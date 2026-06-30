@@ -1,0 +1,1 @@
+import React from 'react';\n\nconst AttendanceList: React.FC = () => {\n  return (\n    <div>\n      <h1 className=\"text-3xl font-bold text-gray-800 mb-6\">Attendance</h1>\n      <div className=\"bg-white p-8 rounded shadow\">\n        <p className=\"text-gray-600\">Attendance management coming soon...</p>\n      </div>\n    </div>\n  );\n};\n\nexport default AttendanceList;
