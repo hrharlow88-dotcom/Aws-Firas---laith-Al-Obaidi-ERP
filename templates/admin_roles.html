@@ -1,0 +1,32 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h2>{{ 'Role Management' if lang=='en' else 'إدارة الأدوار' }}</h2>
+<div class="card">
+  <form method="post">
+    <div>
+      <label>Name / الاسم</label>
+      <input name="name" required />
+    </div>
+    <div>
+      <label>Description / الوصف</label>
+      <input name="description" />
+    </div>
+    <div>
+      <label>Permissions / الأذونات</label>
+      <div>
+        {% for p in permissions %}
+        <label><input type="checkbox" name="permissions" value="{{ p.id }}" /> {{ p.code }}</label><br/>
+        {% endfor %}
+      </div>
+    </div>
+    <button type="submit">{{ 'Create Role' if lang=='en' else 'إنشاء دور' }}</button>
+  </form>
+</div>
+
+<h3>{{ 'Existing Roles' if lang=='en' else 'الأدوار الحالية' }}</h3>
+<ul>
+  {% for r in roles %}
+  <li>{{ r.name }} - {{ r.description or '' }}</li>
+  {% endfor %}
+</ul>
+{% endblock %}

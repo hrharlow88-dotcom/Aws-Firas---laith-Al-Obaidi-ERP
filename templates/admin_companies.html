@@ -1,0 +1,60 @@
+
+{% extends 'layout.html' %}
+{% block content %}
+<h2>{{ 'Company Management' if lang=='en' else 'إدارة الشركة' }}</h2>
+<div class="card">
+  <form method="post">
+    <div>
+      <label>Name / اسم</label>
+      <input name="name" required />
+    </div>
+    <div>
+      <label>Registration No / رقم التسجيل</label>
+      <input name="registration_no" />
+    </div>
+    <div>
+      <label>Address / العنوان</label>
+      <input name="address" />
+    </div>
+    <div>
+      <label>Phone / الهاتف</label>
+      <input name="phone" />
+    </div>
+    <div>
+      <label>Email / البريد</label>
+      <input name="email" />
+    </div>
+    <button type="submit">{{ 'Create Company' if lang=='en' else 'إنشاء شركة' }}</button>
+  </form>
+</div>
+
+<h3>{{ 'Companies' if lang=='en' else 'الشركات' }}</h3>
+<table class="table">
+  <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Email</th></tr></thead>
+  <tbody>
+    {% for c in companies %}
+    <tr>
+      <td>{{ c.id }}</td>
+      <td>{{ c.name }}</td>
+      <td>{{ c.phone }}</td>
+      <td>{{ c.email }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>{{ 'Branches' if lang=='en' else 'الفروع' }}</h3>
+<table class="table">
+  <thead><tr><th>ID</th><th>Company</th><th>Name</th><th>Phone</th></tr></thead>
+  <tbody>
+    {% for b in branches %}
+    <tr>
+      <td>{{ b.id }}</td>
+      <td>{{ b.company_name }}</td>
+      <td>{{ b.name }}</td>
+      <td>{{ b.phone }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

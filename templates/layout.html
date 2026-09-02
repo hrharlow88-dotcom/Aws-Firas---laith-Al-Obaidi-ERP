@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{% if lang == 'ar' %}rtl{% else %}ltr{% endif %}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ i18n.t('portal_title') }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+  </head>
+  <body style="--primary: {{ theme['APP_THEME_PRIMARY'] }}; --secondary: {{ theme['APP_THEME_SECONDARY'] }}; --accent: {{ theme['APP_THEME_ACCENT'] }}; --sidebar-bg: {{ theme['APP_THEME_SIDEBAR'] }};">
+    <div class="container">
+      <div class="shell">
+        <aside class="sidebar">
+          <div class="brand">
+            <div class="brand-mark">ERP</div>
+            <div class="brand-text">{{ i18n.t('portal_title') }}</div>
+          </div>
+          <nav class="nav">
+            <a class="active" href="/?lang={{ lang }}">{{ i18n.t('dashboard_title') }}</a>
+            <a href="/employees?lang={{ lang }}">Employees</a>
+            <a href="/payroll?lang={{ lang }}">Payroll</a>
+            <a href="/attendance?lang={{ lang }}">Attendance</a>
+            <a href="/leaves?lang={{ lang }}">Leaves</a>
+            <a href="/finance?lang={{ lang }}">Finance</a>
+            <a href="/accounting?lang={{ lang }}">Accounting</a>
+            <a href="/ledger?lang={{ lang }}">General Ledger</a>
+            <a href="/trial-balance?lang={{ lang }}">Trial Balance</a>
+            <a href="/financial-statements?lang={{ lang }}">Financial Statements</a>
+            <a href="/reports?lang={{ lang }}">Reports</a>
+            <a href="/sales?lang={{ lang }}">Sales</a>
+            <a href="/customers?lang={{ lang }}">Customers</a>
+            <a href="/suppliers?lang={{ lang }}">Suppliers</a>
+            <a href="/inventory?lang={{ lang }}">Inventory</a>
+            <a href="/purchases?lang={{ lang }}">Purchases</a>
+            <a href="/import?lang={{ lang }}">{{ i18n.t('import_excel') }}</a>
+            <a href="/run_all?lang={{ lang }}">{{ i18n.t('run_full_pipeline') }}</a>
+            <a href="/generate_payslips?year=2026&month=8&lang={{ lang }}">{{ i18n.t('generate_payslips') }}</a>
+            <a href="/init_leaves?year=2026&lang={{ lang }}">{{ i18n.t('init_leaves') }}</a>
+            <a href="/archive?year=2026&month=8&lang={{ lang }}">{{ i18n.t('archive_month') }}</a>
+            <a href="/exports?tables=employees,payroll,loans&lang={{ lang }}">{{ i18n.t('export_tables') }}</a>
+            <a href="/settings?lang={{ lang }}">{{ i18n.t('settings') }}</a>
+            {% if session_user and session_user.role == 'admin' %}
+              <div class="nav-section">Admin</div>
+              <a href="/admin/users?lang={{ lang }}">Users</a>
+              <a href="/admin/roles?lang={{ lang }}">Roles</a>
+              <a href="/admin/companies?lang={{ lang }}">Companies</a>
+            {% endif %}
+          </nav>
+        </aside>
+
+        <div class="content">
+          <header class="topbar">
+            <h1 class="page-title">{{ i18n.t('dashboard_title') }}</h1>
+            <div class="topbar-actions">
+              <div class="lang-switch">
+                <a href="/?lang=en" class="{% if lang == 'en' %}active{% endif %}">{{ i18n.t('english') }}</a>
+                <a href="/?lang=ar" class="{% if lang == 'ar' %}active{% endif %}">{{ i18n.t('arabic') }}</a>
+              </div>
+              {% if session_user %}
+                <span class="muted">{{ session_user.full_name }}</span>
+                <a class="icon-button" href="/logout?lang={{ lang }}">Logout</a>
+              {% else %}
+                <a class="icon-button" href="/login?lang={{ lang }}">Login</a>
+              {% endif %}
+              <a class="icon-button" href="/upload?lang={{ lang }}">{{ i18n.t('upload_excel') }}</a>
+              <a class="icon-button" href="/test_db?lang={{ lang }}">{{ i18n.t('test_db') }}</a>
+              <a class="primary-button" href="/settings?lang={{ lang }}">{{ i18n.t('settings') }}</a>
+            </div>
+          </header>
+
+          <main class="main">
+            {% block body %}{% endblock %}
+          </main>
+
+          <footer>
+            <small>{{ i18n.t('local_control_panel') }}</small>
+          </footer>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

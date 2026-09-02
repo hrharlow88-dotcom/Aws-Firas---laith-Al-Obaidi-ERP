@@ -1,0 +1,40 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Trial Balance</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Accounts</span>
+        <div class="value">{{ rows|length }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Balance Summary</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Account</th>
+            <th>Type</th>
+            <th>Debit</th>
+            <th>Credit</th>
+            <th>Net</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row['account_code'] }} - {{ row['account_name'] }}</td>
+            <td>{{ row['account_type'] }}</td>
+            <td>${{ '%.2f' % (row['total_debit'] or 0) }}</td>
+            <td>${{ '%.2f' % (row['total_credit'] or 0) }}</td>
+            <td>${{ '%.2f' % (row['net_balance'] or 0) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

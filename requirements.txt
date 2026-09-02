@@ -1,0 +1,8 @@
+Flask>=3.0
+pandas>=1.5
+openpyxl
+SQLAlchemy>=1.4
+psycopg2-binary
+python-dotenv
+jinja2
+reportlab  # for generating simple PDF payslips (optional)

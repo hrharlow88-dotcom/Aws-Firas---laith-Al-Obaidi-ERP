@@ -1,0 +1,72 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Attendance Tracker</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Total Records</span>
+        <div class="value">{{ summary['total_records'] }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Present</span>
+        <div class="value">{{ summary['present_count'] }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Late</span>
+        <div class="value">{{ summary['late_count'] }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Absent</span>
+        <div class="value">{{ summary['absent_count'] }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Log Attendance</h3>
+    <form method="post" action="/attendance?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="employee_code" placeholder="Employee code" required>
+        <input type="text" name="employee_name" placeholder="Employee name" required>
+        <input type="date" name="attendance_date" required>
+        <input type="time" name="check_in">
+        <input type="time" name="check_out">
+        <select name="status">
+          <option value="Present">Present</option>
+          <option value="Late">Late</option>
+          <option value="Absent">Absent</option>
+          <option value="Leave">Leave</option>
+        </select>
+      </div>
+      <button type="submit" class="primary-button">Save Attendance</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Attendance Register</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Date</th>
+            <th>Check In</th>
+            <th>Check Out</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in attendances %}
+          <tr>
+            <td>{{ item['employee_name'] }}</td>
+            <td>{{ item['attendance_date'] }}</td>
+            <td>{{ item['check_in'] or '--' }}</td>
+            <td>{{ item['check_out'] or '--' }}</td>
+            <td><span class="tag">{{ item['status'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}
