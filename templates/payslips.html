@@ -1,0 +1,14 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <h2>Payslips</h2>
+  {% if files %}
+    <ul>
+      {% for f in files %}
+        <li><a href="/download/{{ f }}">{{ f }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No payslips generated yet.</p>
+  {% endif %}
+  <p><a href="/?lang={{ lang }}">Back to dashboard</a></p>
+{% endblock %}

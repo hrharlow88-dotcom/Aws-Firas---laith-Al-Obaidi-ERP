@@ -1,0 +1,6 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <h2>{{ title }}</h2>
+  <pre class="output">{{ output }}</pre>
+  <p><a href="/?lang={{ lang }}">{{ i18n.t('back_to_dashboard') }}</a></p>
+{% endblock %}

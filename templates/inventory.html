@@ -1,0 +1,66 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Inventory</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Items</span>
+        <div class="value">{{ summary['total_items'] or 0 }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Qty</span>
+        <div class="value">{{ summary['total_quantity'] or 0 }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Inventory Value</span>
+        <div class="value">${{ '%.2f' % (summary['inventory_value'] or 0) }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Add Inventory Item</h3>
+    <form method="post" action="/inventory?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="item_name" placeholder="Item name" required>
+        <input type="text" name="category" placeholder="Category">
+        <input type="text" name="sku" placeholder="SKU">
+        <input type="number" step="0.01" name="quantity" placeholder="Quantity">
+        <input type="number" step="0.01" name="unit_cost" placeholder="Unit cost">
+        <input type="number" step="0.01" name="reorder_level" placeholder="Reorder level">
+        <input type="text" name="warehouse" placeholder="Warehouse">
+      </div>
+      <button type="submit" class="primary-button">Save Item</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Stock Register</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Category</th>
+            <th>SKU</th>
+            <th>Qty</th>
+            <th>Unit Cost</th>
+            <th>Warehouse</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td>{{ item['item_name'] }}</td>
+            <td>{{ item['category'] }}</td>
+            <td>{{ item['sku'] }}</td>
+            <td>{{ item['quantity'] }}</td>
+            <td>${{ '%.2f' % (item['unit_cost'] or 0) }}</td>
+            <td>{{ item['warehouse'] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

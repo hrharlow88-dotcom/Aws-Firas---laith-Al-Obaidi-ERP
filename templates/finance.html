@@ -1,0 +1,67 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Finance Overview</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Balance</span>
+        <div class="value">${{ '%.2f' % (summary['balance'] or 0) }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Income</span>
+        <div class="value">${{ '%.2f' % (summary['income'] or 0) }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Expenses</span>
+        <div class="value">${{ '%.2f' % (summary['expense'] or 0) }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Add Finance Transaction</h3>
+    <form method="post" action="/finance?lang={{ lang }}">
+      <div class="form-grid">
+        <select name="type">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+        <input type="text" name="category" placeholder="Category" required>
+        <input type="text" name="description" placeholder="Description" required>
+        <input type="number" step="0.01" name="amount" placeholder="Amount" required>
+        <input type="text" name="reference" placeholder="Reference">
+      </div>
+      <button type="submit" class="primary-button">Add Transaction</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Transaction Ledger</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Reference</th>
+            <th>Amount</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in transactions %}
+          <tr>
+            <td>{{ item['type'] }}</td>
+            <td>{{ item['category'] }}</td>
+            <td>{{ item['description'] }}</td>
+            <td>{{ item['reference'] }}</td>
+            <td>${{ '%.2f' % (item['amount'] or 0) }}</td>
+            <td>{{ item['created_at'] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

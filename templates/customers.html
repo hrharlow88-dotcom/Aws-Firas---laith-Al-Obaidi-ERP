@@ -1,0 +1,65 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Customers</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Total</span>
+        <div class="value">{{ summary['total_customers'] or 0 }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Active</span>
+        <div class="value">{{ summary['active_customers'] or 0 }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Add Customer</h3>
+    <form method="post" action="/customers?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="customer_name" placeholder="Customer name" required>
+        <input type="text" name="company" placeholder="Company">
+        <input type="email" name="email" placeholder="Email">
+        <input type="text" name="phone" placeholder="Phone">
+        <input type="text" name="segment" placeholder="Segment">
+        <select name="status">
+          <option value="Active">Active</option>
+          <option value="Lead">Lead</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+      </div>
+      <button type="submit" class="primary-button">Save Customer</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Customer Register</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Company</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Segment</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for customer in customers %}
+          <tr>
+            <td>{{ customer['customer_name'] }}</td>
+            <td>{{ customer['company'] }}</td>
+            <td>{{ customer['email'] }}</td>
+            <td>{{ customer['phone'] }}</td>
+            <td>{{ customer['segment'] }}</td>
+            <td><span class="tag">{{ customer['status'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

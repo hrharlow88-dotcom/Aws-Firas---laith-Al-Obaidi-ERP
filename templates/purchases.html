@@ -1,0 +1,70 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Purchases</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Orders</span>
+        <div class="value">{{ summary['total_orders'] or 0 }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Total Value</span>
+        <div class="value">${{ '%.2f' % (summary['total_value'] or 0) }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Approved</span>
+        <div class="value">${{ '%.2f' % (summary['approved_value'] or 0) }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Add Purchase Order</h3>
+    <form method="post" action="/purchases?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="order_no" placeholder="Order no" required>
+        <input type="text" name="supplier_name" placeholder="Supplier" required>
+        <input type="text" name="item_name" placeholder="Item name">
+        <input type="number" step="0.01" name="quantity" placeholder="Quantity">
+        <input type="number" step="0.01" name="unit_cost" placeholder="Unit cost">
+        <input type="number" step="0.01" name="total" placeholder="Total">
+        <select name="status">
+          <option value="Pending">Pending</option>
+          <option value="Approved">Approved</option>
+          <option value="Completed">Completed</option>
+        </select>
+      </div>
+      <button type="submit" class="primary-button">Save Order</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Purchase Orders</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Supplier</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th>Total</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for purchase in purchases %}
+          <tr>
+            <td>{{ purchase['order_no'] }}</td>
+            <td>{{ purchase['supplier_name'] }}</td>
+            <td>{{ purchase['item_name'] }}</td>
+            <td>{{ purchase['quantity'] }}</td>
+            <td>${{ '%.2f' % (purchase['total'] or 0) }}</td>
+            <td><span class="tag">{{ purchase['status'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

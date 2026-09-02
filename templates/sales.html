@@ -1,0 +1,70 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>Sales Orders</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Orders</span>
+        <div class="value">{{ summary['total_orders'] or 0 }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Sales Value</span>
+        <div class="value">${{ '%.2f' % (summary['sales_value'] or 0) }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Taxes</span>
+        <div class="value">${{ '%.2f' % (summary['taxes'] or 0) }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Create Sales Order</h3>
+    <form method="post" action="/sales?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="order_no" placeholder="Order number" required>
+        <input type="text" name="customer_name" placeholder="Customer name" required>
+        <input type="email" name="customer_email" placeholder="Customer email">
+        <input type="date" name="sales_date">
+        <input type="number" step="0.01" name="total" placeholder="Total amount">
+        <input type="number" step="0.01" name="tax" placeholder="Tax amount">
+        <select name="status">
+          <option value="Draft">Draft</option>
+          <option value="Confirmed">Confirmed</option>
+          <option value="Paid">Paid</option>
+        </select>
+      </div>
+      <button type="submit" class="primary-button">Save Sales Order</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top:18px;">
+    <h3>Order Register</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Customer</th>
+            <th>Date</th>
+            <th>Total</th>
+            <th>Tax</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sale in sales %}
+          <tr>
+            <td>{{ sale['order_no'] }}</td>
+            <td>{{ sale['customer_name'] }}</td>
+            <td>{{ sale['sales_date'] }}</td>
+            <td>${{ '%.2f' % (sale['total'] or 0) }}</td>
+            <td>${{ '%.2f' % (sale['tax'] or 0) }}</td>
+            <td><span class="tag">{{ sale['status'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

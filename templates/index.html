@@ -1,0 +1,172 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="hero">
+    <div>
+      <h2>{{ i18n.t('dashboard_title') }}</h2>
+      <p>{{ i18n.t('hero_description') }}</p>
+      <div class="hero-actions">
+        <a class="primary-button" href="/run_all?lang={{ lang }}">{{ i18n.t('run_full_pipeline') }}</a>
+        <a class="icon-button" href="/generate_payslips?year=2026&month=8&lang={{ lang }}">{{ i18n.t('generate_payslips') }}</a>
+      </div>
+    </div>
+    <div class="hero-badge">
+      <div class="metric-mini">
+        <span class="label">{{ i18n.t('employees') }}</span>
+        <span class="value">150+</span>
+      </div>
+      <div class="metric-mini">
+        <span class="label">{{ i18n.t('payroll') }}</span>
+        <span class="value">$1.2M</span>
+      </div>
+      <div class="metric-mini">
+        <span class="label">{{ i18n.t('attendance') }}</span>
+        <span class="value">96.8%</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="kpis">
+    <div class="kpi">
+      <span class="label">{{ i18n.t('employees') }}</span>
+      <div class="value">1,280</div>
+      <span class="trend">+8.4%</span>
+    </div>
+    <div class="kpi">
+      <span class="label">{{ i18n.t('payroll') }}</span>
+      <div class="value">$8.9K</div>
+      <span class="trend">+2.1%</span>
+    </div>
+    <div class="kpi">
+      <span class="label">{{ i18n.t('leave_balance') }}</span>
+      <div class="value">2,410</div>
+      <span class="trend">+12.5%</span>
+    </div>
+    <div class="kpi">
+      <span class="label">{{ i18n.t('finances') }}</span>
+      <div class="value">$165K</div>
+      <span class="trend">+6.7%</span>
+    </div>
+  </section>
+
+  <h2 class="section-title">{{ i18n.t('core_modules') }}</h2>
+  <div class="grid module-grid">
+    <div class="card module-card">
+      <div class="module-icon employees">👥</div>
+      <h3>{{ i18n.t('employees') }}</h3>
+      <p>{{ i18n.t('module_hr_text') }}</p>
+      <a href="/employees?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon payroll">💰</div>
+      <h3>{{ i18n.t('payroll') }}</h3>
+      <p>{{ i18n.t('module_payroll_text') }}</p>
+      <a href="/payroll?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon leave">🌴</div>
+      <h3>{{ i18n.t('leave_balance') }}</h3>
+      <p>{{ i18n.t('module_leave_text') }}</p>
+      <a href="/leaves?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon attendance">🕒</div>
+      <h3>{{ i18n.t('attendance') }}</h3>
+      <p>{{ i18n.t('module_attendance_text') }}</p>
+      <a href="/attendance?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon finance">📊</div>
+      <h3>{{ i18n.t('finances') }}</h3>
+      <p>{{ i18n.t('module_finance_text') }}</p>
+      <a href="/finance?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon sales">🧾</div>
+      <h3>Sales</h3>
+      <p>Track opportunities, sales orders, taxes, and invoice pipeline.</p>
+      <a href="/sales?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon reports">📈</div>
+      <h3>{{ i18n.t('reports') }}</h3>
+      <p>{{ i18n.t('module_reports_text') }}</p>
+      <a href="/reports?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon customers">🤝</div>
+      <h3>Customers</h3>
+      <p>Track customer accounts, segments, and engagement across sales.</p>
+      <a href="/customers?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon suppliers">🏭</div>
+      <h3>Suppliers</h3>
+      <p>Monitor vendor relationships, purchases, and compliance records.</p>
+      <a href="/suppliers?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon inventory">📦</div>
+      <h3>Inventory</h3>
+      <p>Review stock levels, warehouse position, and reorder alerts.</p>
+      <a href="/inventory?lang={{ lang }}">Open module</a>
+    </div>
+    <div class="card module-card">
+      <div class="module-icon purchases">🧾</div>
+      <h3>Purchases</h3>
+      <p>Follow purchase orders, vendor costs, and approvals in one flow.</p>
+      <a href="/purchases?lang={{ lang }}">Open module</a>
+    </div>
+  </div>
+
+  <div class="split">
+    <section class="card activity">
+      <h3>{{ i18n.t('recent_activity') }}</h3>
+      <ul class="activity-list">
+        <li>
+          <div class="activity-item"><span class="dot"></span><span>{{ i18n.t('activity_import') }}</span></div>
+          <span class="tag">{{ i18n.t('ready') }}</span>
+        </li>
+        <li>
+          <div class="activity-item"><span class="dot"></span><span>{{ i18n.t('activity_payroll') }}</span></div>
+          <span class="tag">{{ i18n.t('processing') }}</span>
+        </li>
+        <li>
+          <div class="activity-item"><span class="dot"></span><span>{{ i18n.t('activity_leaves') }}</span></div>
+          <span class="tag">{{ i18n.t('active') }}</span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h3>{{ i18n.t('operations') }}</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>{{ i18n.t('module') }}</th>
+              <th>{{ i18n.t('status') }}</th>
+              <th>{{ i18n.t('actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>{{ i18n.t('payroll') }}</strong></td>
+              <td>{{ i18n.t('ready') }}</td>
+              <td><a href="/generate_payslips?year=2026&month=8&lang={{ lang }}">{{ i18n.t('launch') }}</a></td>
+            </tr>
+            <tr>
+              <td><strong>{{ i18n.t('leave_balance') }}</strong></td>
+              <td>{{ i18n.t('active') }}</td>
+              <td><a href="/init_leaves?year=2026&lang={{ lang }}">{{ i18n.t('launch') }}</a></td>
+            </tr>
+            <tr>
+              <td><strong>{{ i18n.t('finances') }}</strong></td>
+              <td>{{ i18n.t('ready') }}</td>
+              <td><a href="/exports?tables=employees,payroll,loans&lang={{ lang }}">{{ i18n.t('launch') }}</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+{% endblock %}

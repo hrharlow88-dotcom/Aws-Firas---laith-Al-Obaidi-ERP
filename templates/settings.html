@@ -1,0 +1,37 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card settings-card">
+    <h2>{{ i18n.t('settings_title') }}</h2>
+    <form method="post" class="settings-form">
+      <div class="form-grid settings-grid">
+        <label>Company Name<br><input name="company_name" value="{{ company_settings.get('company_name', 'Al Obaidi ERP') }}"></label>
+        <label>Company Email<br><input name="company_email" value="{{ company_settings.get('company_email', 'admin@company.com') }}"></label>
+        <label>Company Phone<br><input name="company_phone" value="{{ company_settings.get('company_phone', '+964 770 000 0000') }}"></label>
+        <label>Currency<br><input name="currency" value="{{ company_settings.get('currency', 'USD') }}"></label>
+        <label>Tax Rate %<br><input name="tax_rate" value="{{ company_settings.get('tax_rate', 15) }}"></label>
+        <label>Timezone<br><input name="timezone" value="{{ company_settings.get('timezone', 'UTC+3') }}"></label>
+        <label>Address<br><input name="address" value="{{ company_settings.get('address', 'Baghdad, Iraq') }}"></label>
+        <label>{{ i18n.t('db_host') }}<br><input name="db_host" value="{{ vals.get('DB_HOST','') }}"></label>
+        <label>{{ i18n.t('db_port') }}<br><input name="db_port" value="{{ vals.get('DB_PORT','') }}"></label>
+        <label>{{ i18n.t('db_name') }}<br><input name="db_name" value="{{ vals.get('DB_NAME','') }}"></label>
+        <label>{{ i18n.t('db_user') }}<br><input name="db_user" value="{{ vals.get('DB_USER','') }}"></label>
+        <label>{{ i18n.t('db_pass') }}<br><input type="password" name="db_pass" value="{{ vals.get('DB_PASS','') }}"></label>
+        <label>{{ i18n.t('lang_label') }}<br>
+          <select name="lang">
+            <option value="en" {% if vals.get('LANG','en')=='en' %}selected{% endif %}>English</option>
+            <option value="ar" {% if vals.get('LANG','en')=='ar' %}selected{% endif %}>العربية</option>
+          </select>
+        </label>
+        <label>Primary color<br><input type="color" name="theme_primary" value="{{ vals.get('APP_THEME_PRIMARY', '#0b57d0') }}"></label>
+        <label>Accent color<br><input type="color" name="theme_accent" value="{{ vals.get('APP_THEME_ACCENT', '#22c55e') }}"></label>
+        <label>Text color<br><input type="color" name="theme_secondary" value="{{ vals.get('APP_THEME_SECONDARY', '#0f172a') }}"></label>
+      </div>
+      <div class="theme-preview">
+        <span>Sidebar Theme</span>
+        <input type="text" name="theme_sidebar" value="{{ vals.get('APP_THEME_SIDEBAR', 'linear-gradient(180deg, #0b1732 0%, #12254a 100%)') }}">
+      </div>
+      <button type="submit" class="primary-button">{{ i18n.t('save') }}</button>
+    </form>
+    <p><a href="/?lang={{ request.args.get('lang','en') }}">Back to dashboard</a></p>
+  </section>
+{% endblock %}

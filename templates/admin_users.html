@@ -1,0 +1,45 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h2>{{ 'User Management' if lang=='en' else 'إدارة المستخدمين' }}</h2>
+<div class="card">
+  <form method="post">
+    <div>
+      <label>Username / اسم المستخدم</label>
+      <input name="username" required />
+    </div>
+    <div>
+      <label>Password / كلمة المرور</label>
+      <input name="password" type="password" required />
+    </div>
+    <div>
+      <label>Full name / الاسم الكامل</label>
+      <input name="full_name" />
+    </div>
+    <div>
+      <label>Role / الدور</label>
+      <select name="role_id">
+        <option value="">--</option>
+        {% for r in roles %}
+        <option value="{{ r.id }}">{{ r.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">{{ 'Create User' if lang=='en' else 'إنشاء مستخدم' }}</button>
+  </form>
+</div>
+
+<h3>{{ 'Users' if lang=='en' else 'المستخدمون' }}</h3>
+<table class="table">
+  <thead><tr><th>ID</th><th>Username</th><th>Full name</th><th>Roles</th></tr></thead>
+  <tbody>
+    {% for u in users %}
+    <tr>
+      <td>{{ u.id }}</td>
+      <td>{{ u.username }}</td>
+      <td>{{ u.full_name }}</td>
+      <td>{{ u.roles or '' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

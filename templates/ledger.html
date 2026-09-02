@@ -1,0 +1,89 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card">
+    <h2>General Ledger</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <span class="label">Entries</span>
+        <div class="value">{{ entries|length }}</div>
+      </div>
+      <div class="kpi">
+        <span class="label">Accounts</span>
+        <div class="value">{{ accounts|length }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Post Journal Entry</h3>
+    <form method="post" action="/ledger?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="entry_no" placeholder="Entry no" required>
+        <input type="date" name="entry_date">
+        <input type="text" name="description" placeholder="Description">
+        <input type="text" name="account_code" placeholder="Account code" required>
+        <input type="text" name="account_name" placeholder="Account name" required>
+        <input type="number" step="0.01" name="debit" placeholder="Debit">
+        <input type="number" step="0.01" name="credit" placeholder="Credit">
+        <input type="text" name="memo" placeholder="Memo">
+      </div>
+      <button type="submit" class="primary-button">Post Entry</button>
+    </form>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Chart of Accounts</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Normal Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for account in accounts %}
+          <tr>
+            <td>{{ account['account_code'] }}</td>
+            <td>{{ account['account_name'] }}</td>
+            <td>{{ account['account_type'] }}</td>
+            <td>{{ account['normal_balance'] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 18px;">
+    <h3>Journal Entries</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Entry No</th>
+            <th>Date</th>
+            <th>Description</th>
+            <th>Debit</th>
+            <th>Credit</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr>
+            <td>{{ entry['entry_no'] }}</td>
+            <td>{{ entry['entry_date'] }}</td>
+            <td>{{ entry['description'] }}</td>
+            <td>${{ '%.2f' % (entry['total_debit'] or 0) }}</td>
+            <td>${{ '%.2f' % (entry['total_credit'] or 0) }}</td>
+            <td><span class="tag">{{ entry['status'] }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

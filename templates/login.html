@@ -1,0 +1,17 @@
+{% extends 'layout.html' %}
+{% block body %}
+  <section class="card" style="max-width: 520px; margin: 32px auto 0;">
+    <h2>Administrator Login</h2>
+    {% if show_error %}
+      <div class="alert-error">{{ error }}</div>
+    {% endif %}
+    <form method="post" action="/login?lang={{ lang }}">
+      <div class="form-grid">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+      </div>
+      <button class="primary-button" type="submit">Login</button>
+    </form>
+    <p class="muted">Default account: admin / admin123</p>
+  </section>
+{% endblock %}
