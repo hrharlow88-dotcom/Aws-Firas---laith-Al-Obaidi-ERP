@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
 import { AuditLog, SystemSetting, sequelize } from '../models';
 import {
-  DEFAULT_SYSTEM_SETTINGS,
   EmployeeFieldSetting,
   LeaveTypeSetting,
+  normalizeSystemSettings,
   PERMISSIONS,
   SystemSettings,
   isUserRole,
@@ -26,7 +26,7 @@ function hasOnlyKeys(value: Record<string, unknown>, keys: string[]): boolean {
 }
 
 function isOptionalNumber(value: unknown): value is number | null {
-  return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+  return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 10000);
 }
 
 function validateLeaveTypes(value: unknown): value is LeaveTypeSetting[] {
@@ -60,12 +60,39 @@ function validateEmployeeFields(value: unknown): value is EmployeeFieldSetting[]
     new Set(value.map((item) => item.key)).size === value.length;
 }
 
+function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules'] {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'workingDays', 'officialHolidays', 'hoursPerWorkday', 'hourlyMonthlyQuota',
+    'hourlyMonthlyUsageLimit', 'lowBalanceThreshold',
+  ])) return false;
+  const workingDays = value.workingDays;
+  const officialHolidays = value.officialHolidays;
+  return Array.isArray(workingDays) && workingDays.length > 0 && workingDays.length <= 7 &&
+    workingDays.every((day) => Number.isInteger(day) && Number(day) >= 0 && Number(day) <= 6) &&
+    new Set(workingDays).size === workingDays.length &&
+    Array.isArray(officialHolidays) && officialHolidays.length <= 500 &&
+    officialHolidays.every((date) =>
+      typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+      !Number.isNaN(Date.parse(`${date}T00:00:00.000Z`)) &&
+      new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) === date,
+    ) &&
+    new Set(officialHolidays).size === officialHolidays.length &&
+    typeof value.hoursPerWorkday === 'number' && Number.isFinite(value.hoursPerWorkday) &&
+    value.hoursPerWorkday > 0 && value.hoursPerWorkday <= 24 &&
+    typeof value.hourlyMonthlyQuota === 'number' && Number.isFinite(value.hourlyMonthlyQuota) &&
+    value.hourlyMonthlyQuota >= 0 && value.hourlyMonthlyQuota <= 744 &&
+    Number.isInteger(value.hourlyMonthlyUsageLimit) &&
+    Number(value.hourlyMonthlyUsageLimit) >= 0 && Number(value.hourlyMonthlyUsageLimit) <= 31 &&
+    typeof value.lowBalanceThreshold === 'number' && Number.isFinite(value.lowBalanceThreshold) &&
+    value.lowBalanceThreshold >= 0 && value.lowBalanceThreshold <= 10000;
+}
+
 function validateSettings(value: unknown): value is SystemSettings {
   if (
     !isRecord(value) ||
     !isRecord(value.company) ||
     !isRecord(value.roles) ||
-    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields']) ||
+    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules']) ||
     !hasOnlyKeys(value.company, ['displayName', 'legalName', 'phone', 'email', 'address', 'currency', 'timeZone']) ||
     !hasOnlyKeys(value.roles, [...ROLES])
   ) return false;
@@ -79,7 +106,10 @@ function validateSettings(value: unknown): value is SystemSettings {
       isText(entry.label, 80) && entry.label.trim().length > 0 &&
       Array.isArray(entry.permissions) &&
       entry.permissions.every((permission) => (PERMISSIONS as readonly unknown[]).includes(permission)) &&
-      new Set(entry.permissions).size === entry.permissions.length;
+      new Set(entry.permissions).size === entry.permissions.length &&
+      (!entry.permissions.some((permission) =>
+        ['leaves.request', 'leaves.approve', 'leaves.manage_balances'].includes(String(permission)),
+      ) || entry.permissions.includes('leaves.view'));
   });
   const allPermissions = [...PERMISSIONS];
   return isText(company.displayName, 160) && company.displayName.trim().length > 0 &&
@@ -92,12 +122,14 @@ function validateSettings(value: unknown): value is SystemSettings {
     (!company.currency || /^[A-Z]{3}$/.test(company.currency)) &&
     isText(company.timeZone, 80) && company.timeZone.trim().length > 0 &&
     validateLeaveTypes(value.leaveTypes) &&
+    validateLeaveRules(value.leaveRules) &&
     Array.isArray(steps) && steps.length <= 20 &&
     steps.every((step) => isRecord(step) &&
       hasOnlyKeys(step, ['id', 'role']) &&
       typeof step.id === 'string' && /^[0-9a-f-]{36}$/i.test(step.id) &&
       isUserRole(step.role)) &&
     new Set(steps.map((step) => (step as Record<string, unknown>).id)).size === steps.length &&
+    new Set(steps.map((step) => (step as Record<string, unknown>).role)).size === steps.length &&
     roleSettingsValid &&
     (roles.super_admin as Record<string, unknown>).permissions instanceof Array &&
     allPermissions.every((permission) =>
@@ -109,7 +141,7 @@ function validateSettings(value: unknown): value is SystemSettings {
 export class SettingsController {
   static async get(_req: Request, res: Response): Promise<void> {
     const record = await SystemSetting.findByPk(GLOBAL_SETTINGS_ID);
-    res.json({ data: record?.value || DEFAULT_SYSTEM_SETTINGS });
+    res.json({ data: normalizeSystemSettings(record?.value) });
   }
 
   static async update(req: Request, res: Response): Promise<void> {

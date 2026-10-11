@@ -154,7 +154,8 @@ td > strong, .person-cell strong, .branch-cell strong { display: block; color: v
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 18px 17px 8px; }
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field > span { color: #516466; font-size: 10px; font-weight: 700; }
-.field input, .field select { width: 100%; min-height: 39px; padding: 0 10px; border: 1px solid #d4dfdc; border-radius: 4px; background: #fff; color: var(--ink); font-size: 11px; }
+.field input, .field select, .field textarea { width: 100%; min-height: 39px; padding: 9px 10px; border: 1px solid #d4dfdc; border-radius: 4px; background: #fff; color: var(--ink); font-size: 11px; }
+.field textarea { resize: vertical; line-height: 1.6; }
 .field input::placeholder { color: #9ba8a6; }
 .field input:focus, .field select:focus { border-color: var(--teal); outline: 2px solid rgba(30,107,104,.12); }
 .field small { color: var(--muted); font-size: 9px; }
@@ -205,6 +206,30 @@ td > strong, .person-cell strong, .branch-cell strong { display: block; color: v
 .permission-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 12px; }
 .field-caption { grid-column: 1 / -1; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .permission-options small { grid-column: 1 / -1; color: var(--muted); font-size: 9px; }
+.settings-policy { margin-top: 8px; border-top: 1px solid var(--line); }
+.settings-policy-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 17px; }
+.working-days { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px 9px; }
+.working-days > .field-caption { grid-column: 1 / -1; margin-bottom: 4px; }
+.leave-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; padding: 14px 16px; }
+.leave-form { padding-bottom: 15px; }
+.leave-wide { grid-column: 1 / -1; }
+.leave-table { min-width: 900px; }
+.leave-status { display: inline-block; padding: 4px 7px; border-radius: 3px; background: #edf0ef; color: #596967; font-size: 9px; font-weight: 700; }
+.leave-pending { background: var(--brass-wash); color: #805819; }
+.leave-approved { background: var(--green-wash); color: var(--green); }
+.leave-rejected, .leave-cancelled { background: var(--red-wash); color: var(--red); }
+.leave-actions { display: flex; align-items: center; gap: 5px; }
+.leave-actions .icon-link { width: 29px; height: 29px; }
+.leave-actions .leave-reject { color: var(--red); }
+.leave-detail { margin-top: 5px; color: var(--muted); font-size: 9px; }
+.leave-detail summary { color: var(--teal); cursor: pointer; }
+.leave-detail p { margin: 5px 0; white-space: normal; }
+.leave-data-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.leave-data-grid table { min-width: 460px; }
+.low-balance { color: var(--red); }
+.balance-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 15px 16px; border-top: 1px solid var(--line-soft); }
+.balance-form > strong { grid-column: 1 / -1; font-size: 11px; }
+.balance-form > .button { align-self: end; }
 .notice { display: flex; align-items: center; gap: 9px; min-height: 42px; margin-bottom: 16px; padding: 8px 11px; border: 1px solid; border-radius: 4px; font-size: 11px; }
 .notice > span { flex: 1; }
 .notice-error { border-color: #efcbc5; background: var(--red-wash); color: #8f3026; }
@@ -278,6 +303,9 @@ td > strong, .person-cell strong, .branch-cell strong { display: block; color: v
   .settings-tabs { position: static; display: flex; overflow-x: auto; gap: 5px; padding: 6px; }
   .settings-tab { min-width: max-content; padding-inline: 12px; }
   .settings-panel > .form-grid { padding-inline: 12px; }
+  .settings-policy-body { padding-inline: 12px; }
+  .leave-toolbar { grid-template-columns: 1fr; padding: 12px; }
+  .leave-data-grid { grid-template-columns: 1fr; }
   .settings-list { padding-inline: 12px; }
   .role-settings-list { padding-inline: 12px; }
   .role-settings-row { grid-template-columns: 1fr; gap: 11px; }
@@ -306,6 +334,10 @@ td > strong, .person-cell strong, .branch-cell strong { display: block; color: v
   .heading-actions { width: 100%; }
   .heading-actions .button { flex: 1; }
   .form-grid { grid-template-columns: 1fr; }
+  .settings-policy-body { grid-template-columns: 1fr; }
+  .working-days { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .balance-form { grid-template-columns: 1fr; padding-inline: 12px; }
+  .leave-wide { grid-column: auto; }
   .next-stage { gap: 9px; padding: 11px; }
   .next-stage-icon { width: 31px; height: 31px; }
   .stage-tag { display: none; }

@@ -3,6 +3,7 @@ import {
   ArrowDownLeft,
   ArrowLeft,
   Building2,
+  CalendarDays,
   Check,
   ChevronDown,
   CircleHelp,
@@ -22,8 +23,9 @@ import {
 } from 'lucide-react';
 import { SettingsPage } from './SettingsPage';
 import type { Permission, SystemSettings, UserRole } from './SettingsPage';
+import { LeavePage } from './LeavePage';
 
-type Page = 'overview' | 'employees' | 'branches' | 'access' | 'security' | 'settings';
+type Page = 'overview' | 'employees' | 'branches' | 'access' | 'leaves' | 'security' | 'settings';
 
 interface User {
   id: string;
@@ -32,19 +34,6 @@ interface User {
   role: UserRole;
   branchId: string | null;
   isActive?: boolean;
-}
-
-async function handleSettingsSave(settings: SystemSettings) {
-  setSavingSettings(true);
-  try {
-    const result = await api<ApiResult<SystemSettings>>('/settings', token, { method: 'PUT', body: settings });
-    setSystemSettings(result.data);
-    notify('تم حفظ إعدادات النظام.');
-  } catch (cause) {
-    notify(cause instanceof Error ? cause.message : 'تعذر حفظ الإعدادات.', true);
-  } finally {
-    setSavingSettings(false);
-  }
 }
 
 interface EmployeeSummary {
@@ -161,6 +150,10 @@ function App() {
   const canUpdateEmployees = rolePermissions.includes('employees.update');
   const canManageBranches = rolePermissions.includes('branches.manage');
   const canManageAccess = rolePermissions.includes('users.manage');
+  const canViewLeaves = rolePermissions.includes('leaves.view');
+  const canRequestLeaves = rolePermissions.includes('leaves.request');
+  const canApproveLeaves = rolePermissions.includes('leaves.approve');
+  const canManageLeaveBalances = rolePermissions.includes('leaves.manage_balances');
   const canManageSettings = user?.role === 'super_admin';
 
   const notify = useCallback((message: string, isError = false) => {
@@ -173,6 +166,20 @@ function App() {
     setError('');
     window.setTimeout(() => setSuccess(''), 3500);
   }, []);
+  const notifyLeaveError = useCallback((message: string) => notify(message, true), [notify]);
+
+  async function handleSettingsSave(settings: SystemSettings) {
+    setSavingSettings(true);
+    try {
+      const result = await api<ApiResult<SystemSettings>>('/settings', token, { method: 'PUT', body: settings });
+      setSystemSettings(result.data);
+      notify('تم حفظ إعدادات النظام.');
+    } catch (cause) {
+      notify(cause instanceof Error ? cause.message : 'تعذر حفظ الإعدادات.', true);
+    } finally {
+      setSavingSettings(false);
+    }
+  }
 
   const signOut = useCallback(() => {
     sessionStorage.removeItem('erp_token');
@@ -398,6 +405,7 @@ function App() {
     employees: 'دليل الموظفين',
     branches: 'الفروع والمواقع',
     access: 'المستخدمون والصلاحيات',
+    leaves: 'إدارة الإجازات',
     security: 'أمان الحساب',
     settings: 'إعدادات النظام',
   };
@@ -417,6 +425,7 @@ function App() {
           <NavButton active={page === 'employees'} icon={<Users />} label="الموظفون" onClick={() => { setPage('employees'); setMobileNav(false); }} />
           <NavButton active={page === 'branches'} icon={<Building2 />} label="الفروع" onClick={() => { setPage('branches'); setMobileNav(false); }} />
           {canManageAccess && <NavButton active={page === 'access'} icon={<ShieldCheck />} label="المستخدمون والصلاحيات" onClick={() => { setPage('access'); setMobileNav(false); }} />}
+          {canViewLeaves && <NavButton active={page === 'leaves'} icon={<CalendarDays />} label="الإجازات والأرصدة" onClick={() => { setPage('leaves'); setMobileNav(false); }} />}
           {canManageSettings && <NavButton active={page === 'settings'} icon={<SettingsIcon />} label="إعدادات النظام" onClick={() => { setPage('settings'); setMobileNav(false); }} />}
           <NavButton active={page === 'security'} icon={<KeyRound />} label="أمان الحساب" onClick={() => { setPage('security'); setMobileNav(false); }} />
         </nav>
@@ -493,6 +502,17 @@ function App() {
             onSubmit={handleUserCreate}
             onToggle={toggleUserStatus}
             showForm={showUserForm}
+          />}
+          {page === 'leaves' && canViewLeaves && systemSettings && <LeavePage
+            token={token}
+            userId={user.id}
+            userRole={user.role}
+            settings={systemSettings}
+            canRequest={canRequestLeaves}
+            canApprove={canApproveLeaves}
+            canManageBalances={canManageLeaveBalances}
+            onError={notifyLeaveError}
+            onSuccess={notify}
           />}
           {page === 'security' && <SecurityPage onSubmit={handlePasswordChange} />}
           {page === 'settings' && canManageSettings && systemSettings && <SettingsPage value={systemSettings} busy={savingSettings} onSave={handleSettingsSave} />}

@@ -5,7 +5,8 @@ import BranchController from '../controllers/BranchController';
 import EmployeeController from '../controllers/EmployeeController';
 import UserController from '../controllers/UserController';
 import SettingsController from '../controllers/SettingsController';
-import { allowPermission, allowRoles, requireAuth } from '../middleware/auth';
+import LeaveController from '../controllers/LeaveController';
+import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
 const router = express.Router();
@@ -44,6 +45,14 @@ router.put('/users/:id', requireAuth, allowPermission('users.manage'), validateU
 
 router.get('/settings', requireAuth, asyncRoute(SettingsController.get));
 router.put('/settings', requireAuth, allowRoles('super_admin'), asyncRoute(SettingsController.update));
+
+router.get('/leaves', requireAuth, allowPermission('leaves.view'), asyncRoute(LeaveController.listRequests));
+router.post('/leaves', requireAuth, allowPermission('leaves.request'), asyncRoute(LeaveController.createRequest));
+router.get('/leaves/balances', requireAuth, allowPermission('leaves.view'), asyncRoute(LeaveController.balances));
+router.get('/leaves/ledger', requireAuth, allowPermission('leaves.view'), asyncRoute(LeaveController.ledger));
+router.post('/leaves/balances', requireAuth, allowPermission('leaves.manage_balances'), asyncRoute(LeaveController.adjustBalance));
+router.post('/leaves/:id/decision', requireAuth, allowPermission('leaves.approve'), validateUuidParam, asyncRoute(LeaveController.decide));
+router.post('/leaves/:id/cancel', requireAuth, allowAnyPermission('leaves.request', 'leaves.manage_balances'), validateUuidParam, asyncRoute(LeaveController.cancel));
 
 router.get('/employees', requireAuth, asyncRoute(EmployeeController.list));
 router.get('/employees/summary', requireAuth, asyncRoute(EmployeeController.summary));

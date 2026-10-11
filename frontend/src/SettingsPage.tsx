@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { Check, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 
 export type UserRole = 'super_admin' | 'hr_manager' | 'hr_staff' | 'finance' | 'branch_manager' | 'viewer';
-export type Permission = 'branches.manage' | 'employees.create' | 'employees.update' | 'users.manage';
+export type Permission =
+  | 'branches.manage'
+  | 'employees.create'
+  | 'employees.update'
+  | 'users.manage'
+  | 'leaves.view'
+  | 'leaves.request'
+  | 'leaves.approve'
+  | 'leaves.manage_balances';
 
 export interface SystemSettings {
   company: {
@@ -34,6 +42,14 @@ export interface SystemSettings {
     enabled: boolean;
     options: string[];
   }>;
+  leaveRules: {
+    workingDays: number[];
+    officialHolidays: string[];
+    hoursPerWorkday: number;
+    hourlyMonthlyQuota: number;
+    hourlyMonthlyUsageLimit: number;
+    lowBalanceThreshold: number;
+  };
 }
 
 const roles: Array<{ id: UserRole; label: string }> = [
@@ -50,6 +66,10 @@ const permissions: Array<{ id: Permission; label: string }> = [
   { id: 'employees.create', label: 'إضافة الموظفين' },
   { id: 'employees.update', label: 'تعديل الموظفين' },
   { id: 'users.manage', label: 'إدارة حسابات المستخدمين' },
+  { id: 'leaves.view', label: 'عرض الإجازات والأرصدة' },
+  { id: 'leaves.request', label: 'إنشاء وإلغاء طلب الإجازة' },
+  { id: 'leaves.approve', label: 'اعتماد ورفض الإجازات' },
+  { id: 'leaves.manage_balances', label: 'إدارة أرصدة الإجازات' },
 ];
 
 type SettingsTab = 'company' | 'leave' | 'approvals' | 'roles' | 'fields';
@@ -70,6 +90,10 @@ export function SettingsPage({ value, busy, onSave }: {
 
   function updateCompany(field: keyof SystemSettings['company'], nextValue: string) {
     setSettings((current) => ({ ...current, company: { ...current.company, [field]: nextValue } }));
+  }
+
+  function updateLeaveRules(patch: Partial<SystemSettings['leaveRules']>) {
+    setSettings((current) => ({ ...current, leaveRules: { ...current.leaveRules, ...patch } }));
   }
 
   function addLeaveType() {
@@ -126,8 +150,12 @@ export function SettingsPage({ value, busy, onSave }: {
     setSettings((current) => {
       const currentPermissions = current.roles[role].permissions;
       const nextPermissions = enabled
-        ? [...currentPermissions, permission]
-        : currentPermissions.filter((item) => item !== permission);
+        ? [...new Set([...currentPermissions, permission, ...(permission.startsWith('leaves.') && permission !== 'leaves.view' ? ['leaves.view' as Permission] : [])])]
+        : currentPermissions.filter((item) =>
+          permission === 'leaves.view' && ['leaves.view', 'leaves.request', 'leaves.approve', 'leaves.manage_balances'].includes(item)
+            ? false
+            : item !== permission,
+        );
       return {
         ...current,
         roles: { ...current.roles, [role]: { ...current.roles[role], permissions: nextPermissions } },
@@ -188,6 +216,32 @@ export function SettingsPage({ value, busy, onSave }: {
                 </div>
               </div>)}
             </div> : <SettingsEmpty title="لم تُضف أنواع إجازات بعد" text="أدخل الأنواع والاستحقاقات المعتمدة قبل تفعيل إجراءات الإجازات." onAdd={addLeaveType} />}
+            <div className="settings-policy">
+              <div className="panel-head"><div><h3>تقويم وحدود الاستخدام</h3><p>راجع هذه القيم واعتمدها قبل تشغيل الطلبات؛ لا تُعد استحقاقاً قانونياً تلقائياً.</p></div></div>
+              <div className="settings-policy-body">
+                <div className="working-days">
+                  <span className="field-caption">أيام العمل الأسبوعية</span>
+                  {['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'].map((label, day) => (
+                    <label className="settings-check" key={day}>
+                      <input type="checkbox" checked={settings.leaveRules.workingDays.includes(day)} onChange={(event) => updateLeaveRules({
+                        workingDays: event.target.checked
+                          ? [...settings.leaveRules.workingDays, day].sort((a, b) => a - b)
+                          : settings.leaveRules.workingDays.filter((item) => item !== day),
+                      })} />{label}
+                    </label>
+                  ))}
+                </div>
+                <label className="field settings-wide"><span>العطل الرسمية (تاريخ لكل سطر، YYYY-MM-DD)</span>
+                  <textarea rows={5} value={settings.leaveRules.officialHolidays.join('\n')} placeholder="2026-01-01" onChange={(event) => updateLeaveRules({
+                    officialHolidays: [...new Set(event.target.value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean))],
+                  })} />
+                </label>
+                <label className="field"><span>ساعات يوم العمل</span><input type="number" min="0.25" max="24" step="0.25" value={settings.leaveRules.hoursPerWorkday} onChange={(event) => updateLeaveRules({ hoursPerWorkday: Number(event.target.value) })} /></label>
+                <label className="field"><span>الحصة الشهرية للإجازة بالساعات</span><input type="number" min="0" max="744" step="0.25" value={settings.leaveRules.hourlyMonthlyQuota} onChange={(event) => updateLeaveRules({ hourlyMonthlyQuota: Number(event.target.value) })} /></label>
+                <label className="field"><span>مرات استخدام الساعات شهرياً</span><input type="number" min="0" max="31" step="1" value={settings.leaveRules.hourlyMonthlyUsageLimit} onChange={(event) => updateLeaveRules({ hourlyMonthlyUsageLimit: Number(event.target.value) })} /></label>
+                <label className="field"><span>تنبيه انخفاض الرصيد</span><input type="number" min="0" max="10000" step="0.25" value={settings.leaveRules.lowBalanceThreshold} onChange={(event) => updateLeaveRules({ lowBalanceThreshold: Number(event.target.value) })} /></label>
+              </div>
+            </div>
           </>}
 
           {tab === 'approvals' && <>

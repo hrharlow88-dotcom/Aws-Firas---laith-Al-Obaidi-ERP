@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { SystemSetting, User } from '../models';
 import { AuthenticatedUser, UserRole } from '../types';
-import { DEFAULT_SYSTEM_SETTINGS, Permission, permissionsFor } from '../config/systemSettings';
+import { Permission, normalizeSystemSettings, permissionsFor } from '../config/systemSettings';
 
 const jwtSecret = process.env.JWT_SECRET;
 
@@ -61,8 +61,28 @@ export function allowPermission(permission: Permission) {
     }
     void SystemSetting.findByPk('00000000-0000-4000-8000-000000000001')
       .then((record) => {
-        const settings = record?.value || DEFAULT_SYSTEM_SETTINGS;
+        const settings = normalizeSystemSettings(record?.value);
         if (!permissionsFor(user.role, settings).includes(permission)) {
+          res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
+          return;
+        }
+        next();
+      })
+      .catch(next);
+  };
+}
+
+export function allowAnyPermission(...permissions: Permission[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = req.user as AuthenticatedUser | undefined;
+    if (!user) {
+      res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
+      return;
+    }
+    void SystemSetting.findByPk('00000000-0000-4000-8000-000000000001')
+      .then((record) => {
+        const settings = normalizeSystemSettings(record?.value);
+        if (!permissionsFor(user.role, settings).some((permission) => permissions.includes(permission))) {
           res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
           return;
         }
