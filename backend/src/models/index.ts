@@ -214,6 +214,7 @@ interface LeaveRequestAttributes {
   quantity: string;
   reason: string;
   substituteName: string | null;
+  medicalCertificateReference: string | null;
   status: LeaveRequestStatus;
   approvalRoles: UserRole[];
   approvalStepIndex: number;
@@ -221,7 +222,7 @@ interface LeaveRequestAttributes {
   decidedAt: Date | null;
 }
 
-type LeaveRequestCreationAttributes = Optional<LeaveRequestAttributes, 'id' | 'startTime' | 'endTime' | 'substituteName' | 'status' | 'approvalStepIndex' | 'decidedAt'>;
+type LeaveRequestCreationAttributes = Optional<LeaveRequestAttributes, 'id' | 'startTime' | 'endTime' | 'substituteName' | 'medicalCertificateReference' | 'status' | 'approvalStepIndex' | 'decidedAt'>;
 
 export class LeaveRequest extends Model<LeaveRequestAttributes, LeaveRequestCreationAttributes> implements LeaveRequestAttributes {
   declare id: string;
@@ -234,6 +235,7 @@ export class LeaveRequest extends Model<LeaveRequestAttributes, LeaveRequestCrea
   declare quantity: string;
   declare reason: string;
   declare substituteName: string | null;
+  declare medicalCertificateReference: string | null;
   declare status: LeaveRequestStatus;
   declare approvalRoles: UserRole[];
   declare approvalStepIndex: number;
@@ -253,6 +255,7 @@ LeaveRequest.init(
     quantity: { type: DataTypes.DECIMAL(8, 2), allowNull: false },
     reason: { type: DataTypes.STRING(1000), allowNull: false },
     substituteName: { type: DataTypes.STRING(180), allowNull: true, field: 'substitute_name' },
+    medicalCertificateReference: { type: DataTypes.STRING(180), allowNull: true, field: 'medical_certificate_reference' },
     status: { type: DataTypes.ENUM('pending', 'approved', 'rejected', 'cancelled'), allowNull: false, defaultValue: 'pending' },
     approvalRoles: { type: DataTypes.JSONB, allowNull: false, field: 'approval_roles' },
     approvalStepIndex: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'approval_step_index' },

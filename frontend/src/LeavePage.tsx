@@ -7,6 +7,7 @@ interface EmployeeOption {
   employeeNo: string;
   fullName: string;
   employmentStatus: 'active' | 'inactive' | 'on_leave';
+  hireDate: string;
   branch?: { name: string };
 }
 
@@ -22,6 +23,7 @@ interface LeaveRequest {
   endTime: string | null;
   quantity: string;
   reason: string;
+  medicalCertificateReference: string | null;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   submittedBy: string;
   approvalRoles: UserRole[];
@@ -44,6 +46,8 @@ interface Balance {
   balance: number;
   pending: number;
   available: number;
+  policyEntitlement: number | null;
+  completeServiceYears: number;
 }
 
 interface LedgerEntry {
@@ -180,6 +184,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
       reason: form.get('reason'),
       substituteName: form.get('substituteName'),
     };
+    if (leaveType?.requiresMedicalCertificate) body.medicalCertificateReference = form.get('medicalCertificateReference');
     if (leaveType?.unit === 'hours') {
       body.startTime = form.get('startTime');
       body.endTime = form.get('endTime');
@@ -282,6 +287,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
             <label className="field"><span>وقت البداية *</span><input name="startTime" type="time" required /></label>
             <label className="field"><span>وقت النهاية *</span><input name="endTime" type="time" required /></label>
           </>}
+          {selectedType?.requiresMedicalCertificate && <label className="field"><span>مرجع التقرير الطبي الحكومي المعتمد *</span><input name="medicalCertificateReference" required maxLength={180} /></label>}
           <label className="field"><span>البديل (اختياري)</span><input name="substituteName" maxLength={180} /></label>
           <label className="field leave-wide"><span>سبب الطلب *</span><input name="reason" required maxLength={1000} /></label>
         </div>
@@ -307,7 +313,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
                 {mayApprove && <><button className="icon-link" aria-label="اعتماد" title="اعتماد" disabled={busy} onClick={() => void decide(request, 'approve')}><Check size={15} /></button><button className="icon-link leave-reject" aria-label="رفض" title="رفض" disabled={busy} onClick={() => void decide(request, 'reject')}><X size={15} /></button></>}
                 {mayCancel && (request.submittedBy === userId || canManageBalances) && <button className="text-button" disabled={busy} onClick={() => void cancel(request)}>إلغاء</button>}
               </div>
-                <details className="leave-detail"><summary>التفاصيل</summary><div><p>{request.reason}</p>{request.approvals.map((approval, index) => <p key={`${approval.stepIndex}-${index}`}>{approval.approver?.name || roleLabels[approval.role].label}: {approval.action === 'approved' ? 'موافقة' : 'رفض'}{approval.note ? ` — ${approval.note}` : ''}</p>)}</div></details></td>
+                <details className="leave-detail"><summary>التفاصيل</summary><div><p>{request.reason}</p>{request.medicalCertificateReference && <p>مرجع التقرير الطبي: {request.medicalCertificateReference}</p>}{request.approvals.map((approval, index) => <p key={`${approval.stepIndex}-${index}`}>{approval.approver?.name || roleLabels[approval.role].label}: {approval.action === 'approved' ? 'موافقة' : 'رفض'}{approval.note ? ` — ${approval.note}` : ''}</p>)}</div></details></td>
             </tr>;
           })}</tbody>
         </table></div> : <div className="empty-state"><div className="empty-icon"><Clock3 size={19} /></div><strong>لا توجد طلبات بهذه التصفية</strong><p>ستظهر الطلبات هنا مع سجل الموافقات وحالتها الحالية.</p></div>}
@@ -315,13 +321,13 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
 
       {employeeId && <div className="leave-data-grid">
         <section className="panel">
-          <div className="panel-head"><div><h3>الأرصدة المتاحة</h3><p>{selectedEmployee?.fullName || 'الموظف المحدد'} · تُخصم الطلبات المعلقة من المتاح.</p></div></div>
-          {balances.length ? <div className="table-scroll"><table><thead><tr><th>نوع الإجازة</th><th>الرصيد</th><th>معلق</th><th>متاح</th></tr></thead><tbody>
-            {balances.map((balance) => <tr key={balance.leaveTypeId}><td>{balance.leaveTypeName}</td><td>{balance.balance.toLocaleString('ar-IQ')}</td><td>{balance.pending.toLocaleString('ar-IQ')}</td><td><strong className={balance.available <= settings.leaveRules.lowBalanceThreshold ? 'low-balance' : ''}>{balance.available.toLocaleString('ar-IQ')} {balance.unit === 'hours' ? 'س' : 'يوم'}</strong></td></tr>)}
+          <div className="panel-head"><div><h3>الأرصدة المتاحة</h3><p>{selectedEmployee?.fullName || 'الموظف المحدد'} · الاستحقاق السنوي مرجعي، والمتاح يُحسب من دفتر الحركات بعد حجز المعلّق.</p></div></div>
+          {balances.length ? <div className="table-scroll"><table><thead><tr><th>نوع الإجازة</th><th>استحقاق مرجعي</th><th>الرصيد الدفتري</th><th>معلق</th><th>متاح</th></tr></thead><tbody>
+            {balances.map((balance) => <tr key={balance.leaveTypeId}><td>{balance.leaveTypeName}</td><td>{balance.policyEntitlement === null ? '—' : <span>{balance.policyEntitlement.toLocaleString('ar-IQ')} يوم<span className="table-sub">وفق {balance.completeServiceYears.toLocaleString('ar-IQ')} سنة خدمة · مرجعي</span></span>}</td><td>{balance.balance.toLocaleString('ar-IQ')}</td><td>{balance.pending.toLocaleString('ar-IQ')}</td><td><strong className={balance.available <= settings.leaveRules.lowBalanceThreshold ? 'low-balance' : ''}>{balance.available.toLocaleString('ar-IQ')} {balance.unit === 'hours' ? 'س' : 'يوم'}</strong></td></tr>)}
           </tbody></table></div> : <div className="table-loading">لا توجد أنواع إجازة مفعّلة لعرضها.</div>}
           {canManageBalances && <form className="balance-form" onSubmit={(event) => void adjustBalance(event)}>
             <strong>تسجيل حركة رصيد</strong>
-            <label className="field"><span>نوع الإجازة</span><select name="leaveTypeId" required defaultValue=""><option value="" disabled>اختر</option>{settings.leaveTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
+            <label className="field"><span>نوع الإجازة</span><select name="leaveTypeId" required defaultValue=""><option value="" disabled>اختر</option>{settings.leaveTypes.filter((type) => type.deductsBalance !== false).map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}</select></label>
             <label className="field"><span>الكمية (+/-)</span><input name="quantity" type="number" step="0.25" min="-10000" max="10000" required /></label>
             <label className="field"><span>نوع الحركة</span><select name="entryType"><option value="opening">رصيد افتتاحي</option><option value="adjustment">تسوية</option></select></label>
             <label className="field"><span>السبب</span><input name="reason" maxLength={1000} required /></label>

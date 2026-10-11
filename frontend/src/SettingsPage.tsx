@@ -30,6 +30,10 @@ export interface SystemSettings {
     active: boolean;
     annualEntitlement: number | null;
     carryForwardLimit: number | null;
+    serviceEntitlements?: Array<{ minimumYears: number; days: number }>;
+    dayCountBasis?: 'working' | 'calendar';
+    requiresMedicalCertificate?: boolean;
+    deductsBalance?: boolean;
   }>;
   approvalSteps: Array<{ id: string; role: UserRole }>;
   roles: Record<UserRole, { label: string; permissions: Permission[] }>;
@@ -45,7 +49,7 @@ export interface SystemSettings {
   leaveRules: {
     workingDays: number[];
     officialHolidays: string[];
-    hoursPerWorkday: number;
+    maxHoursPerRequest: number;
     hourlyMonthlyQuota: number;
     hourlyMonthlyUsageLimit: number;
     lowBalanceThreshold: number;
@@ -59,6 +63,56 @@ const roles: Array<{ id: UserRole; label: string }> = [
   { id: 'finance', label: 'المالية' },
   { id: 'branch_manager', label: 'مدير فرع' },
   { id: 'viewer', label: 'مشاهدة فقط' },
+];
+
+const POLICY_LEAVE_TYPES: SystemSettings['leaveTypes'] = [
+  {
+    id: '10000000-0000-4000-8000-000000000001',
+    name: 'الإجازة الاعتيادية',
+    unit: 'days',
+    paid: true,
+    active: true,
+    annualEntitlement: 21,
+    carryForwardLimit: null,
+    serviceEntitlements: [
+      { minimumYears: 6, days: 23 },
+      { minimumYears: 11, days: 25 },
+      { minimumYears: 16, days: 28 },
+    ],
+    dayCountBasis: 'working',
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000002',
+    name: 'الإجازة المرضية',
+    unit: 'days',
+    paid: true,
+    active: true,
+    annualEntitlement: 30,
+    carryForwardLimit: null,
+    requiresMedicalCertificate: true,
+    dayCountBasis: 'working',
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000003',
+    name: 'إجازة الولادة (الحد القانوني)',
+    unit: 'days',
+    paid: true,
+    active: true,
+    annualEntitlement: null,
+    carryForwardLimit: null,
+    dayCountBasis: 'calendar',
+    deductsBalance: false,
+  },
+  {
+    id: '10000000-0000-4000-8000-000000000004',
+    name: 'الإجازة الزمنية',
+    unit: 'hours',
+    paid: true,
+    active: true,
+    annualEntitlement: null,
+    carryForwardLimit: null,
+    deductsBalance: false,
+  },
 ];
 
 const permissions: Array<{ id: Permission; label: string }> = [
@@ -94,6 +148,27 @@ export function SettingsPage({ value, busy, onSave }: {
 
   function updateLeaveRules(patch: Partial<SystemSettings['leaveRules']>) {
     setSettings((current) => ({ ...current, leaveRules: { ...current.leaveRules, ...patch } }));
+  }
+
+  function applyPolicyDefaults() {
+    setSettings((current) => ({
+      ...current,
+      leaveTypes: [
+        ...current.leaveTypes.filter((type) => !POLICY_LEAVE_TYPES.some((preset) => preset.id === type.id)),
+        ...POLICY_LEAVE_TYPES.map((type) => ({ ...type })),
+      ],
+      leaveRules: {
+        ...current.leaveRules,
+        workingDays: [0, 1, 2, 3, 4, 6],
+        maxHoursPerRequest: 3,
+        hourlyMonthlyQuota: 6,
+        hourlyMonthlyUsageLimit: 2,
+      },
+      approvalSteps: current.approvalSteps.length ? current.approvalSteps : [
+        { id: '20000000-0000-4000-8000-000000000001', role: 'branch_manager' },
+        { id: '20000000-0000-4000-8000-000000000002', role: 'hr_manager' },
+      ],
+    }));
   }
 
   function addLeaveType() {
@@ -202,7 +277,7 @@ export function SettingsPage({ value, busy, onSave }: {
           </>}
 
           {tab === 'leave' && <>
-            <div className="panel-head"><div><h3>أنواع الإجازات وسياساتها</h3><p>لا توجد قواعد افتراضية مفترضة؛ أضف فقط ما اعتمدته الشركة.</p></div><button className="button button-quiet" onClick={addLeaveType}><Plus size={15} />إضافة نوع</button></div>
+            <div className="panel-head"><div><h3>أنواع الإجازات وسياساتها</h3><p>تُدرج الحزمة المعتمدة عند اختيارك، وتُحفظ بعد الضغط على حفظ الإعدادات.</p></div><div className="heading-actions"><button className="button button-quiet" onClick={applyPolicyDefaults}>تحميل سياسة الشركة</button><button className="button button-quiet" onClick={addLeaveType}><Plus size={15} />إضافة نوع</button></div></div>
             {settings.leaveTypes.length ? <div className="settings-list">
               {settings.leaveTypes.map((item, index) => <div className="settings-item" key={item.id}>
                 <div className="settings-item-heading"><strong>نوع إجازة {index + 1}</strong><button className="icon-button settings-delete" aria-label={`حذف ${item.name || 'نوع الإجازة'}`} onClick={() => setSettings((current) => ({ ...current, leaveTypes: current.leaveTypes.filter((leave) => leave.id !== item.id) }))}><Trash2 size={16} /></button></div>
@@ -211,13 +286,24 @@ export function SettingsPage({ value, busy, onSave }: {
                   <label className="field"><span>وحدة الاحتساب</span><select value={item.unit} onChange={(event) => updateLeaveType(item.id, { unit: event.target.value as 'days' | 'hours' })}><option value="days">أيام</option><option value="hours">ساعات</option></select></label>
                   <label className="field"><span>الاستحقاق السنوي (اختياري)</span><input type="number" min="0" step="0.25" value={item.annualEntitlement ?? ''} onChange={(event) => updateLeaveType(item.id, { annualEntitlement: event.target.value === '' ? null : Number(event.target.value) })} /></label>
                   <label className="field"><span>حد الترحيل (اختياري)</span><input type="number" min="0" step="0.25" value={item.carryForwardLimit ?? ''} onChange={(event) => updateLeaveType(item.id, { carryForwardLimit: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+                  {item.unit === 'days' && <label className="field"><span>أساس احتساب الأيام</span><select value={item.dayCountBasis || 'working'} onChange={(event) => updateLeaveType(item.id, { dayCountBasis: event.target.value as 'working' | 'calendar' })}><option value="working">أيام العمل</option><option value="calendar">أيام تقويمية</option></select></label>}
+                  {item.name.includes('مرض') && <label className="settings-check"><input type="checkbox" checked={item.requiresMedicalCertificate || false} onChange={(event) => updateLeaveType(item.id, { requiresMedicalCertificate: event.target.checked })} />يتطلب تقريراً طبياً</label>}
+                  <label className="settings-check"><input type="checkbox" checked={item.deductsBalance !== false} onChange={(event) => updateLeaveType(item.id, { deductsBalance: event.target.checked })} />يُخصم من دفتر رصيد الإجازات</label>
+                  {item.serviceEntitlements?.length ? <div className="policy-tiers"><strong>الاستحقاق السنوي المرجعي حسب سنوات الخدمة</strong>{item.serviceEntitlements.map((tier, tierIndex) => <div className="policy-tier" key={tier.minimumYears}><span>من السنة</span><input aria-label="سنة بدء الشريحة" type="number" min="0" max="60" value={tier.minimumYears} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, minimumYears: Number(event.target.value) } : row) })} /><span>يوم</span><input aria-label="أيام الاستحقاق" type="number" min="0" max="365" step="0.25" value={tier.days} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, days: Number(event.target.value) } : row) })} /><button className="icon-button settings-delete" type="button" aria-label="حذف شريحة الاستحقاق" onClick={() => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.filter((_, index) => index !== tierIndex) })}><Trash2 size={15} /></button></div>)}
+                    <button className="button button-quiet" type="button" onClick={() => updateLeaveType(item.id, { serviceEntitlements: [...(item.serviceEntitlements || []), { minimumYears: (item.serviceEntitlements?.[(item.serviceEntitlements?.length || 1) - 1]?.minimumYears || 0) + 1, days: item.annualEntitlement || 0 }] })}><Plus size={14} />إضافة شريحة</button>
+                    <small>الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.</small>
+                  </div>}
                   <label className="settings-check"><input type="checkbox" checked={item.paid} onChange={(event) => updateLeaveType(item.id, { paid: event.target.checked })} />إجازة مدفوعة</label>
                   <label className="settings-check"><input type="checkbox" checked={item.active} onChange={(event) => updateLeaveType(item.id, { active: event.target.checked })} />مفعّل للاستخدام</label>
                 </div>
               </div>)}
             </div> : <SettingsEmpty title="لم تُضف أنواع إجازات بعد" text="أدخل الأنواع والاستحقاقات المعتمدة قبل تفعيل إجراءات الإجازات." onAdd={addLeaveType} />}
+            <div className="permission-note leave-policy-warning">
+              <ShieldCheck size={18} />
+              <div><strong>تنبيه امتثال ومراجعة</strong><span>ملف الشركة ينص على 90 يوماً غير مدفوعة للأمومة؛ لم نفعّل هذا البند. الحزمة تضبط 14 أسبوعاً مدفوعة (98 يوماً تقويمياً) استناداً إلى المادة 87 من قانون العمل العراقي رقم 37 لسنة 2015، بانتظار مراجعة المستشار القانوني للشركة.</span></div>
+            </div>
             <div className="settings-policy">
-              <div className="panel-head"><div><h3>تقويم وحدود الاستخدام</h3><p>راجع هذه القيم واعتمدها قبل تشغيل الطلبات؛ لا تُعد استحقاقاً قانونياً تلقائياً.</p></div></div>
+              <div className="panel-head"><div><h3>تقويم وحدود الاستخدام</h3><p>راجع هذه القيم واعتمدها قبل تشغيل الطلبات؛ الاستحقاقات المرجعية لا تُضاف تلقائياً إلى الأرصدة.</p></div></div>
               <div className="settings-policy-body">
                 <div className="working-days">
                   <span className="field-caption">أيام العمل الأسبوعية</span>
@@ -236,7 +322,7 @@ export function SettingsPage({ value, busy, onSave }: {
                     officialHolidays: [...new Set(event.target.value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean))],
                   })} />
                 </label>
-                <label className="field"><span>ساعات يوم العمل</span><input type="number" min="0.25" max="24" step="0.25" value={settings.leaveRules.hoursPerWorkday} onChange={(event) => updateLeaveRules({ hoursPerWorkday: Number(event.target.value) })} /></label>
+                <label className="field"><span>الحد الأقصى للإجازة الزمنية للطلب</span><input type="number" min="0.25" max="24" step="0.25" value={settings.leaveRules.maxHoursPerRequest} onChange={(event) => updateLeaveRules({ maxHoursPerRequest: Number(event.target.value) })} /></label>
                 <label className="field"><span>الحصة الشهرية للإجازة بالساعات</span><input type="number" min="0" max="744" step="0.25" value={settings.leaveRules.hourlyMonthlyQuota} onChange={(event) => updateLeaveRules({ hourlyMonthlyQuota: Number(event.target.value) })} /></label>
                 <label className="field"><span>مرات استخدام الساعات شهرياً</span><input type="number" min="0" max="31" step="1" value={settings.leaveRules.hourlyMonthlyUsageLimit} onChange={(event) => updateLeaveRules({ hourlyMonthlyUsageLimit: Number(event.target.value) })} /></label>
                 <label className="field"><span>تنبيه انخفاض الرصيد</span><input type="number" min="0" max="10000" step="0.25" value={settings.leaveRules.lowBalanceThreshold} onChange={(event) => updateLeaveRules({ lowBalanceThreshold: Number(event.target.value) })} /></label>

@@ -31,6 +31,10 @@ export interface LeaveTypeSetting {
   active: boolean;
   annualEntitlement: number | null;
   carryForwardLimit: number | null;
+  serviceEntitlements?: Array<{ minimumYears: number; days: number }>;
+  dayCountBasis?: 'working' | 'calendar';
+  requiresMedicalCertificate?: boolean;
+  deductsBalance?: boolean;
 }
 
 export interface ApprovalStepSetting {
@@ -62,7 +66,7 @@ export interface SystemSettings {
   leaveRules: {
     workingDays: number[];
     officialHolidays: string[];
-    hoursPerWorkday: number;
+    maxHoursPerRequest: number;
     hourlyMonthlyQuota: number;
     hourlyMonthlyUsageLimit: number;
     lowBalanceThreshold: number;
@@ -95,7 +99,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   leaveRules: {
     workingDays: [0, 1, 2, 3, 4, 6],
     officialHolidays: [],
-    hoursPerWorkday: 8,
+    maxHoursPerRequest: 3,
     hourlyMonthlyQuota: 6,
     hourlyMonthlyUsageLimit: 2,
     lowBalanceThreshold: 5,
@@ -123,7 +127,14 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
         }];
       }),
     ) as Record<UserRole, RoleSetting>,
-    leaveRules: { ...DEFAULT_SYSTEM_SETTINGS.leaveRules, ...value.leaveRules },
+    leaveRules: {
+      workingDays: value.leaveRules?.workingDays ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.workingDays,
+      officialHolidays: value.leaveRules?.officialHolidays ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.officialHolidays,
+      maxHoursPerRequest: value.leaveRules?.maxHoursPerRequest ?? 3,
+      hourlyMonthlyQuota: value.leaveRules?.hourlyMonthlyQuota ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.hourlyMonthlyQuota,
+      hourlyMonthlyUsageLimit: value.leaveRules?.hourlyMonthlyUsageLimit ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.hourlyMonthlyUsageLimit,
+      lowBalanceThreshold: value.leaveRules?.lowBalanceThreshold ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.lowBalanceThreshold,
+    },
   };
 }
 

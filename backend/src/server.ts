@@ -38,6 +38,9 @@ async function start(): Promise<void> {
   await sequelize.query(
     "ALTER TABLE employees ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '{}'::jsonb",
   );
+  await sequelize.query(
+    'ALTER TABLE IF EXISTS leave_requests ADD COLUMN IF NOT EXISTS medical_certificate_reference VARCHAR(180)',
+  );
 
   const adminEmail = process.env.ADMIN_EMAIL!.trim().toLowerCase();
   const existingAdmin = await User.findOne({ where: { email: adminEmail } });

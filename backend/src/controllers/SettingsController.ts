@@ -32,14 +32,27 @@ function isOptionalNumber(value: unknown): value is number | null {
 function validateLeaveTypes(value: unknown): value is LeaveTypeSetting[] {
   return Array.isArray(value) && value.length <= MAX_LIST_ITEMS && value.every((item) =>
     isRecord(item) &&
-    hasOnlyKeys(item, ['id', 'name', 'unit', 'paid', 'active', 'annualEntitlement', 'carryForwardLimit']) &&
+    hasOnlyKeys(item, ['id', 'name', 'unit', 'paid', 'active', 'annualEntitlement', 'carryForwardLimit', 'serviceEntitlements', 'dayCountBasis', 'requiresMedicalCertificate', 'deductsBalance']) &&
     typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
     isText(item.name, 80) && item.name.trim().length > 0 &&
     (item.unit === 'days' || item.unit === 'hours') &&
     typeof item.paid === 'boolean' &&
     typeof item.active === 'boolean' &&
     isOptionalNumber(item.annualEntitlement) &&
-    isOptionalNumber(item.carryForwardLimit),
+    isOptionalNumber(item.carryForwardLimit) &&
+    (item.serviceEntitlements === undefined ||
+      (Array.isArray(item.serviceEntitlements) && item.serviceEntitlements.length <= 20 &&
+        item.serviceEntitlements.every((tier) => isRecord(tier) &&
+          hasOnlyKeys(tier, ['minimumYears', 'days']) &&
+          Number.isInteger(tier.minimumYears) && Number(tier.minimumYears) >= 0 && Number(tier.minimumYears) <= 60 &&
+          typeof tier.days === 'number' && Number.isFinite(tier.days) && tier.days >= 0 && tier.days <= 365) &&
+        new Set(item.serviceEntitlements.map((tier) => (tier as Record<string, unknown>).minimumYears)).size === item.serviceEntitlements.length &&
+        item.serviceEntitlements.every((tier, index, tiers) =>
+          index === 0 || Number((tiers[index - 1] as Record<string, unknown>).minimumYears) < Number((tier as Record<string, unknown>).minimumYears),
+        ))) &&
+    (item.dayCountBasis === undefined || item.dayCountBasis === 'working' || item.dayCountBasis === 'calendar') &&
+    (item.requiresMedicalCertificate === undefined || typeof item.requiresMedicalCertificate === 'boolean') &&
+    (item.deductsBalance === undefined || typeof item.deductsBalance === 'boolean'),
   ) && new Set(value.map((item) => item.id)).size === value.length;
 }
 
@@ -62,7 +75,7 @@ function validateEmployeeFields(value: unknown): value is EmployeeFieldSetting[]
 
 function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules'] {
   if (!isRecord(value) || !hasOnlyKeys(value, [
-    'workingDays', 'officialHolidays', 'hoursPerWorkday', 'hourlyMonthlyQuota',
+    'workingDays', 'officialHolidays', 'maxHoursPerRequest', 'hourlyMonthlyQuota',
     'hourlyMonthlyUsageLimit', 'lowBalanceThreshold',
   ])) return false;
   const workingDays = value.workingDays;
@@ -77,8 +90,8 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
       new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) === date,
     ) &&
     new Set(officialHolidays).size === officialHolidays.length &&
-    typeof value.hoursPerWorkday === 'number' && Number.isFinite(value.hoursPerWorkday) &&
-    value.hoursPerWorkday > 0 && value.hoursPerWorkday <= 24 &&
+    typeof value.maxHoursPerRequest === 'number' && Number.isFinite(value.maxHoursPerRequest) &&
+    value.maxHoursPerRequest > 0 && value.maxHoursPerRequest <= 24 &&
     typeof value.hourlyMonthlyQuota === 'number' && Number.isFinite(value.hourlyMonthlyQuota) &&
     value.hourlyMonthlyQuota >= 0 && value.hourlyMonthlyQuota <= 744 &&
     Number.isInteger(value.hourlyMonthlyUsageLimit) &&
