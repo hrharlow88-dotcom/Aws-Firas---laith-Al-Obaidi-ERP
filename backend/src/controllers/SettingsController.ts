@@ -5,6 +5,7 @@ import {
   LeaveTypeSetting,
   normalizeSystemSettings,
   PERMISSIONS,
+  PayrollComponentSetting,
   SystemSettings,
   isUserRole,
 } from '../config/systemSettings';
@@ -100,12 +101,47 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
     value.lowBalanceThreshold >= 0 && value.lowBalanceThreshold <= 10000;
 }
 
+function validatePayrollRules(value: unknown): value is SystemSettings['payrollRules'] {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['baseCurrency', 'monthlyDivisor', 'roundingDigits', 'components'])) {
+    return false;
+  }
+  const components = value.components;
+  if (
+    !isText(value.baseCurrency, 3) || !/^[A-Z]{3}$/.test(value.baseCurrency) ||
+    typeof value.monthlyDivisor !== 'number' || !Number.isFinite(value.monthlyDivisor) ||
+    value.monthlyDivisor <= 0 || value.monthlyDivisor > 31 ||
+    !Number.isInteger(value.roundingDigits) || Number(value.roundingDigits) < 0 || Number(value.roundingDigits) > 4 ||
+    !Array.isArray(components) || components.length > MAX_LIST_ITEMS
+  ) return false;
+
+  const valid = components.every((item): item is PayrollComponentSetting =>
+    isRecord(item) &&
+    hasOnlyKeys(item, ['id', 'name', 'category', 'calculation', 'rate', 'active', 'statutory', 'legalApproved']) &&
+    typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
+    isText(item.name, 80) && item.name.trim().length > 0 &&
+    (item.category === 'earning' || item.category === 'deduction') &&
+    ['manual', 'percentage_of_gross', 'percentage_of_basic', 'per_day'].includes(String(item.calculation)) &&
+    typeof item.rate === 'number' && Number.isFinite(item.rate) && item.rate >= 0 && item.rate <= 100000 &&
+    (item.calculation !== 'percentage_of_gross' && item.calculation !== 'percentage_of_basic' || item.rate <= 100) &&
+    typeof item.active === 'boolean' &&
+    typeof item.statutory === 'boolean' &&
+    typeof item.legalApproved === 'boolean' &&
+    (!item.statutory || !item.active || item.legalApproved),
+  );
+  return valid &&
+    new Set(components.map((item) => item.id)).size === components.length &&
+    new Set(components.map((item) => item.name.trim().toLocaleLowerCase())).size === components.length &&
+    components
+      .filter((item) => item.category === 'earning' && item.calculation === 'percentage_of_gross' && item.active)
+      .reduce((sum, item) => sum + item.rate, 0) <= 100;
+}
+
 function validateSettings(value: unknown): value is SystemSettings {
   if (
     !isRecord(value) ||
     !isRecord(value.company) ||
     !isRecord(value.roles) ||
-    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules']) ||
+    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules']) ||
     !hasOnlyKeys(value.company, ['displayName', 'legalName', 'phone', 'email', 'address', 'currency', 'timeZone']) ||
     !hasOnlyKeys(value.roles, [...ROLES])
   ) return false;
@@ -136,6 +172,7 @@ function validateSettings(value: unknown): value is SystemSettings {
     isText(company.timeZone, 80) && company.timeZone.trim().length > 0 &&
     validateLeaveTypes(value.leaveTypes) &&
     validateLeaveRules(value.leaveRules) &&
+    validatePayrollRules(value.payrollRules) &&
     Array.isArray(steps) && steps.length <= 20 &&
     steps.every((step) => isRecord(step) &&
       hasOnlyKeys(step, ['id', 'role']) &&
@@ -159,7 +196,7 @@ export class SettingsController {
 
   static async update(req: Request, res: Response): Promise<void> {
     if (!validateSettings(req.body)) {
-      res.status(400).json({ message: 'تحقق من إعدادات الشركة والإجازات والموافقات والأدوار والحقول.' });
+      res.status(400).json({ message: 'تحقق من إعدادات الشركة والإجازات والرواتب والموافقات والأدوار والحقول.' });
       return;
     }
     const settings = req.body;

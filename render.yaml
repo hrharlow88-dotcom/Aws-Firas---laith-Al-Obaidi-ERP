@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: laith-erp-demo
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: cd backend && npm install && npm run build && cd ../frontend && npm install && npm run build
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        fromDatabase:
+          name: laith-erp-demo-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: laith-erp-demo-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: laith-erp-demo-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: laith-erp-demo-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: laith-erp-demo-db
+          property: password
+      - key: DB_SSL
+        value: "false"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_NAME
+        value: مسؤول النظام
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+databases:
+  - name: laith-erp-demo-db
+    databaseName: laith_erp
+    user: laith_erp_app
+    plan: free
+    region: frankfurt
+    ipAllowList: []

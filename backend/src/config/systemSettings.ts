@@ -52,6 +52,27 @@ export interface EmployeeFieldSetting {
   options: string[];
 }
 
+export type PayrollComponentCategory = 'earning' | 'deduction';
+export type PayrollCalculation = 'manual' | 'percentage_of_gross' | 'percentage_of_basic' | 'per_day';
+
+export interface PayrollComponentSetting {
+  id: string;
+  name: string;
+  category: PayrollComponentCategory;
+  calculation: PayrollCalculation;
+  rate: number;
+  active: boolean;
+  statutory: boolean;
+  legalApproved: boolean;
+}
+
+export interface PayrollRulesSetting {
+  baseCurrency: string;
+  monthlyDivisor: number;
+  roundingDigits: number;
+  components: PayrollComponentSetting[];
+}
+
 export interface RoleSetting {
   label: string;
   permissions: Permission[];
@@ -63,6 +84,7 @@ export interface SystemSettings {
   approvalSteps: ApprovalStepSetting[];
   roles: Record<UserRole, RoleSetting>;
   employeeFields: EmployeeFieldSetting[];
+  payrollRules: PayrollRulesSetting;
   leaveRules: {
     workingDays: number[];
     officialHolidays: string[];
@@ -82,6 +104,25 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
   viewer: { label: 'مشاهدة فقط', permissions: ['leaves.view'] },
 };
 
+export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
+  baseCurrency: 'IQD',
+  monthlyDivisor: 30,
+  roundingDigits: 2,
+  components: [
+    { id: '30000000-0000-4000-8000-000000000001', name: 'الراتب الأساسي', category: 'earning', calculation: 'percentage_of_gross', rate: 50, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000002', name: 'بدل الطعام', category: 'earning', calculation: 'percentage_of_gross', rate: 25, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000003', name: 'بدل تحسين المعيشة', category: 'earning', calculation: 'percentage_of_gross', rate: 25, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000004', name: 'العمولة', category: 'earning', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000005', name: 'المكافأة', category: 'earning', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000006', name: 'الزيادة والفروقات', category: 'earning', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000007', name: 'خصم الغياب والتأخير', category: 'deduction', calculation: 'per_day', rate: 1, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000008', name: 'غرامات المركبات', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000009', name: 'استقطاع آخر', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000010', name: 'السلف', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000011', name: 'الضمان الاجتماعي', category: 'deduction', calculation: 'percentage_of_basic', rate: 5, active: false, statutory: true, legalApproved: false },
+  ],
+};
+
 export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   company: {
     displayName: 'مجموعة ليث العبيدي للسيارات',
@@ -96,6 +137,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   approvalSteps: [],
   roles: DEFAULT_ROLE_SETTINGS,
   employeeFields: [],
+  payrollRules: DEFAULT_PAYROLL_RULES,
   leaveRules: {
     workingDays: [0, 1, 2, 3, 4, 6],
     officialHolidays: [],
@@ -127,6 +169,11 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
         }];
       }),
     ) as Record<UserRole, RoleSetting>,
+    payrollRules: {
+      ...DEFAULT_PAYROLL_RULES,
+      ...value.payrollRules,
+      components: value.payrollRules?.components ?? DEFAULT_PAYROLL_RULES.components,
+    },
     leaveRules: {
       workingDays: value.leaveRules?.workingDays ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.workingDays,
       officialHolidays: value.leaveRules?.officialHolidays ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.officialHolidays,

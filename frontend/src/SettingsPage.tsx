@@ -12,6 +12,20 @@ export type Permission =
   | 'leaves.approve'
   | 'leaves.manage_balances';
 
+export type PayrollComponentCategory = 'earning' | 'deduction';
+export type PayrollCalculation = 'manual' | 'percentage_of_gross' | 'percentage_of_basic' | 'per_day';
+
+export interface PayrollComponentSetting {
+  id: string;
+  name: string;
+  category: PayrollComponentCategory;
+  calculation: PayrollCalculation;
+  rate: number;
+  active: boolean;
+  statutory: boolean;
+  legalApproved: boolean;
+}
+
 export interface SystemSettings {
   company: {
     displayName: string;
@@ -46,6 +60,12 @@ export interface SystemSettings {
     enabled: boolean;
     options: string[];
   }>;
+  payrollRules: {
+    baseCurrency: string;
+    monthlyDivisor: number;
+    roundingDigits: number;
+    components: PayrollComponentSetting[];
+  };
   leaveRules: {
     workingDays: number[];
     officialHolidays: string[];
@@ -126,7 +146,7 @@ const permissions: Array<{ id: Permission; label: string }> = [
   { id: 'leaves.manage_balances', label: 'إدارة أرصدة الإجازات' },
 ];
 
-type SettingsTab = 'company' | 'leave' | 'approvals' | 'roles' | 'fields';
+type SettingsTab = 'company' | 'leave' | 'payroll' | 'approvals' | 'roles' | 'fields';
 
 function createId(): string {
   return crypto.randomUUID();
@@ -148,6 +168,39 @@ export function SettingsPage({ value, busy, onSave }: {
 
   function updateLeaveRules(patch: Partial<SystemSettings['leaveRules']>) {
     setSettings((current) => ({ ...current, leaveRules: { ...current.leaveRules, ...patch } }));
+  }
+
+  function updatePayrollRules(patch: Partial<SystemSettings['payrollRules']>) {
+    setSettings((current) => ({ ...current, payrollRules: { ...current.payrollRules, ...patch } }));
+  }
+
+  function updatePayrollComponent(id: string, patch: Partial<PayrollComponentSetting>) {
+    setSettings((current) => ({
+      ...current,
+      payrollRules: {
+        ...current.payrollRules,
+        components: current.payrollRules.components.map((item) => item.id === id ? { ...item, ...patch } : item),
+      },
+    }));
+  }
+
+  function addPayrollComponent() {
+    setSettings((current) => ({
+      ...current,
+      payrollRules: {
+        ...current.payrollRules,
+        components: [...current.payrollRules.components, {
+          id: createId(),
+          name: '',
+          category: 'earning',
+          calculation: 'manual',
+          rate: 0,
+          active: true,
+          statutory: false,
+          legalApproved: false,
+        }],
+      },
+    }));
   }
 
   function applyPolicyDefaults() {
@@ -241,6 +294,7 @@ export function SettingsPage({ value, busy, onSave }: {
   const tabs: Array<{ id: SettingsTab; label: string }> = [
     { id: 'company', label: 'بيانات الشركة' },
     { id: 'leave', label: 'أنواع الإجازات' },
+    { id: 'payroll', label: 'إعدادات الرواتب' },
     { id: 'approvals', label: 'سير الموافقات' },
     { id: 'roles', label: 'الأدوار والصلاحيات' },
     { id: 'fields', label: 'حقول الموظف' },
@@ -328,6 +382,39 @@ export function SettingsPage({ value, busy, onSave }: {
                 <label className="field"><span>تنبيه انخفاض الرصيد</span><input type="number" min="0" max="10000" step="0.25" value={settings.leaveRules.lowBalanceThreshold} onChange={(event) => updateLeaveRules({ lowBalanceThreshold: Number(event.target.value) })} /></label>
               </div>
             </div>
+          </>}
+
+          {tab === 'payroll' && <>
+            <div className="panel-head">
+              <div><h3>سياسة الرواتب ومكوناتها</h3><p>اضبط مكونات الدخل والاستقطاع وقواعد التقريب دون تعديل الشيفرة.</p></div>
+              <button className="button button-quiet" onClick={addPayrollComponent}><Plus size={15} />إضافة مكوّن</button>
+            </div>
+            <div className="settings-policy-body payroll-policy-body">
+              <label className="field"><span>العملة الأساسية (ISO 4217)</span><input value={settings.payrollRules.baseCurrency} maxLength={3} dir="ltr" onChange={(event) => updatePayrollRules({ baseCurrency: event.target.value.toUpperCase() })} /></label>
+              <label className="field"><span>أيام الشهر لأغراض احتساب الأجر اليومي</span><input type="number" min="1" max="31" step="0.5" value={settings.payrollRules.monthlyDivisor} onChange={(event) => updatePayrollRules({ monthlyDivisor: Number(event.target.value) })} /></label>
+              <label className="field"><span>الخانات العشرية للتقريب</span><input type="number" min="0" max="4" step="1" value={settings.payrollRules.roundingDigits} onChange={(event) => updatePayrollRules({ roundingDigits: Number(event.target.value) })} /></label>
+            </div>
+            <div className="permission-note leave-policy-warning">
+              <ShieldCheck size={18} />
+              <div><strong>إعدادات قابلة للتعديل وليست اعتماداً قانونياً</strong><span>القيم الأولية مستوحاة من ملفات الرواتب المرفقة. مكوّن الضمان معطّل افتراضياً؛ لا يُفعّل أي استقطاع قانوني إلا بعد تحديده ومراجعة واعتماد سياسة الشركة. هذه الإعدادات لا تستورد أسماء أو رواتب ولا تنشئ مسيراً مالياً بحد ذاتها.</span></div>
+            </div>
+            {settings.payrollRules.components.length ? <div className="settings-list">
+              {settings.payrollRules.components.map((item, index) => <div className="settings-item" key={item.id}>
+                <div className="settings-item-heading">
+                  <strong>{item.name || `مكوّن ${index + 1}`}</strong>
+                  <button className="icon-button settings-delete" type="button" aria-label={`حذف ${item.name || 'المكوّن'}`} onClick={() => updatePayrollRules({ components: settings.payrollRules.components.filter((component) => component.id !== item.id) })}><Trash2 size={16} /></button>
+                </div>
+                <div className="form-grid">
+                  <label className="field"><span>اسم المكوّن *</span><input value={item.name} maxLength={80} required onChange={(event) => updatePayrollComponent(item.id, { name: event.target.value })} /></label>
+                  <label className="field"><span>نوع المكوّن</span><select value={item.category} onChange={(event) => updatePayrollComponent(item.id, { category: event.target.value as PayrollComponentCategory })}><option value="earning">استحقاق / دخل</option><option value="deduction">استقطاع</option></select></label>
+                  <label className="field"><span>طريقة الاحتساب</span><select value={item.calculation} onChange={(event) => updatePayrollComponent(item.id, { calculation: event.target.value as PayrollCalculation })}><option value="manual">إدخال يدوي عند إعداد المسير</option><option value="percentage_of_gross">نسبة من الراتب الكلي</option><option value="percentage_of_basic">نسبة من الراتب الأساسي</option><option value="per_day">مبلغ لكل يوم أو وحدة</option></select></label>
+                  <label className="field"><span>{item.calculation.startsWith('percentage') ? 'النسبة %' : item.calculation === 'per_day' ? 'معامل احتساب اليوم' : 'القيمة الافتراضية'}</span><input type="number" min="0" max={item.calculation.startsWith('percentage') ? 100 : 100000} step="0.01" value={item.rate} onChange={(event) => updatePayrollComponent(item.id, { rate: Number(event.target.value) })} /></label>
+                  <label className="settings-check"><input type="checkbox" checked={item.active} disabled={item.statutory && !item.legalApproved} onChange={(event) => updatePayrollComponent(item.id, { active: event.target.checked })} />مكوّن مفعّل للاستخدام</label>
+                  <label className="settings-check"><input type="checkbox" checked={item.statutory} onChange={(event) => updatePayrollComponent(item.id, event.target.checked ? { statutory: true, active: false, legalApproved: false } : { statutory: false, legalApproved: false })} />مكوّن قانوني أو رسمي</label>
+                  {item.statutory && <label className="settings-check"><input type="checkbox" checked={item.legalApproved} onChange={(event) => updatePayrollComponent(item.id, { legalApproved: event.target.checked })} />تمت مراجعته واعتماده قانونياً</label>}
+                </div>
+              </div>)}
+            </div> : <SettingsEmpty title="لا توجد مكونات للرواتب" text="أضف مكونات الدخل والاستقطاع التي تعتمدها شركتك." onAdd={addPayrollComponent} />}
           </>}
 
           {tab === 'approvals' && <>

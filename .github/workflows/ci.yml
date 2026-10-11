@@ -1,0 +1,27 @@
+name: Build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, policy-based-leave-rules]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build API
+        run: |
+          npm install --prefix backend
+          npm run build --prefix backend
+      - name: Build web app
+        run: |
+          npm install --prefix frontend
+          npm run build --prefix frontend
