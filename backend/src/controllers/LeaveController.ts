@@ -361,10 +361,12 @@ export class LeaveController {
 
   static async decide(req: Request, res: Response): Promise<void> {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+    const requestedAction = body.action;
+    const note = body.note;
     if (Object.keys(body).some((key) => !['action', 'note'].includes(key)) ||
-      !['approve', 'reject'].includes(body.action) ||
-      (body.note !== undefined && (typeof body.note !== 'string' || body.note.length > 1000)) ||
-      (body.action === 'reject' && (typeof body.note !== 'string' || !body.note.trim()))) {
+      (requestedAction !== 'approve' && requestedAction !== 'reject') ||
+      (note !== undefined && (typeof note !== 'string' || note.length > 1000)) ||
+      (requestedAction === 'reject' && (typeof note !== 'string' || !note.trim()))) {
       res.status(400).json({ message: 'اختر اعتماداً أو رفضاً وأدخل سبب الرفض عند الحاجة.' });
       return;
     }
@@ -378,7 +380,7 @@ export class LeaveController {
       if (req.user!.role !== 'super_admin' && req.user!.role !== requiredRole) {
         return { status: 403, message: 'هذا الطلب بانتظار دور موافقة آخر.' };
       }
-      const action = body.action === 'approve' ? 'approved' : 'rejected';
+      const action = requestedAction === 'approve' ? 'approved' : 'rejected';
       const isFinalApproval = action === 'approved' && request.approvalStepIndex + 1 >= request.approvalRoles.length;
       let deductsBalance = true;
       if (isFinalApproval) {
@@ -399,7 +401,7 @@ export class LeaveController {
         role: req.user!.role,
         userId: req.user!.id,
         action,
-        note: typeof body.note === 'string' ? body.note.trim() || null : null,
+        note: typeof note === 'string' ? note.trim() || null : null,
       }, { transaction });
       if (action === 'rejected') {
         await request.update({ status: 'rejected', decidedAt: new Date() }, { transaction });
@@ -473,40 +475,45 @@ export class LeaveController {
 
   static async adjustBalance(req: Request, res: Response): Promise<void> {
     const body = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
+    const employeeId = body.employeeId;
+    const leaveTypeId = body.leaveTypeId;
+    const quantity = body.quantity;
+    const entryType = body.entryType;
+    const reason = body.reason;
     if (Object.keys(body).some((key) => !['employeeId', 'leaveTypeId', 'quantity', 'entryType', 'reason'].includes(key)) ||
-      !isUuid(body.employeeId) || !isUuid(body.leaveTypeId) ||
-      typeof body.quantity !== 'number' || !Number.isFinite(body.quantity) || body.quantity === 0 || Math.abs(body.quantity) > 10000 ||
-      !['opening', 'adjustment'].includes(String(body.entryType)) ||
-      typeof body.reason !== 'string' || !body.reason.trim() || body.reason.length > 1000) {
+      !isUuid(employeeId) || !isUuid(leaveTypeId) ||
+      typeof quantity !== 'number' || !Number.isFinite(quantity) || quantity === 0 || Math.abs(quantity) > 10000 ||
+      (entryType !== 'opening' && entryType !== 'adjustment') ||
+      typeof reason !== 'string' || !reason.trim() || reason.length > 1000) {
       res.status(400).json({ message: 'أكمل الموظف ونوع الإجازة وكمية الحركة وسببها بصورة صحيحة.' });
       return;
     }
     const settings = await loadSettings();
-    if (!settings.leaveTypes.some((item) => item.id === body.leaveTypeId && item.deductsBalance !== false)) {
+    if (!settings.leaveTypes.some((item) => item.id === leaveTypeId && item.deductsBalance !== false)) {
       res.status(400).json({ message: 'نوع الإجازة غير موجود في إعدادات النظام.' });
       return;
     }
     const result = await sequelize.transaction(async (transaction) => {
-      const employee = await employeeForRequest(String(body.employeeId), req, transaction);
+      const employee = await employeeForRequest(employeeId, req, transaction);
       if (!employee) return { status: 404, message: 'الموظف غير موجود ضمن نطاق فرعك.' };
-      if (body.entryType === 'opening') {
+      if (entryType === 'opening') {
         const existingOpening = await LeaveLedgerEntry.findOne({
-          where: { employeeId: employee.id, leaveTypeId: body.leaveTypeId, entryType: 'opening' },
+          where: { employeeId: employee.id, leaveTypeId, entryType: 'opening' },
           transaction,
         });
         if (existingOpening) return { status: 409, message: 'يوجد رصيد افتتاحي مسجل لهذا الموظف ونوع الإجازة.' };
       }
-      const totals = await balanceTotals(employee.id, String(body.leaveTypeId), undefined, transaction);
-      if (totals.available + Number(body.quantity) < -0.0001) {
+      const totals = await balanceTotals(employee.id, leaveTypeId, undefined, transaction);
+      if (totals.available + quantity < -0.0001) {
         return { status: 400, message: 'لا يمكن أن يؤدي التعديل إلى رصيد متاح سالب.' };
       }
       const entry = await LeaveLedgerEntry.create({
         employeeId: employee.id,
-        leaveTypeId: String(body.leaveTypeId),
-        quantity: Number(body.quantity).toFixed(2),
-        entryType: body.entryType as 'opening' | 'adjustment',
+        leaveTypeId,
+        quantity: quantity.toFixed(2),
+        entryType,
         requestId: null,
-        reason: body.reason.trim(),
+        reason: reason.trim(),
         createdBy: req.user!.id,
       }, { transaction });
       await AuditLog.create(audit(req, 'leave.balance_adjusted', 'leave_ledger_entry', entry.id), { transaction });

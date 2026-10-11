@@ -26,7 +26,7 @@ export class AuthController {
       return;
     }
 
-    const token = jwt.sign({ sub: user.id, ver: tokenVersion }, secret, { expiresIn: '8h' });
+    const token = jwt.sign({ sub: user.id, ver: user.tokenVersion }, secret, { expiresIn: '8h' });
     res.json({
       token,
       user: {
