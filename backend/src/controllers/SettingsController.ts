@@ -5,6 +5,7 @@ import {
   LeaveTypeSetting,
   normalizeSystemSettings,
   PERMISSIONS,
+  PayrollComponentSetting,
   SystemSettings,
   isUserRole,
 } from '../config/systemSettings';
@@ -32,14 +33,27 @@ function isOptionalNumber(value: unknown): value is number | null {
 function validateLeaveTypes(value: unknown): value is LeaveTypeSetting[] {
   return Array.isArray(value) && value.length <= MAX_LIST_ITEMS && value.every((item) =>
     isRecord(item) &&
-    hasOnlyKeys(item, ['id', 'name', 'unit', 'paid', 'active', 'annualEntitlement', 'carryForwardLimit']) &&
+    hasOnlyKeys(item, ['id', 'name', 'unit', 'paid', 'active', 'annualEntitlement', 'carryForwardLimit', 'serviceEntitlements', 'dayCountBasis', 'requiresMedicalCertificate', 'deductsBalance']) &&
     typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
     isText(item.name, 80) && item.name.trim().length > 0 &&
     (item.unit === 'days' || item.unit === 'hours') &&
     typeof item.paid === 'boolean' &&
     typeof item.active === 'boolean' &&
     isOptionalNumber(item.annualEntitlement) &&
-    isOptionalNumber(item.carryForwardLimit),
+    isOptionalNumber(item.carryForwardLimit) &&
+    (item.serviceEntitlements === undefined ||
+      (Array.isArray(item.serviceEntitlements) && item.serviceEntitlements.length <= 20 &&
+        item.serviceEntitlements.every((tier) => isRecord(tier) &&
+          hasOnlyKeys(tier, ['minimumYears', 'days']) &&
+          Number.isInteger(tier.minimumYears) && Number(tier.minimumYears) >= 0 && Number(tier.minimumYears) <= 60 &&
+          typeof tier.days === 'number' && Number.isFinite(tier.days) && tier.days >= 0 && tier.days <= 365) &&
+        new Set(item.serviceEntitlements.map((tier) => (tier as Record<string, unknown>).minimumYears)).size === item.serviceEntitlements.length &&
+        item.serviceEntitlements.every((tier, index, tiers) =>
+          index === 0 || Number((tiers[index - 1] as Record<string, unknown>).minimumYears) < Number((tier as Record<string, unknown>).minimumYears),
+        ))) &&
+    (item.dayCountBasis === undefined || item.dayCountBasis === 'working' || item.dayCountBasis === 'calendar') &&
+    (item.requiresMedicalCertificate === undefined || typeof item.requiresMedicalCertificate === 'boolean') &&
+    (item.deductsBalance === undefined || typeof item.deductsBalance === 'boolean'),
   ) && new Set(value.map((item) => item.id)).size === value.length;
 }
 
@@ -62,7 +76,7 @@ function validateEmployeeFields(value: unknown): value is EmployeeFieldSetting[]
 
 function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules'] {
   if (!isRecord(value) || !hasOnlyKeys(value, [
-    'workingDays', 'officialHolidays', 'hoursPerWorkday', 'hourlyMonthlyQuota',
+    'workingDays', 'officialHolidays', 'maxHoursPerRequest', 'hourlyMonthlyQuota',
     'hourlyMonthlyUsageLimit', 'lowBalanceThreshold',
   ])) return false;
   const workingDays = value.workingDays;
@@ -77,8 +91,8 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
       new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) === date,
     ) &&
     new Set(officialHolidays).size === officialHolidays.length &&
-    typeof value.hoursPerWorkday === 'number' && Number.isFinite(value.hoursPerWorkday) &&
-    value.hoursPerWorkday > 0 && value.hoursPerWorkday <= 24 &&
+    typeof value.maxHoursPerRequest === 'number' && Number.isFinite(value.maxHoursPerRequest) &&
+    value.maxHoursPerRequest > 0 && value.maxHoursPerRequest <= 24 &&
     typeof value.hourlyMonthlyQuota === 'number' && Number.isFinite(value.hourlyMonthlyQuota) &&
     value.hourlyMonthlyQuota >= 0 && value.hourlyMonthlyQuota <= 744 &&
     Number.isInteger(value.hourlyMonthlyUsageLimit) &&
@@ -87,12 +101,47 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
     value.lowBalanceThreshold >= 0 && value.lowBalanceThreshold <= 10000;
 }
 
+function validatePayrollRules(value: unknown): value is SystemSettings['payrollRules'] {
+  if (!isRecord(value) || !hasOnlyKeys(value, ['baseCurrency', 'monthlyDivisor', 'roundingDigits', 'components'])) {
+    return false;
+  }
+  const components = value.components;
+  if (
+    !isText(value.baseCurrency, 3) || !/^[A-Z]{3}$/.test(value.baseCurrency) ||
+    typeof value.monthlyDivisor !== 'number' || !Number.isFinite(value.monthlyDivisor) ||
+    value.monthlyDivisor <= 0 || value.monthlyDivisor > 31 ||
+    !Number.isInteger(value.roundingDigits) || Number(value.roundingDigits) < 0 || Number(value.roundingDigits) > 4 ||
+    !Array.isArray(components) || components.length > MAX_LIST_ITEMS
+  ) return false;
+
+  const valid = components.every((item): item is PayrollComponentSetting =>
+    isRecord(item) &&
+    hasOnlyKeys(item, ['id', 'name', 'category', 'calculation', 'rate', 'active', 'statutory', 'legalApproved']) &&
+    typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
+    isText(item.name, 80) && item.name.trim().length > 0 &&
+    (item.category === 'earning' || item.category === 'deduction') &&
+    ['manual', 'percentage_of_gross', 'percentage_of_basic', 'per_day'].includes(String(item.calculation)) &&
+    typeof item.rate === 'number' && Number.isFinite(item.rate) && item.rate >= 0 && item.rate <= 100000 &&
+    (item.calculation !== 'percentage_of_gross' && item.calculation !== 'percentage_of_basic' || item.rate <= 100) &&
+    typeof item.active === 'boolean' &&
+    typeof item.statutory === 'boolean' &&
+    typeof item.legalApproved === 'boolean' &&
+    (!item.statutory || !item.active || item.legalApproved),
+  );
+  return valid &&
+    new Set(components.map((item) => item.id)).size === components.length &&
+    new Set(components.map((item) => item.name.trim().toLocaleLowerCase())).size === components.length &&
+    components
+      .filter((item) => item.category === 'earning' && item.calculation === 'percentage_of_gross' && item.active)
+      .reduce((sum, item) => sum + item.rate, 0) <= 100;
+}
+
 function validateSettings(value: unknown): value is SystemSettings {
   if (
     !isRecord(value) ||
     !isRecord(value.company) ||
     !isRecord(value.roles) ||
-    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules']) ||
+    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules']) ||
     !hasOnlyKeys(value.company, ['displayName', 'legalName', 'phone', 'email', 'address', 'currency', 'timeZone']) ||
     !hasOnlyKeys(value.roles, [...ROLES])
   ) return false;
@@ -123,6 +172,7 @@ function validateSettings(value: unknown): value is SystemSettings {
     isText(company.timeZone, 80) && company.timeZone.trim().length > 0 &&
     validateLeaveTypes(value.leaveTypes) &&
     validateLeaveRules(value.leaveRules) &&
+    validatePayrollRules(value.payrollRules) &&
     Array.isArray(steps) && steps.length <= 20 &&
     steps.every((step) => isRecord(step) &&
       hasOnlyKeys(step, ['id', 'role']) &&
@@ -146,7 +196,7 @@ export class SettingsController {
 
   static async update(req: Request, res: Response): Promise<void> {
     if (!validateSettings(req.body)) {
-      res.status(400).json({ message: 'تحقق من إعدادات الشركة والإجازات والموافقات والأدوار والحقول.' });
+      res.status(400).json({ message: 'تحقق من إعدادات الشركة والإجازات والرواتب والموافقات والأدوار والحقول.' });
       return;
     }
     const settings = req.body;

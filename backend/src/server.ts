@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { NextFunction, Request, Response } from 'express';
+import path from 'node:path';
 import helmet from 'helmet';
 import bcrypt from 'bcryptjs';
 import { User, sequelize } from './models';
@@ -38,6 +39,9 @@ async function start(): Promise<void> {
   await sequelize.query(
     "ALTER TABLE employees ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '{}'::jsonb",
   );
+  await sequelize.query(
+    'ALTER TABLE IF EXISTS leave_requests ADD COLUMN IF NOT EXISTS medical_certificate_reference VARCHAR(180)',
+  );
 
   const adminEmail = process.env.ADMIN_EMAIL!.trim().toLowerCase();
   const existingAdmin = await User.findOne({ where: { email: adminEmail } });
@@ -60,6 +64,17 @@ async function start(): Promise<void> {
   app.use(express.json({ limit: '1mb' }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api', routes);
+  const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+  app.use(express.static(frontendDist, { index: false }));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/')) {
+      res.status(404).json({ message: 'المسار المطلوب غير موجود.' });
+      return;
+    }
+    res.sendFile(path.join(frontendDist, 'index.html'), (error) => {
+      if (error) next(error);
+    });
+  });
   app.use((_req, res) => res.status(404).json({ message: 'المسار المطلوب غير موجود.' }));
   app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (error && typeof error === 'object' && 'name' in error && error.name === 'SequelizeUniqueConstraintError') {
