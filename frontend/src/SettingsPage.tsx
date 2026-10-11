@@ -343,10 +343,31 @@ export function SettingsPage({ value, busy, onSave }: {
                   {item.unit === 'days' && <label className="field"><span>أساس احتساب الأيام</span><select value={item.dayCountBasis || 'working'} onChange={(event) => updateLeaveType(item.id, { dayCountBasis: event.target.value as 'working' | 'calendar' })}><option value="working">أيام العمل</option><option value="calendar">أيام تقويمية</option></select></label>}
                   {item.name.includes('مرض') && <label className="settings-check"><input type="checkbox" checked={item.requiresMedicalCertificate || false} onChange={(event) => updateLeaveType(item.id, { requiresMedicalCertificate: event.target.checked })} />يتطلب تقريراً طبياً</label>}
                   <label className="settings-check"><input type="checkbox" checked={item.deductsBalance !== false} onChange={(event) => updateLeaveType(item.id, { deductsBalance: event.target.checked })} />يُخصم من دفتر رصيد الإجازات</label>
-                  {item.serviceEntitlements?.length ? <div className="policy-tiers"><strong>الاستحقاق السنوي المرجعي حسب سنوات الخدمة</strong>{item.serviceEntitlements.map((tier, tierIndex) => <div className="policy-tier" key={tier.minimumYears}><span>من السنة</span><input aria-label="سنة بدء الشريحة" type="number" min="0" max="60" value={tier.minimumYears} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, minimumYears: Number(event.target.value) } : row) })} /><span>يوم</span><input aria-label="أيام الاستحقاق" type="number" min="0" max="365" step="0.25" value={tier.days} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, days: Number(event.target.value) } : row) })} /><button className="icon-button settings-delete" type="button" aria-label="حذف شريحة الاستحقاق" onClick={() => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.filter((_, index) => index !== tierIndex) })}><Trash2 size={15} /></button></div>)}
-                    <button className="button button-quiet" type="button" onClick={() => updateLeaveType(item.id, { serviceEntitlements: [...(item.serviceEntitlements || []), { minimumYears: (item.serviceEntitlements?.[(item.serviceEntitlements?.length || 1) - 1]?.minimumYears || 0) + 1, days: item.annualEntitlement || 0 }] })}><Plus size={14} />إضافة شريحة</button>
-                    <small>الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.</small>
-                  </div>}
+                  {item.serviceEntitlements?.length ? (
+                    <div className="policy-tiers">
+                      <strong>الاستحقاق السنوي المرجعي حسب سنوات الخدمة</strong>
+                      {item.serviceEntitlements.map((tier, tierIndex) => (
+                        <div className="policy-tier" key={tier.minimumYears}>
+                          <span>من السنة</span>
+                          <input aria-label="سنة بدء الشريحة" type="number" min="0" max="60" value={tier.minimumYears} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, minimumYears: Number(event.target.value) } : row) })} />
+                          <span>يوم</span>
+                          <input aria-label="أيام الاستحقاق" type="number" min="0" max="365" step="0.25" value={tier.days} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, days: Number(event.target.value) } : row) })} />
+                          <button className="icon-button settings-delete" type="button" aria-label="حذف شريحة الاستحقاق" onClick={() => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.filter((_, index) => index !== tierIndex) })}><Trash2 size={15} /></button>
+                        </div>
+                      ))}
+                      <button className="button button-quiet" type="button" onClick={() => {
+                        const tiers = item.serviceEntitlements ?? [];
+                        const lastTier = tiers[tiers.length - 1];
+                        updateLeaveType(item.id, {
+                          serviceEntitlements: [...tiers, {
+                            minimumYears: (lastTier?.minimumYears ?? 0) + 1,
+                            days: item.annualEntitlement ?? 0,
+                          }],
+                        });
+                      }}><Plus size={14} />إضافة شريحة</button>
+                      <small>الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.</small>
+                    </div>
+                  ) : null}
                   <label className="settings-check"><input type="checkbox" checked={item.paid} onChange={(event) => updateLeaveType(item.id, { paid: event.target.checked })} />إجازة مدفوعة</label>
                   <label className="settings-check"><input type="checkbox" checked={item.active} onChange={(event) => updateLeaveType(item.id, { active: event.target.checked })} />مفعّل للاستخدام</label>
                 </div>
