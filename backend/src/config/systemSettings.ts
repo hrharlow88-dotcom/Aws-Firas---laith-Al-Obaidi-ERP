@@ -9,7 +9,26 @@ export const PERMISSIONS = [
   'leaves.request',
   'leaves.approve',
   'leaves.manage_balances',
+  'org.manage',
+  'employees.view_profile',
+  'employees.manage_profile',
+  'compensation.view',
+  'compensation.manage',
+  'attendance.view',
+  'attendance.manage',
+  'payroll.view',
+  'payroll.prepare',
+  'payroll.approve',
+  'finance.view',
+  'finance.manage',
+  'finance.post',
+  'audit.view',
+  'integrations.manage',
 ] as const;
+
+/** Permissions that existed before settings started recording knownPermissions. */
+const LEGACY_BASE_PERMISSIONS = ['branches.manage', 'employees.create', 'employees.update', 'users.manage'];
+const LEAVE_PERMISSIONS = ['leaves.view', 'leaves.request', 'leaves.approve', 'leaves.manage_balances'];
 
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -53,7 +72,20 @@ export interface EmployeeFieldSetting {
 }
 
 export type PayrollComponentCategory = 'earning' | 'deduction';
-export type PayrollCalculation = 'manual' | 'percentage_of_gross' | 'percentage_of_basic' | 'per_day';
+export type PayrollCalculation =
+  | 'manual'
+  | 'percentage_of_gross'
+  | 'percentage_of_basic'
+  | 'per_day'
+  | 'per_late_minute'
+  | 'per_overtime_hour';
+
+export const PAYROLL_CALCULATIONS: PayrollCalculation[] = [
+  'manual', 'percentage_of_gross', 'percentage_of_basic', 'per_day', 'per_late_minute', 'per_overtime_hour',
+];
+
+/** The component treated as the basic salary when none is flagged with isBasic. */
+export const DEFAULT_BASIC_COMPONENT_ID = '30000000-0000-4000-8000-000000000001';
 
 export interface PayrollComponentSetting {
   id: string;
@@ -64,6 +96,18 @@ export interface PayrollComponentSetting {
   active: boolean;
   statutory: boolean;
   legalApproved: boolean;
+  isBasic?: boolean;
+}
+
+export interface AttendanceRulesSetting {
+  /** Late minutes forgiven each month before per-minute deductions apply. */
+  lateMonthlyAllowanceMinutes: number;
+  /** Overtime shorter than this on a day is ignored. */
+  overtimeMinimumMinutes: number;
+  /** Two punches closer than this are treated as one (double tap on the device). */
+  duplicatePunchWindowMinutes: number;
+  /** A working day without any punch or approved leave counts as absence. */
+  markAbsentWithoutPunch: boolean;
 }
 
 export interface PayrollRulesSetting {
@@ -85,6 +129,8 @@ export interface SystemSettings {
   roles: Record<UserRole, RoleSetting>;
   employeeFields: EmployeeFieldSetting[];
   payrollRules: PayrollRulesSetting;
+  attendanceRules: AttendanceRulesSetting;
+  knownPermissions: Permission[];
   leaveRules: {
     workingDays: number[];
     officialHolidays: string[];
@@ -97,11 +143,43 @@ export interface SystemSettings {
 
 export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
   super_admin: { label: 'مدير النظام', permissions: [...PERMISSIONS] },
-  hr_manager: { label: 'مدير الموارد البشرية', permissions: [...PERMISSIONS.filter((permission) => permission !== 'users.manage'), 'leaves.view', 'leaves.request', 'leaves.approve', 'leaves.manage_balances'] },
-  hr_staff: { label: 'موظف موارد بشرية', permissions: ['employees.create', 'employees.update', 'leaves.view', 'leaves.request'] },
-  finance: { label: 'المالية', permissions: [] },
-  branch_manager: { label: 'مدير فرع', permissions: ['employees.update', 'leaves.view', 'leaves.request', 'leaves.approve'] },
+  hr_manager: {
+    label: 'مدير الموارد البشرية',
+    permissions: [
+      'branches.manage', 'employees.create', 'employees.update',
+      ...LEAVE_PERMISSIONS,
+      'org.manage', 'employees.view_profile', 'employees.manage_profile',
+      'compensation.view', 'compensation.manage',
+      'attendance.view', 'attendance.manage',
+      'payroll.view', 'payroll.prepare', 'audit.view',
+    ] as Permission[],
+  },
+  hr_staff: {
+    label: 'موظف موارد بشرية',
+    permissions: [
+      'employees.create', 'employees.update', 'leaves.view', 'leaves.request',
+      'employees.view_profile', 'employees.manage_profile', 'attendance.view', 'attendance.manage',
+    ] as Permission[],
+  },
+  finance: {
+    label: 'المالية',
+    permissions: [
+      'compensation.view', 'payroll.view', 'payroll.approve',
+      'finance.view', 'finance.manage', 'finance.post', 'audit.view',
+    ] as Permission[],
+  },
+  branch_manager: {
+    label: 'مدير فرع',
+    permissions: ['employees.update', 'leaves.view', 'leaves.request', 'leaves.approve', 'attendance.view'] as Permission[],
+  },
   viewer: { label: 'مشاهدة فقط', permissions: ['leaves.view'] },
+};
+
+export const DEFAULT_ATTENDANCE_RULES: AttendanceRulesSetting = {
+  lateMonthlyAllowanceMinutes: 0,
+  overtimeMinimumMinutes: 30,
+  duplicatePunchWindowMinutes: 2,
+  markAbsentWithoutPunch: true,
 };
 
 export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
@@ -109,7 +187,7 @@ export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
   monthlyDivisor: 30,
   roundingDigits: 2,
   components: [
-    { id: '30000000-0000-4000-8000-000000000001', name: 'الراتب الأساسي', category: 'earning', calculation: 'percentage_of_gross', rate: 50, active: true, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000001', name: 'الراتب الأساسي', category: 'earning', calculation: 'percentage_of_gross', rate: 50, active: true, statutory: false, legalApproved: false, isBasic: true },
     { id: '30000000-0000-4000-8000-000000000002', name: 'بدل الطعام', category: 'earning', calculation: 'percentage_of_gross', rate: 25, active: true, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000003', name: 'بدل تحسين المعيشة', category: 'earning', calculation: 'percentage_of_gross', rate: 25, active: true, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000004', name: 'العمولة', category: 'earning', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
@@ -120,6 +198,8 @@ export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
     { id: '30000000-0000-4000-8000-000000000009', name: 'استقطاع آخر', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000010', name: 'السلف', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000011', name: 'الضمان الاجتماعي', category: 'deduction', calculation: 'percentage_of_basic', rate: 5, active: false, statutory: true, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000012', name: 'العمل الإضافي', category: 'earning', calculation: 'per_overtime_hour', rate: 1.5, active: false, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000013', name: 'خصم دقائق التأخير', category: 'deduction', calculation: 'per_late_minute', rate: 1, active: false, statutory: false, legalApproved: false },
   ],
 };
 
@@ -138,6 +218,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   roles: DEFAULT_ROLE_SETTINGS,
   employeeFields: [],
   payrollRules: DEFAULT_PAYROLL_RULES,
+  attendanceRules: DEFAULT_ATTENDANCE_RULES,
+  knownPermissions: [...PERMISSIONS],
   leaveRules: {
     workingDays: [0, 1, 2, 3, 4, 6],
     officialHolidays: [],
@@ -158,17 +240,22 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
       ROLES.map((role) => {
         const saved = value.roles?.[role];
         const base = DEFAULT_ROLE_SETTINGS[role];
-        const savedPermissions = saved?.permissions || [];
-        const hasCurrentLeavePermissions = savedPermissions.some((permission) => permission.startsWith('leaves.'));
-        return [role, {
-          ...base,
-          ...saved,
-          permissions: hasCurrentLeavePermissions
-            ? savedPermissions
-            : [...new Set([...savedPermissions, ...base.permissions.filter((permission) => permission.startsWith('leaves.'))])],
-        }];
+        if (!saved) return [role, base];
+        const savedPermissions = (saved.permissions || [])
+          .filter((permission) => (PERMISSIONS as readonly string[]).includes(permission));
+        // Permissions the administrator has already seen keep their saved state
+        // (granted or deliberately removed). Permissions introduced after the
+        // settings were saved start from the role's defaults.
+        const known = value.knownPermissions ?? [
+          ...LEGACY_BASE_PERMISSIONS,
+          ...(savedPermissions.some((permission) => permission.startsWith('leaves.')) ? LEAVE_PERMISSIONS : []),
+        ];
+        const introduced = base.permissions.filter((permission) => !known.includes(permission));
+        return [role, { ...base, ...saved, permissions: [...new Set([...savedPermissions, ...introduced])] }];
       }),
     ) as Record<UserRole, RoleSetting>,
+    knownPermissions: [...PERMISSIONS],
+    attendanceRules: { ...DEFAULT_ATTENDANCE_RULES, ...value.attendanceRules },
     payrollRules: {
       ...DEFAULT_PAYROLL_RULES,
       ...value.payrollRules,
@@ -183,6 +270,12 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
       lowBalanceThreshold: value.leaveRules?.lowBalanceThreshold ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.lowBalanceThreshold,
     },
   };
+}
+
+export function basicComponentId(rules: PayrollRulesSetting): string | null {
+  const flagged = rules.components.find((item) => item.isBasic && item.category === 'earning');
+  if (flagged) return flagged.id;
+  return rules.components.find((item) => item.id === DEFAULT_BASIC_COMPONENT_ID)?.id ?? null;
 }
 
 export function permissionsFor(role: UserRole, settings: SystemSettings): Permission[] {

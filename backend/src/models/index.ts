@@ -6,22 +6,9 @@ import {
 } from 'sequelize';
 import { ROLES, UserRole } from '../types';
 import type { SystemSettings } from '../config/systemSettings';
+import { connectionOptions } from '../db/connection';
 
-export const sequelize = new Sequelize(
-  process.env.DB_NAME || 'erp_system',
-  process.env.DB_USER || 'erp_app',
-  process.env.DB_PASSWORD || '',
-  {
-    dialect: 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT || 5432),
-    logging: false,
-    dialectOptions: process.env.DB_SSL === 'true'
-      ? { ssl: { require: true, rejectUnauthorized: true } }
-      : undefined,
-    pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
-  },
-);
+export const sequelize = new Sequelize(connectionOptions());
 
 interface BranchAttributes {
   id: string;
@@ -154,10 +141,12 @@ interface AuditLogAttributes {
   action: string;
   entityType: string;
   entityId: string | null;
+  details: Record<string, unknown> | null;
+  ip: string | null;
   createdAt?: Date;
 }
 
-type AuditLogCreationAttributes = Optional<AuditLogAttributes, 'id' | 'entityId' | 'createdAt'>;
+type AuditLogCreationAttributes = Optional<AuditLogAttributes, 'id' | 'entityId' | 'details' | 'ip' | 'createdAt'>;
 
 export class AuditLog extends Model<AuditLogAttributes, AuditLogCreationAttributes> implements AuditLogAttributes {
   declare id: string;
@@ -165,6 +154,8 @@ export class AuditLog extends Model<AuditLogAttributes, AuditLogCreationAttribut
   declare action: string;
   declare entityType: string;
   declare entityId: string | null;
+  declare details: Record<string, unknown> | null;
+  declare ip: string | null;
   declare createdAt: Date;
 }
 
@@ -175,6 +166,8 @@ AuditLog.init(
     action: { type: DataTypes.STRING(80), allowNull: false },
     entityType: { type: DataTypes.STRING(80), allowNull: false, field: 'entity_type' },
     entityId: { type: DataTypes.UUID, allowNull: true, field: 'entity_id' },
+    details: { type: DataTypes.JSONB, allowNull: true },
+    ip: { type: DataTypes.STRING(64), allowNull: true },
     createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW, field: 'created_at' },
   },
   { sequelize, tableName: 'audit_logs', underscored: true, updatedAt: false },

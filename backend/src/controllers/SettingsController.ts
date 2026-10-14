@@ -4,11 +4,13 @@ import {
   EmployeeFieldSetting,
   LeaveTypeSetting,
   normalizeSystemSettings,
+  PAYROLL_CALCULATIONS,
   PERMISSIONS,
   PayrollComponentSetting,
   SystemSettings,
   isUserRole,
 } from '../config/systemSettings';
+import { invalidateSettingsCache } from '../services/settings';
 import { ROLES } from '../types';
 
 const GLOBAL_SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
@@ -116,11 +118,14 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
 
   const valid = components.every((item): item is PayrollComponentSetting =>
     isRecord(item) &&
-    hasOnlyKeys(item, ['id', 'name', 'category', 'calculation', 'rate', 'active', 'statutory', 'legalApproved']) &&
+    hasOnlyKeys(item, ['id', 'name', 'category', 'calculation', 'rate', 'active', 'statutory', 'legalApproved', 'isBasic']) &&
     typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
     isText(item.name, 80) && item.name.trim().length > 0 &&
     (item.category === 'earning' || item.category === 'deduction') &&
-    ['manual', 'percentage_of_gross', 'percentage_of_basic', 'per_day'].includes(String(item.calculation)) &&
+    (PAYROLL_CALCULATIONS as string[]).includes(String(item.calculation)) &&
+    (item.calculation !== 'per_overtime_hour' || item.category === 'earning') &&
+    (item.calculation !== 'per_late_minute' || item.category === 'deduction') &&
+    (item.isBasic === undefined || (typeof item.isBasic === 'boolean' && (!item.isBasic || item.category === 'earning'))) &&
     typeof item.rate === 'number' && Number.isFinite(item.rate) && item.rate >= 0 && item.rate <= 100000 &&
     (item.calculation !== 'percentage_of_gross' && item.calculation !== 'percentage_of_basic' || item.rate <= 100) &&
     typeof item.active === 'boolean' &&
@@ -129,6 +134,7 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
     (!item.statutory || !item.active || item.legalApproved),
   );
   return valid &&
+    components.filter((item) => item.isBasic).length <= 1 &&
     new Set(components.map((item) => item.id)).size === components.length &&
     new Set(components.map((item) => item.name.trim().toLocaleLowerCase())).size === components.length &&
     components
@@ -136,12 +142,30 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
       .reduce((sum, item) => sum + item.rate, 0) <= 100;
 }
 
+function validateAttendanceRules(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'lateMonthlyAllowanceMinutes', 'overtimeMinimumMinutes', 'duplicatePunchWindowMinutes', 'markAbsentWithoutPunch',
+  ])) return false;
+  const minutes = (item: unknown, max: number) => Number.isInteger(item) && Number(item) >= 0 && Number(item) <= max;
+  return minutes(value.lateMonthlyAllowanceMinutes, 6000) &&
+    minutes(value.overtimeMinimumMinutes, 600) &&
+    minutes(value.duplicatePunchWindowMinutes, 60) &&
+    typeof value.markAbsentWithoutPunch === 'boolean';
+}
+
 function validateSettings(value: unknown): value is SystemSettings {
   if (
     !isRecord(value) ||
     !isRecord(value.company) ||
     !isRecord(value.roles) ||
-    !hasOnlyKeys(value, ['company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules']) ||
+    !hasOnlyKeys(value, [
+      'company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules',
+      'attendanceRules', 'knownPermissions',
+    ]) ||
+    (value.knownPermissions !== undefined && (!Array.isArray(value.knownPermissions) ||
+      !value.knownPermissions.every((permission) => typeof permission === 'string'))) ||
+    !validateAttendanceRules(value.attendanceRules) ||
     !hasOnlyKeys(value.company, ['displayName', 'legalName', 'phone', 'email', 'address', 'currency', 'timeZone']) ||
     !hasOnlyKeys(value.roles, [...ROLES])
   ) return false;
@@ -199,7 +223,9 @@ export class SettingsController {
       res.status(400).json({ message: 'تحقق من إعدادات الشركة والإجازات والرواتب والموافقات والأدوار والحقول.' });
       return;
     }
-    const settings = req.body;
+    // The administrator saved the full permission matrix, so every permission
+    // that exists now counts as reviewed for future upgrades.
+    const settings = normalizeSystemSettings({ ...req.body, knownPermissions: [...PERMISSIONS] });
     const record = await sequelize.transaction(async (transaction) => {
       const [saved] = await SystemSetting.upsert({
         id: GLOBAL_SETTINGS_ID,
@@ -214,7 +240,8 @@ export class SettingsController {
       }, { transaction });
       return saved;
     });
-    res.json({ data: record.value });
+    invalidateSettingsCache();
+    res.json({ data: normalizeSystemSettings(record.value) });
   }
 }
 

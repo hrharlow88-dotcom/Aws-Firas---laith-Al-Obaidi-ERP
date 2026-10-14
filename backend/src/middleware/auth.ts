@@ -1,12 +1,12 @@
 import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
-import { SystemSetting, User } from '../models';
+import { User } from '../models';
 import { AuthenticatedUser, UserRole } from '../types';
-import { Permission, normalizeSystemSettings, permissionsFor } from '../config/systemSettings';
-
-const jwtSecret = process.env.JWT_SECRET;
+import { Permission } from '../config/systemSettings';
+import { userPermissions } from '../services/settings';
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const jwtSecret = process.env.JWT_SECRET;
   const header = req.header('authorization');
   const token = header?.startsWith('Bearer ') ? header.slice(7) : '';
 
@@ -53,36 +53,18 @@ export function allowRoles(...roles: UserRole[]) {
 }
 
 export function allowPermission(permission: Permission) {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    const user = req.user as AuthenticatedUser | undefined;
-    if (!user) {
-      res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
-      return;
-    }
-    void SystemSetting.findByPk('00000000-0000-4000-8000-000000000001')
-      .then((record) => {
-        const settings = normalizeSystemSettings(record?.value);
-        if (!permissionsFor(user.role, settings).includes(permission)) {
-          res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
-          return;
-        }
-        next();
-      })
-      .catch(next);
-  };
+  return allowAnyPermission(permission);
 }
 
 export function allowAnyPermission(...permissions: Permission[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const user = req.user as AuthenticatedUser | undefined;
-    if (!user) {
+    if (!req.user) {
       res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
       return;
     }
-    void SystemSetting.findByPk('00000000-0000-4000-8000-000000000001')
-      .then((record) => {
-        const settings = normalizeSystemSettings(record?.value);
-        if (!permissionsFor(user.role, settings).some((permission) => permissions.includes(permission))) {
+    void userPermissions(req)
+      .then((granted) => {
+        if (!granted.some((permission) => permissions.includes(permission))) {
           res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
           return;
         }
