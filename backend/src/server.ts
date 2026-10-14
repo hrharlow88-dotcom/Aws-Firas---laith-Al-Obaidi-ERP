@@ -3,7 +3,9 @@ import bcrypt from 'bcryptjs';
 import { User, sequelize } from './models';
 import { runMigrations } from './db/migrator';
 import { createApp } from './app';
-import { startBackgroundJobs } from './jobs';
+import { registerJob, startBackgroundJobs } from './jobs';
+import { processJournalQueue } from './services/finance';
+import { sapConfigured } from './services/sapB1';
 
 function validateEnvironment(): void {
   const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
@@ -57,6 +59,9 @@ async function start(): Promise<void> {
   const app = createApp();
   const port = Number(process.env.PORT || 5000);
   app.listen(port, '0.0.0.0', () => console.log(`ERP API listening on ${port}`));
+  if (sapConfigured()) {
+    registerJob({ name: 'sap-journal-queue', everyMs: 30000, run: async () => { await processJournalQueue(); } });
+  }
   startBackgroundJobs();
 }
 

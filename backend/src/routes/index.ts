@@ -10,6 +10,9 @@ import OrgController from '../controllers/OrgController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
 import AttendanceController from '../controllers/AttendanceController';
 import PayrollController from '../controllers/PayrollController';
+import FinanceController from '../controllers/FinanceController';
+import IntegrationController, { requireApiKey } from '../controllers/IntegrationController';
+import AuditController from '../controllers/AuditController';
 import { uploadSingle } from '../services/storage';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
@@ -33,6 +36,14 @@ const passwordLimiter = rateLimit({
 const publicLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'طلبات كثيرة. حاول بعد قليل.' },
+});
+
+const integrationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { message: 'طلبات كثيرة. حاول بعد قليل.' },
@@ -146,5 +157,27 @@ router.get('/payroll/inputs', requireAuth, allowPermission('payroll.view'), asyn
 router.post('/payroll/inputs', requireAuth, allowPermission('payroll.prepare'), asyncRoute(PayrollController.addInput));
 router.delete('/payroll/inputs/:id', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.deleteInput));
 router.post('/payroll/inputs/import', requireAuth, allowPermission('payroll.prepare'), uploadSingle('file'), asyncRoute(PayrollController.importInputs));
+
+router.get('/finance/mappings', requireAuth, allowPermission('finance.view'), asyncRoute(FinanceController.listMappings));
+router.put('/finance/mappings', requireAuth, allowPermission('finance.manage'), asyncRoute(FinanceController.saveMappings));
+router.get('/finance/sap/status', requireAuth, allowPermission('finance.view'), asyncRoute(FinanceController.sapStatus));
+router.get('/finance/sap/accounts', requireAuth, allowPermission('finance.manage'), asyncRoute(FinanceController.sapAccounts));
+router.get('/finance/sap/cost-centers', requireAuth, allowPermission('finance.manage'), asyncRoute(FinanceController.sapCostCenters));
+router.get('/finance/journals', requireAuth, allowPermission('finance.view'), asyncRoute(FinanceController.listJournals));
+router.get('/finance/journals/:id', requireAuth, allowPermission('finance.view'), validateUuidParam, asyncRoute(FinanceController.getJournal));
+router.get('/finance/journals/:id/export.csv', requireAuth, allowPermission('finance.view'), validateUuidParam, asyncRoute(FinanceController.exportJournal));
+router.post('/finance/journals/from-payroll/:runId', requireAuth, allowPermission('finance.post'), asyncRoute(FinanceController.createFromPayroll));
+router.post('/finance/journals/:id/post', requireAuth, allowPermission('finance.post'), validateUuidParam, asyncRoute(FinanceController.post));
+router.post('/finance/journals/:id/mark-posted', requireAuth, allowPermission('finance.post'), validateUuidParam, asyncRoute(FinanceController.markPostedManually));
+router.post('/finance/journals/:id/cancel', requireAuth, allowPermission('finance.post'), validateUuidParam, asyncRoute(FinanceController.cancel));
+
+router.get('/audit', requireAuth, allowPermission('audit.view'), asyncRoute(AuditController.list));
+
+router.get('/integrations/keys', requireAuth, allowPermission('integrations.manage'), asyncRoute(IntegrationController.listKeys));
+router.post('/integrations/keys', requireAuth, allowPermission('integrations.manage'), asyncRoute(IntegrationController.createKey));
+router.post('/integrations/keys/:id/revoke', requireAuth, allowPermission('integrations.manage'), validateUuidParam, asyncRoute(IntegrationController.revokeKey));
+router.get('/integrations/v1/employees', integrationLimiter, requireApiKey('employees.read'), asyncRoute(IntegrationController.employees));
+router.get('/integrations/v1/org', integrationLimiter, requireApiKey('org.read'), asyncRoute(IntegrationController.org));
+router.get('/integrations/v1/attendance-summary', integrationLimiter, requireApiKey('attendance.read'), asyncRoute(IntegrationController.attendanceSummary));
 
 export default router;
