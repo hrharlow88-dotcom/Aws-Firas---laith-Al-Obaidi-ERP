@@ -8,6 +8,7 @@ import {
 import { addDays } from '../services/attendanceRules';
 import { DateOrder, isXlsx, parseExcelPunches, parseTextPunches } from '../services/punchParser';
 import { getSettings } from '../services/settings';
+import { uploadedName } from '../services/storage';
 import { recordAudit } from '../utils/audit';
 import {
   assertOnlyKeys, badRequest, body, conflict, notFound, optionalNumber, optionalText, queryText, requiredText,
@@ -206,10 +207,10 @@ export class AttendanceController {
       });
     }
     const result = await ingestPunches(parsed.punches, {
-      source: 'file', fileName: file.originalname.slice(0, 255), userId: req.user!.id, invalid: parsed.invalid,
+      source: 'file', fileName: uploadedName(file, 'punches'), userId: req.user!.id, invalid: parsed.invalid,
     });
     await recordAudit(req, null, 'attendance.imported', 'attendance_import', result.importId, {
-      file: file.originalname, imported: result.imported, duplicate: result.duplicate, unmatched: result.unmatched,
+      file: uploadedName(file, 'punches'), imported: result.imported, duplicate: result.duplicate, unmatched: result.unmatched,
     });
     await recomputeAfterIngest(result);
     res.status(201).json({ data: { ...result, format: parsed.format } });

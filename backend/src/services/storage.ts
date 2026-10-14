@@ -72,6 +72,17 @@ export async function storedFileExists(key: string): Promise<boolean> {
   }
 }
 
+/**
+ * Multer (busboy) decodes the multipart file name as Latin-1, which garbles
+ * Arabic names. Re-decode as UTF-8 when the bytes form valid UTF-8.
+ */
+export function uploadedName(file: Express.Multer.File, fallback: string): string {
+  const raw = file.originalname || '';
+  const decoded = Buffer.from(raw, 'latin1').toString('utf8');
+  const name = decoded.includes('\uFFFD') ? raw : decoded;
+  return (name.replace(/[\u0000-\u001f\\/]/g, '_').trim() || fallback).slice(0, 255);
+}
+
 /** RFC 5987 Content-Disposition so Arabic file names survive the download. */
 export function contentDisposition(name: string, inline: boolean): string {
   const fallback = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');

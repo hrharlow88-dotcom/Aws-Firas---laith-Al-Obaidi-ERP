@@ -4,7 +4,7 @@ import { execute, insertRow, select, selectOne, setClause, transaction } from '.
 import { employeeInScope, employeeScopeSql } from '../services/access';
 import { can, getSettings } from '../services/settings';
 import {
-  contentDisposition, openStoredFile, sniffFile, storedFileExists, storeFile,
+  contentDisposition, openStoredFile, sniffFile, storedFileExists, storeFile, uploadedName,
 } from '../services/storage';
 import { recordAudit, diffFields } from '../utils/audit';
 import { decryptField, encryptField, maskTail, randomToken, sha256 } from '../utils/crypto';
@@ -347,7 +347,7 @@ export class EmployeeFileController {
            :storageKey, :originalName, :mimeType, :size, :hash, :userId)`,
         {
           id, employeeId: employee.id, docType, title, docNumber: optionalText(input, 'docNumber', 80) ?? null,
-          issueDate, expiryDate, storageKey, originalName: file.originalname.slice(0, 255) || `document.${kind.ext}`,
+          issueDate, expiryDate, storageKey, originalName: uploadedName(file, `document.${kind.ext}`),
           mimeType: kind.mime, size: file.size, hash: sha256(file.buffer), userId: req.user!.id,
         },
         tx,

@@ -124,7 +124,7 @@ describe('employee file', () => {
 
     const download = await api().get(`/api/documents/${documentId}/file`).set(hr.auth).expect(200);
     expect(download.headers['content-type']).toBe('application/pdf');
-    expect(download.headers['content-disposition']).toContain("filename*=UTF-8''");
+    expect(download.headers['content-disposition']).toContain(`filename*=UTF-8''${encodeURIComponent('البطاقة.pdf')}`);
 
     const viewed = await selectOne<{ count: number }>(
       `SELECT count(*)::int AS count FROM audit_logs WHERE action = 'employee.document_viewed' AND entity_id = :id`,

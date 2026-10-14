@@ -14,6 +14,7 @@ import {
 } from '../utils/http';
 import { isUuid } from '../utils/validation';
 import { isXlsx } from '../services/punchParser';
+import { uploadedName } from '../services/storage';
 
 async function runOr404(id: string): Promise<RunRow> {
   if (!isUuid(id)) throw notFound('مسير الرواتب غير موجود.');
@@ -103,12 +104,14 @@ export class PayrollController {
               r.total_deductions::float AS "totalDeductions", r.total_net::float AS "totalNet", r.warning_count AS "warningCount",
               r.notes, r.cancelled_reason AS "cancelledReason", r.created_by AS "createdBy", r.calculated_by AS "calculatedBy",
               r.calculated_at AS "calculatedAt", r.approved_at AS "approvedAt", r.posted_at AS "postedAt",
-              cu.name AS "createdByName", ca.name AS "calculatedByName", ap.name AS "approvedByName"
+              cu.name AS "createdByName", ca.name AS "calculatedByName", ap.name AS "approvedByName",
+              je.id AS "journalId", je.status AS "journalStatus"
        FROM payroll_runs r
        LEFT JOIN branches b ON b.id = r.branch_id
        JOIN users cu ON cu.id = r.created_by
        LEFT JOIN users ca ON ca.id = r.calculated_by
        LEFT JOIN users ap ON ap.id = r.approved_by
+       LEFT JOIN journal_entries je ON je.source_type = 'payroll' AND je.source_id = r.id AND je.status <> 'cancelled'
        WHERE r.id = :id`,
       { id: run.id },
     );
@@ -481,7 +484,7 @@ export class PayrollController {
           tx,
         );
       }
-      await recordAudit(req, tx, 'payroll.inputs_imported', 'payroll_inputs', null, { period, rows: rows.length, file: file.originalname });
+      await recordAudit(req, tx, 'payroll.inputs_imported', 'payroll_inputs', null, { period, rows: rows.length, file: uploadedName(file, 'inputs.xlsx') });
     });
     res.status(201).json({ data: { imported: rows.length } });
   }

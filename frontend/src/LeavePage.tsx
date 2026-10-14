@@ -101,7 +101,7 @@ async function api<T>(path: string, token: string, method = 'GET', body?: unknow
 }
 
 function dateLabel(value: string): string {
-  return new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' }).format(new Date(`${value}T00:00:00`));
+  return new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { dateStyle: 'medium' }).format(new Date(`${value}T00:00:00`));
 }
 
 export function LeavePage({ token, userId, userRole, settings, canRequest, canApprove, canManageBalances, onError, onSuccess }: Props) {
@@ -295,7 +295,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
       </form>}
 
       <section className="panel">
-        <div className="panel-head"><div><h3>طلبات الإجازة</h3><p>{requests.length.toLocaleString('ar-IQ')} طلباً (حتى 250 طلباً)</p></div></div>
+        <div className="panel-head"><div><h3>طلبات الإجازة</h3><p>{requests.length.toLocaleString('ar-IQ-u-nu-latn')} طلباً (حتى 250 طلباً)</p></div></div>
         {requests.length ? <div className="table-scroll"><table className="leave-table">
           <thead><tr><th>الموظف</th><th>نوع الإجازة</th><th>الفترة</th><th>المدة</th><th>الحالة</th><th>الخطوة التالية</th><th>الإجراء</th></tr></thead>
           <tbody>{requests.map((request) => {
@@ -306,7 +306,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
               <td><strong>{request.employee.fullName}</strong><span className="table-sub">{request.employee.branch?.name || request.employee.employeeNo}</span></td>
               <td>{request.leaveTypeName}</td>
               <td>{dateLabel(request.startsOn)}{request.endsOn !== request.startsOn ? ` – ${dateLabel(request.endsOn)}` : ''}{request.startTime && <span className="table-sub">{request.startTime.slice(0, 5)} – {request.endTime?.slice(0, 5)}</span>}</td>
-              <td>{Number(request.quantity).toLocaleString('ar-IQ')} {request.leaveUnit === 'hours' ? 'س' : 'يوم'}</td>
+              <td>{Number(request.quantity).toLocaleString('ar-IQ-u-nu-latn')} {request.leaveUnit === 'hours' ? 'س' : 'يوم'}</td>
               <td><span className={`leave-status leave-${request.status}`}>{statusLabels[request.status]}</span></td>
               <td>{request.status === 'pending' && requiredRole ? roleLabels[requiredRole].label : '—'}</td>
               <td><div className="leave-actions">
@@ -323,7 +323,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
         <section className="panel">
           <div className="panel-head"><div><h3>الأرصدة المتاحة</h3><p>{selectedEmployee?.fullName || 'الموظف المحدد'} · الاستحقاق السنوي مرجعي، والمتاح يُحسب من دفتر الحركات بعد حجز المعلّق.</p></div></div>
           {balances.length ? <div className="table-scroll"><table><thead><tr><th>نوع الإجازة</th><th>استحقاق مرجعي</th><th>الرصيد الدفتري</th><th>معلق</th><th>متاح</th></tr></thead><tbody>
-            {balances.map((balance) => <tr key={balance.leaveTypeId}><td>{balance.leaveTypeName}</td><td>{balance.policyEntitlement === null ? '—' : <span>{balance.policyEntitlement.toLocaleString('ar-IQ')} يوم<span className="table-sub">وفق {balance.completeServiceYears.toLocaleString('ar-IQ')} سنة خدمة · مرجعي</span></span>}</td><td>{balance.balance.toLocaleString('ar-IQ')}</td><td>{balance.pending.toLocaleString('ar-IQ')}</td><td><strong className={balance.available <= settings.leaveRules.lowBalanceThreshold ? 'low-balance' : ''}>{balance.available.toLocaleString('ar-IQ')} {balance.unit === 'hours' ? 'س' : 'يوم'}</strong></td></tr>)}
+            {balances.map((balance) => <tr key={balance.leaveTypeId}><td>{balance.leaveTypeName}</td><td>{balance.policyEntitlement === null ? '—' : <span>{balance.policyEntitlement.toLocaleString('ar-IQ-u-nu-latn')} يوم<span className="table-sub">وفق {balance.completeServiceYears.toLocaleString('ar-IQ-u-nu-latn')} سنة خدمة · مرجعي</span></span>}</td><td>{balance.balance.toLocaleString('ar-IQ-u-nu-latn')}</td><td>{balance.pending.toLocaleString('ar-IQ-u-nu-latn')}</td><td><strong className={balance.available <= settings.leaveRules.lowBalanceThreshold ? 'low-balance' : ''}>{balance.available.toLocaleString('ar-IQ-u-nu-latn')} {balance.unit === 'hours' ? 'س' : 'يوم'}</strong></td></tr>)}
           </tbody></table></div> : <div className="table-loading">لا توجد أنواع إجازة مفعّلة لعرضها.</div>}
           {canManageBalances && <form className="balance-form" onSubmit={(event) => void adjustBalance(event)}>
             <strong>تسجيل حركة رصيد</strong>
@@ -337,7 +337,7 @@ export function LeavePage({ token, userId, userRole, settings, canRequest, canAp
         <section className="panel">
           <div className="panel-head"><div><h3>سجل حركات الرصيد</h3><p>آخر 250 حركة موثقة لهذا الموظف.</p></div></div>
           {ledger.length ? <div className="table-scroll"><table><thead><tr><th>التاريخ</th><th>النوع</th><th>الكمية</th><th>السبب</th></tr></thead><tbody>
-            {ledger.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat('ar-IQ', { dateStyle: 'medium' }).format(new Date(entry.createdAt))}</td><td>{entryLabels[entry.entryType]} · {entry.leaveTypeName}</td><td>{Number(entry.quantity).toLocaleString('ar-IQ')}</td><td>{entry.reason}</td></tr>)}
+            {ledger.map((entry) => <tr key={entry.id}><td>{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { dateStyle: 'medium' }).format(new Date(entry.createdAt))}</td><td>{entryLabels[entry.entryType]} · {entry.leaveTypeName}</td><td>{Number(entry.quantity).toLocaleString('ar-IQ-u-nu-latn')}</td><td>{entry.reason}</td></tr>)}
           </tbody></table></div> : <div className="table-loading">لا توجد حركات رصيد مسجلة.</div>}
         </section>
       </div>}
