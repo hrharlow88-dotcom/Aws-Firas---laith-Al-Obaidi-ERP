@@ -1,6 +1,6 @@
 import { FormEvent, useRef, useState } from 'react';
 import {
-  ArrowRight, Camera, CreditCard, Download, Eye, FileText, IdCard, Plus, Printer, Trash2, Upload, Wallet,
+  Camera, CreditCard, Download, Eye, FilePlus2, FileText, IdCard, Plus, Printer, Trash2, Upload, Wallet,
 } from 'lucide-react';
 import { EmployeePhoto } from '../components/EmployeePhoto';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
@@ -11,6 +11,7 @@ import {
   monthLabel, today,
 } from '../lib/format';
 import { navigate } from '../lib/router';
+import { useCrumb } from '../lib/breadcrumbs';
 import { useLoad, useSession } from '../lib/session';
 import type { Department, JobTitle } from './OrgPage';
 
@@ -31,7 +32,7 @@ interface EmployeeDetail {
   managerName: string | null;
   hireDate: string;
   terminationDate: string | null;
-  employmentStatus: 'active' | 'inactive' | 'on_leave';
+  employmentStatus: 'active' | 'inactive' | 'on_leave' | 'suspended';
   employmentType: string;
   attendancePin: string | null;
   shiftId: string | null;
@@ -47,6 +48,7 @@ const STATUS: Record<string, { label: string; tone: string }> = {
   active: { label: 'على رأس العمل', tone: 'good' },
   on_leave: { label: 'في إجازة', tone: 'warn' },
   inactive: { label: 'غير نشط', tone: 'muted' },
+  suspended: { label: 'موقوف (بلا راتب)', tone: 'bad' },
 };
 
 export function EmployeeProfilePage({ employeeId, branches }: { employeeId: string; branches: Array<{ id: string; name: string }> }) {
@@ -56,6 +58,7 @@ export function EmployeeProfilePage({ employeeId, branches }: { employeeId: stri
   const detail = useLoad<EmployeeDetail | null>(`/employees/${employeeId}`, null);
   const photoInput = useRef<HTMLInputElement>(null);
   const employee = detail.data;
+  useCrumb(employee?.fullName);
 
   async function uploadPhoto(file: File) {
     const form = new FormData();
@@ -88,7 +91,6 @@ export function EmployeeProfilePage({ employeeId, branches }: { employeeId: stri
 
   return (
     <section className="screen">
-      <button className="back-link" onClick={() => navigate('employees')}><ArrowRight size={15} />دليل الموظفين</button>
       <header className="profile-header panel">
         <div className="profile-photo-wrap">
           <EmployeePhoto employeeId={employee.id} hasPhoto={employee.hasPhoto} name={employee.fullName} size={84} version={photoVersion} />
@@ -397,7 +399,68 @@ function DocumentsTab({ employeeId }: { employeeId: string }) {
 
 interface ContractRow {
   id: string; contractNo: string | null; contractType: string; startsOn: string; endsOn: string | null;
-  probationEndsOn: string | null; status: string; notes: string | null;
+  probationEndsOn: string | null; status: string; notes: string | null; documentId: string | null;
+}
+
+interface ContractTemplate { id: string; name: string; contractType: string | null; fields: string[]; isActive: boolean }
+interface FieldValue { key: string; alias: string; label: string; value: string }
+
+/** The day before the same date `months` later (a one-year contract, a three-month probation). */
+function monthsLater(date: string, months: number): string {
+  const value = new Date(`${date}T00:00:00Z`);
+  value.setUTCMonth(value.getUTCMonth() + months);
+  value.setUTCDate(value.getUTCDate() - 1);
+  return value.toISOString().slice(0, 10);
+}
+
+function GenerateContract({ employeeId, onDone, onClose }: { employeeId: string; onDone: () => void; onClose: () => void }) {
+  const session = useSession();
+  const templates = useLoad<ContractTemplate[]>('/contracts/templates', []);
+  const preview = useLoad<FieldValue[]>(`/employees/${employeeId}/contracts/preview`, []);
+  const active = templates.data.filter((item) => item.isActive);
+  const [templateId, setTemplateId] = useState('');
+  const [startsOn, setStartsOn] = useState(today());
+  const [busy, setBusy] = useState(false);
+  const template = active.find((item) => item.id === templateId) ?? active[0];
+  const termFields = ['start_date', 'end_date', 'probation_end', 'contract_no', 'contract_date', 'contract_day'];
+  const missing = template ? preview.data.filter((field) => template.fields.includes(field.key) && !termFields.includes(field.key) && !field.value) : [];
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!template) return;
+    const form = new FormData(event.currentTarget);
+    const text = (key: string) => String(form.get(key) ?? '') || null;
+    setBusy(true);
+    try {
+      const result = await session.call<{ data: { documentId: string } }>(`/employees/${employeeId}/contracts/generate`, {
+        body: { templateId: template.id, contractType: text('contractType'), startsOn: text('startsOn'), endsOn: text('endsOn'), probationEndsOn: text('probationEndsOn'), contractNo: text('contractNo') },
+      });
+      await downloadFile(`/documents/${result.data.documentId}/file`, session.token, 'contract.docx');
+      session.notify('أُنشئ العقد وحُفظ في مستمسكات الموظف كمسودة. بعد التوقيع ارفع النسخة الموقعة وغيّر الحالة إلى ساري.');
+      onDone();
+    } catch (error) {
+      session.fail(error, 'تعذر إنشاء العقد.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (templates.loading) return <Loading />;
+  if (!active.length) return <Empty icon={<FileText size={22} />} title="لا توجد قوالب عقود" text="ارفع قالب العقد من الموظفون ← قوالب العقود." action={session.can('employees.manage_profile') ? 'قوالب العقود' : undefined} onAction={() => navigate('contract-templates')} />;
+  return (
+    <form onSubmit={submit} key={template?.id}>
+      <div className="form-grid form-grid-2">
+        <label className="field settings-wide"><span>القالب *</span><select value={template?.id ?? ''} onChange={(event) => setTemplateId(event.target.value)}>{active.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label className="field"><span>نوع العقد</span><select name="contractType" defaultValue={template?.contractType ?? 'fixed_term'}>{Object.entries(EMPLOYMENT_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="field"><span>رقم العقد</span><input name="contractNo" dir="ltr" maxLength={60} /></label>
+        <label className="field"><span>تاريخ البداية *</span><input name="startsOn" type="date" required value={startsOn} onChange={(event) => setStartsOn(event.target.value)} /></label>
+        <label className="field"><span>تاريخ النهاية</span><input name="endsOn" type="date" key={startsOn} defaultValue={template?.contractType === 'daily' || !startsOn ? '' : monthsLater(startsOn, 12)} /></label>
+        <label className="field"><span>نهاية فترة التجربة</span><input name="probationEndsOn" type="date" key={`p${startsOn}`} defaultValue={startsOn ? monthsLater(startsOn, 3) : ''} /><small>3 أشهر افتراضياً</small></label>
+      </div>
+      {missing.length > 0 && <Warning title="بيانات ناقصة في ملف الموظف">ستظهر فارغة في العقد: {missing.map((field) => field.label).join('، ')}. أكملها من تبويب البيانات الشخصية ثم أنشئ العقد.</Warning>}
+      <div className="dialog-actions"><button className="button button-primary" disabled={busy || !template}><FilePlus2 size={16} />{busy ? 'جارٍ الإنشاء…' : 'إنشاء العقد وتنزيله'}</button><button type="button" className="button button-quiet" onClick={onClose}>إلغاء</button></div>
+    </form>
+  );
 }
 
 const CONTRACT_STATUS: Record<string, { label: string; tone: string }> = {
@@ -412,6 +475,7 @@ function ContractsTab({ employeeId }: { employeeId: string }) {
   const contracts = useLoad<ContractRow[]>(`/employees/${employeeId}/contracts`, []);
   const canEdit = session.can('employees.manage_profile');
   const [editing, setEditing] = useState<ContractRow | 'new' | null>(null);
+  const [generating, setGenerating] = useState(false);
   const current = editing && editing !== 'new' ? editing : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -437,9 +501,9 @@ function ContractsTab({ employeeId }: { employeeId: string }) {
   return (
     <section className="panel">
       <div className="panel-head"><div><h3>العقود</h3><p>تنبيهات انتهاء العقد وفترة التجربة تظهر في لوحة البداية.</p></div>
-        {canEdit && <button className="button button-primary" onClick={() => setEditing('new')}><Plus size={16} />عقد جديد</button>}</div>
+        {canEdit && <div className="heading-actions"><button className="button button-primary" onClick={() => setGenerating(true)}><FilePlus2 size={16} />إنشاء عقد من قالب</button><button className="button button-quiet" onClick={() => setEditing('new')}><Plus size={16} />تسجيل عقد موقّع</button></div>}</div>
       {contracts.loading ? <Loading /> : contracts.data.length ? <div className="table-scroll"><table>
-        <thead><tr><th>رقم العقد</th><th>النوع</th><th>من</th><th>إلى</th><th>نهاية التجربة</th><th>الحالة</th>{canEdit && <th />}</tr></thead>
+        <thead><tr><th>رقم العقد</th><th>النوع</th><th>من</th><th>إلى</th><th>نهاية التجربة</th><th>الحالة</th><th>الملف</th>{canEdit && <th />}</tr></thead>
         <tbody>{contracts.data.map((contract) => <tr key={contract.id}>
           <td dir="ltr">{contract.contractNo || '—'}</td>
           <td>{EMPLOYMENT_TYPES[contract.contractType] ?? contract.contractType}</td>
@@ -447,9 +511,13 @@ function ContractsTab({ employeeId }: { employeeId: string }) {
           <td>{contract.endsOn ? formatDate(contract.endsOn) : 'مفتوح'}</td>
           <td>{formatDate(contract.probationEndsOn)}</td>
           <td><StatusTag map={CONTRACT_STATUS} value={contract.status} /></td>
+          <td>{contract.documentId ? <button className="icon-link" aria-label="تنزيل العقد" onClick={() => void downloadFile(`/documents/${contract.documentId}/file`, session.token, 'contract').catch((error) => session.fail(error, 'تعذر التنزيل.'))}><Download size={14} /></button> : '—'}</td>
           {canEdit && <td><button className="text-button" onClick={() => setEditing(contract)}>تعديل</button></td>}
         </tr>)}</tbody>
       </table></div> : <Empty icon={<FileText size={22} />} title="لا توجد عقود مسجلة" text="سجّل عقد العمل وتاريخ انتهائه وفترة التجربة." action={canEdit ? 'عقد جديد' : undefined} onAction={() => setEditing('new')} />}
+      <Dialog open={generating} title="إنشاء عقد من قالب" subtitle="يُملأ القالب من ملف الموظف وراتبه، ويُحفظ في مستمسكاته كمسودة للتوقيع." onClose={() => setGenerating(false)} wide>
+        {generating && <GenerateContract employeeId={employeeId} onClose={() => setGenerating(false)} onDone={() => { setGenerating(false); contracts.reload(); }} />}
+      </Dialog>
       <Dialog open={editing !== null} title={current ? 'تعديل العقد' : 'عقد جديد'} onClose={() => setEditing(null)}>
         <form onSubmit={submit} key={current?.id ?? 'new'}>
           <div className="form-grid form-grid-2">
@@ -470,7 +538,7 @@ function ContractsTab({ employeeId }: { employeeId: string }) {
 
 interface CompensationRow {
   id: string; effectiveFrom: string; grossSalary: number; currency: string; reason: string; createdAt: string; createdByName: string;
-  componentOverrides: Record<string, number>;
+  componentOverrides: Record<string, number>; socialSecurityBase: number | null;
 }
 
 function SalaryTab({ employeeId }: { employeeId: string }) {
@@ -496,6 +564,7 @@ function SalaryTab({ employeeId }: { employeeId: string }) {
           grossSalary: Number(form.get('grossSalary')),
           currency: form.get('currency'),
           reason: form.get('reason'),
+          socialSecurityBase: form.get('socialSecurityBase') ? Number(form.get('socialSecurityBase')) : null,
           componentOverrides: overrides,
         },
       });
@@ -511,12 +580,13 @@ function SalaryTab({ employeeId }: { employeeId: string }) {
     <section className="panel">
       <div className="panel-head"><div><h3>الراتب وسجل التعديلات</h3><p>لا يُعدل راتب سابق؛ كل تغيير يُسجل بتاريخ سريان وسبب. المسير المعتمد لا يتأثر بتعديل لاحق.</p></div>
         {canEdit && <button className="button button-primary" onClick={() => setOpen(true)}><Wallet size={16} />تسجيل راتب / زيادة</button>}</div>
-      {current && <div className="salary-current"><span>الراتب الحالي</span><strong>{formatMoney(current.grossSalary, current.currency)}</strong><small>ساري من {formatDate(current.effectiveFrom)}</small></div>}
+      {current && <div className="salary-current"><span>الراتب الحالي</span><strong>{formatMoney(current.grossSalary, current.currency)}</strong><small>ساري من {formatDate(current.effectiveFrom)}{current.socialSecurityBase ? ` · راتب منصة الضمان ${formatMoney(current.socialSecurityBase, current.currency)}` : ' · غير مسجل في الضمان'}</small></div>}
       {history.loading ? <Loading /> : history.data.length ? <div className="table-scroll"><table>
-        <thead><tr><th>ساري من</th><th>الراتب الكلي</th><th>مبالغ ثابتة</th><th>السبب</th><th>سُجل بواسطة</th></tr></thead>
+        <thead><tr><th>ساري من</th><th>الراتب الكلي</th><th>راتب الضمان</th><th>مبالغ ثابتة</th><th>السبب</th><th>سُجل بواسطة</th></tr></thead>
         <tbody>{history.data.map((row) => <tr key={row.id}>
           <td>{formatDate(row.effectiveFrom)}</td>
           <td><strong>{formatMoney(row.grossSalary, row.currency)}</strong></td>
+          <td>{row.socialSecurityBase ? formatMoney(row.socialSecurityBase, row.currency) : '—'}</td>
           <td>{Object.keys(row.componentOverrides || {}).length ? Object.entries(row.componentOverrides).map(([id, amount]) => <small className="table-sub" key={id}>{session.settings.payrollRules.components.find((item) => item.id === id)?.name}: {formatMoney(amount, row.currency)}</small>) : '—'}</td>
           <td className="wrap">{row.reason}</td>
           <td>{row.createdByName}<small className="table-sub">{formatDate(row.createdAt)}</small></td>
@@ -528,11 +598,12 @@ function SalaryTab({ employeeId }: { employeeId: string }) {
             <label className="field"><span>ساري من *</span><input name="effectiveFrom" type="date" required defaultValue={`${today().slice(0, 7)}-01`} /></label>
             <label className="field"><span>الراتب الكلي الشهري *</span><input name="grossSalary" type="number" min={0} step="0.01" required defaultValue={current?.grossSalary ?? ''} /><small>للأجر اليومي: أدخل أجر اليوم الواحد.</small></label>
             <label className="field"><span>العملة</span><select name="currency" defaultValue={current?.currency ?? session.settings.payrollRules.baseCurrency}><option value="IQD">دينار عراقي</option><option value="USD">دولار أمريكي</option></select></label>
+            <label className="field"><span>راتب منصة الضمان</span><input name="socialSecurityBase" type="number" min={0} step="0.01" defaultValue={current?.socialSecurityBase ?? ''} /><small>يُستقطع الضمان منه. اتركه فارغاً لغير المسجلين.</small></label>
             <label className="field settings-wide"><span>السبب *</span><input name="reason" required maxLength={500} placeholder="راتب التعيين / زيادة سنوية / ترقية…" /></label>
           </div>
           <details className="overrides">
             <summary>مبالغ ثابتة لمكونات محددة (اختياري)</summary>
-            <div className="form-grid">{components.filter((item) => item.calculation !== 'per_day' && item.calculation !== 'per_late_minute' && item.calculation !== 'per_overtime_hour').map((component) => (
+            <div className="form-grid">{components.filter((item) => !['per_day', 'per_late_minute', 'per_overtime_hour', 'percentage_of_ss_base', 'loan_installments'].includes(item.calculation)).map((component) => (
               <label className="field" key={component.id}><span>{component.name}</span><input name={`override.${component.id}`} type="number" min={0} step="0.01" defaultValue={current?.componentOverrides?.[component.id] ?? ''} /></label>
             ))}</div>
           </details>

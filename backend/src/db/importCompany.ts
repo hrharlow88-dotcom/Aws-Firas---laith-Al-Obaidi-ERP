@@ -635,14 +635,9 @@ async function main(): Promise<void> {
           paidBefore, startPeriod: addMonths(period, -loan.paidCount), status,
           installmentsTotal: loan.months > 0 ? Math.round(loan.months) : null, paidCount: Math.round(loan.paidCount), reference, notes: loan.notes.slice(0, 1000) || null, userId,
         };
-        if (existing) {
-          await execute(
-            `UPDATE employee_loans SET currency = :currency, principal = :principal, installment = :installment, paid_before = :paidBefore,
-               installments_total = :installmentsTotal, installments_paid_before = :paidCount,
-               start_period = :startPeriod, status = :status, notes = :notes, updated_at = now() WHERE id = :loanId`,
-            { ...values, loanId: existing.id }, tx,
-          );
-        } else {
+        // A loan already in the system is left alone: corrections made there win over the sheet.
+        if (existing) continue;
+        {
           await execute(
             `INSERT INTO employee_loans (id, employee_id, currency, principal, installment, paid_before, installments_total,
                installments_paid_before, start_period, status, reference, notes, created_by)

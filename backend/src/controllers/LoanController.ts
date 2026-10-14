@@ -15,6 +15,7 @@ const LOAN_COLUMNS = `
   l.start_period AS "startPeriod", l.status, l.installments_total AS "installmentsTotal",
   l.installments_paid_before + COALESCE(rp.count, 0) AS "installmentsPaid", l.reference, l.notes, l.created_at AS "createdAt",
   COALESCE(rp.repaid, 0)::float AS "repaidByPayroll",
+  COALESCE(rp.pending, 0)::float AS "pendingDeduction",
   (l.principal - l.paid_before - COALESCE(rp.repaid, 0))::float AS remaining,
   rp.last_period AS "lastPeriod"`;
 
@@ -22,7 +23,11 @@ const LOAN_FROM = `
   FROM employee_loans l
   JOIN employees e ON e.id = l.employee_id
   LEFT JOIN LATERAL (
-    SELECT SUM(x.amount) AS repaid, MAX(x.period) AS last_period, COUNT(*)::int AS count
+    -- Repaid = runs that were approved; a calculated run's deduction is still pending.
+    SELECT SUM(x.amount) FILTER (WHERE r.status IN ('approved','posted')) AS repaid,
+           SUM(x.amount) FILTER (WHERE r.status IN ('draft','calculated')) AS pending,
+           MAX(x.period) FILTER (WHERE r.status IN ('approved','posted')) AS last_period,
+           (COUNT(*) FILTER (WHERE r.status IN ('approved','posted')))::int AS count
     FROM loan_repayments x JOIN payroll_runs r ON r.id = x.run_id
     WHERE x.loan_id = l.id AND r.status <> 'cancelled'
   ) rp ON true`;
@@ -91,9 +96,12 @@ export class LoanController {
   /** Suspends, resumes or closes a loan; amounts already deducted stay as they are. */
   static async setStatus(req: Request, res: Response): Promise<void> {
     const input = body(req);
-    assertOnlyKeys(input, ['status', 'reason', 'installment']);
-    const loan = await selectOne<{ id: string; employeeId: string; status: string; principal: number }>(
-      'SELECT id, employee_id AS "employeeId", status, principal::float AS principal FROM employee_loans WHERE id = :id',
+    assertOnlyKeys(input, ['status', 'reason', 'installment', 'principal', 'paidBefore']);
+    const loan = await selectOne<{ id: string; employeeId: string; status: string; principal: number; paid: number }>(
+      `SELECT l.id, l.employee_id AS "employeeId", l.status, l.principal::float AS principal,
+              (l.paid_before + COALESCE((SELECT SUM(x.amount) FROM loan_repayments x JOIN payroll_runs r ON r.id = x.run_id
+                                         WHERE x.loan_id = l.id AND r.status IN ('approved','posted')), 0))::float AS paid
+       FROM employee_loans l WHERE l.id = :id`,
       { id: req.params.id },
     );
     if (!loan) throw notFound('السلفة غير موجودة.');
@@ -101,17 +109,26 @@ export class LoanController {
     const status = String(input.status ?? loan.status);
     if (!['active', 'suspended', 'closed'].includes(status)) throw badRequest('حالة السلفة غير صالحة.');
     const installment = optionalNumber(input, 'installment', { min: 0.01, max: 1e12 });
-    if (installment && installment > loan.principal) throw badRequest('القسط الشهري أكبر من مبلغ السلفة.');
+    // Correcting the amount lent (a typing error, a top-up) never below what was already repaid.
+    const principal = optionalNumber(input, 'principal', { min: 0.01, max: 1e12 });
+    if (principal && principal < loan.paid) throw badRequest('مبلغ السلفة أقل مما سُدد منها.');
+    // What was repaid before the system (outside payroll runs) can be corrected too.
+    const paidBefore = optionalNumber(input, 'paidBefore', { min: 0, max: 1e12 });
+    if (paidBefore !== undefined && paidBefore !== null && paidBefore > (principal ?? loan.principal)) throw badRequest('المسدد سابقاً أكبر من مبلغ السلفة.');
+    if (installment && installment > (principal ?? loan.principal)) throw badRequest('القسط الشهري أكبر من مبلغ السلفة.');
     const reason = requiredText(input, 'reason', 500, 'السبب');
-    if (status === loan.status && !installment) throw conflict('لا يوجد تغيير.');
+    if (status === loan.status && !installment && !principal && (paidBefore === undefined || paidBefore === null)) throw conflict('لا يوجد تغيير.');
     await transaction(async (tx) => {
       await execute(
-        `UPDATE employee_loans SET status = :status, installment = COALESCE(:installment, installment), updated_at = now() WHERE id = :id`,
-        { id: loan.id, status, installment: installment ?? null },
+        `UPDATE employee_loans SET status = :status, installment = COALESCE(:installment, installment),
+           principal = COALESCE(:principal, principal), paid_before = COALESCE(:paidBefore, paid_before), updated_at = now()
+         WHERE id = :id`,
+        { id: loan.id, status, installment: installment ?? null, principal: principal ?? null, paidBefore: paidBefore ?? null },
         tx,
       );
       await recordAudit(req, tx, 'payroll.loan_updated', 'employee', loan.employeeId, {
-        loanId: loan.id, from: loan.status, to: status, installment: installment ?? undefined, reason,
+        loanId: loan.id, from: loan.status, to: status, installment: installment ?? undefined,
+        principal: principal ? [loan.principal, principal] : undefined, paidBefore: paidBefore ?? undefined, reason,
       });
     });
     res.json({ data: { id: loan.id } });

@@ -11,7 +11,7 @@ export interface Route {
 
 export function parseRoute(hash = window.location.hash): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
-  return { page: parts[0] || 'overview', params: parts.slice(1) };
+  return { page: parts[0] || 'home', params: parts.slice(1) };
 }
 
 export function navigate(page: string, ...params: string[]): void {

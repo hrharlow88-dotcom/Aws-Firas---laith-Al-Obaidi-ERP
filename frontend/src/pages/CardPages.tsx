@@ -1,3 +1,4 @@
+import { useCrumb } from '../lib/breadcrumbs';
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { ArrowRight, CheckCircle2, Printer, XCircle } from 'lucide-react';
@@ -20,6 +21,7 @@ function verifyUrl(token: string): string {
 export function EmployeeCardPage({ employeeId }: { employeeId: string }) {
   const card = useLoad<CardData | null>(`/employees/${employeeId}/card`, null);
   const photo = useEmployeePhoto(employeeId, Boolean(card.data?.hasPhoto));
+  useCrumb(card.data && { label: card.data.fullName, href: `#/employees/${employeeId}` }, 'البطاقة');
   const [qr, setQr] = useState<string | null>(null);
   useEffect(() => {
     if (!card.data?.cardToken) return;

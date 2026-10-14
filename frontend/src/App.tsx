@@ -1,7 +1,6 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowDownLeft,
   ArrowLeft,
   Building2,
   CalendarDays,
@@ -10,21 +9,15 @@ import {
   CircleHelp,
   Clock3,
   Fingerprint,
-  History,
-  Landmark,
-  LayoutDashboard,
   KeyRound,
+  LayoutGrid,
   LogOut,
-  Menu,
-  Network,
-  PlugZap,
   Plus,
   Search,
   ShieldCheck,
   Users,
   UserRoundCog,
   Wallet,
-  Settings as SettingsIcon,
   X,
 } from 'lucide-react';
 import { SettingsPage } from './SettingsPage';
@@ -42,10 +35,16 @@ import { PayrollPage, PayslipPage } from './pages/PayrollPage';
 import { AuditPage, FinancePage, IntegrationsPage } from './pages/FinancePage';
 import { EmployeeCardPage, VerifyCardPage } from './pages/CardPages';
 import { RUN_STATUS } from './lib/format';
+import { APPS, appForPage, visibleMenus } from './lib/apps';
+import type { AppDefinition, AppMenu } from './lib/apps';
+import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
+import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
+import { ContractTemplatesPage } from './pages/ContractTemplatesPage';
 import { StatusTag } from './components/ui';
 
 type Page =
-  | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
+  | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
+  | 'payroll-days' | 'loans' | 'contract-templates'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
 
 interface User {
@@ -85,7 +84,7 @@ interface Employee {
   department: string;
   position: string;
   hireDate: string;
-  employmentStatus: 'active' | 'inactive' | 'on_leave';
+  employmentStatus: 'active' | 'inactive' | 'on_leave' | 'suspended';
   customFields?: Record<string, string | number>;
   branch?: Pick<Branch, 'id' | 'code' | 'name' | 'city'>;
   departmentId?: string | null;
@@ -119,6 +118,7 @@ const statusNames = {
   active: 'على رأس العمل',
   inactive: 'غير نشط',
   on_leave: 'في إجازة',
+  suspended: 'موقوف',
 } as const;
 
 function api<T>(path: string, token?: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -157,7 +157,6 @@ function Workspace() {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [mobileNav, setMobileNav] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
@@ -430,84 +429,48 @@ function Workspace() {
     return <main className="startup"><BrandMark size={64} /><p>جارٍ تحميل الإعدادات…</p></main>;
   }
 
-  const pageTitle: Record<Page, string> = {
-    overview: 'نظرة عامة',
-    employees: route.params[0] ? 'ملف الموظف' : 'دليل الموظفين',
-    org: 'الهيكل التنظيمي',
-    branches: 'الفروع والمواقع',
-    access: 'المستخدمون والصلاحيات',
-    leaves: 'إدارة الإجازات',
-    attendance: 'الحضور والانصراف',
-    payroll: 'الرواتب',
-    payslip: 'قسيمة الراتب',
-    card: 'بطاقة الموظف',
-    finance: 'المالية و SAP',
-    audit: 'سجل التدقيق',
-    integrations: 'الربط مع الأنظمة',
-    security: 'أمان الحساب',
-    settings: 'إعدادات النظام',
-  };
-  const go = (next: Page) => { setPage(next); setMobileNav(false); };
+  const go = (next: Page) => { setPage(next); };
   const branchOptions = branches.filter((branch) => branch.isActive).map((branch) => ({ id: branch.id, name: branch.name }));
+  const isAdmin = user.role === 'super_admin';
+  const currentApp = page === 'home' ? undefined : appForPage(page) ?? APPS[0];
+  const menus = currentApp ? visibleMenus(currentApp, can, isAdmin) : [];
 
   return (
     <SessionProvider value={session}>
-    <div className="app-shell">
-      <button className="nav-scrim" aria-label="إغلاق القائمة" onClick={() => setMobileNav(false)} hidden={!mobileNav} />
-      <aside className={`rail ${mobileNav ? 'rail-open' : ''}`}>
-        <div className="brand">
-          <BrandMark size={46} />
-          <div><strong>{systemSettings?.company.displayName || 'شركة الليث العبيدي'}</strong><span>نظام إدارة الموارد والمالية</span></div>
-          <button className="icon-button rail-close" aria-label="إغلاق القائمة" onClick={() => setMobileNav(false)}><X size={18} /></button>
+    <CrumbProvider>
+    <div className="o-shell">
+      <header className="o-navbar no-print">
+        <button className={`o-apps-button ${page === 'home' ? 'is-home' : ''}`} onClick={() => go('home')} title="كل التطبيقات" aria-label="كل التطبيقات"><LayoutGrid size={20} /></button>
+        {currentApp
+          ? <button className="o-app-name" onClick={() => menus[0] && navigate(menus[0].page)}>{currentApp.label}</button>
+          : <span className="o-app-name o-brand-name"><BrandMark size={24} />{systemSettings?.company.displayName || 'شركة الليث العبيدي'}</span>}
+        {menus.length > 1 && <nav className="o-menus" aria-label="قوائم التطبيق">
+          {menus.map((menu) => <button key={menu.page} className={menuActive(menu.page, page, currentApp) ? 'is-active' : ''} aria-current={menuActive(menu.page, page, currentApp) ? 'page' : undefined} onClick={() => navigate(menu.page)}>{menu.label}</button>)}
+        </nav>}
+        <div className="o-navbar-end">
+          <span className="o-date"><Clock3 size={14} />{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span>
+          <details className="o-user">
+            <summary><span className="avatar avatar-small">{user.name.slice(0, 1)}</span><span className="o-user-name">{user.name}</span><ChevronDown size={14} /></summary>
+            <div className="o-user-menu">
+              <div className="o-user-head"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
+              <button onClick={() => navigate('security')}><KeyRound size={15} />أمان الحساب</button>
+              <button onClick={signOut}><LogOut size={15} />تسجيل الخروج</button>
+            </div>
+          </details>
         </div>
-        <nav className="main-nav" aria-label="التنقل الرئيسي">
-          <div className="rail-label">الموارد البشرية</div>
-          <NavButton active={page === 'overview'} icon={<LayoutDashboard />} label="نظرة عامة" onClick={() => go('overview')} />
-          <NavButton active={page === 'employees' || page === 'card'} icon={<Users />} label="الموظفون" onClick={() => go('employees')} />
-          <NavButton active={page === 'org'} icon={<Network />} label="الهيكل التنظيمي" onClick={() => go('org')} />
-          <NavButton active={page === 'branches'} icon={<Building2 />} label="الفروع" onClick={() => go('branches')} />
-          {can('attendance.view') && <NavButton active={page === 'attendance'} icon={<Fingerprint />} label="الحضور والانصراف" onClick={() => go('attendance')} />}
-          {canViewLeaves && <NavButton active={page === 'leaves'} icon={<CalendarDays />} label="الإجازات والأرصدة" onClick={() => go('leaves')} />}
-          {(can('payroll.view') || can('finance.view') || can('audit.view')) && <div className="rail-label">المالية والرقابة</div>}
-          {can('payroll.view') && <NavButton active={page === 'payroll' || page === 'payslip'} icon={<Wallet />} label="الرواتب" onClick={() => go('payroll')} />}
-          {can('finance.view') && <NavButton active={page === 'finance'} icon={<Landmark />} label="المالية و SAP" onClick={() => go('finance')} />}
-          {can('audit.view') && <NavButton active={page === 'audit'} icon={<History />} label="سجل التدقيق" onClick={() => go('audit')} />}
-          <div className="rail-label">النظام</div>
-          {canManageAccess && <NavButton active={page === 'access'} icon={<ShieldCheck />} label="المستخدمون والصلاحيات" onClick={() => go('access')} />}
-          {can('integrations.manage') && <NavButton active={page === 'integrations'} icon={<PlugZap />} label="الربط مع الأنظمة" onClick={() => go('integrations')} />}
-          {canManageSettings && <NavButton active={page === 'settings'} icon={<SettingsIcon />} label="إعدادات النظام" onClick={() => go('settings')} />}
-          <NavButton active={page === 'security'} icon={<KeyRound />} label="أمان الحساب" onClick={() => go('security')} />
-        </nav>
-        <div className="rail-bottom">
-          <div className="privacy-note"><ShieldCheck size={16} /><span>الوصول للبيانات<br />محدد حسب الدور</span></div>
-          <div className="rail-profile">
-            <div className="avatar">{user.name.slice(0, 1)}</div>
-            <div className="profile-copy"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
-            <button className="icon-button" onClick={signOut} title="تسجيل الخروج" aria-label="تسجيل الخروج"><LogOut size={17} /></button>
-          </div>
-        </div>
-      </aside>
+      </header>
 
-      <main className="main-area">
-        <header className="topbar">
-          <div className="topbar-title">
-            <button className="icon-button menu-trigger" aria-label="فتح القائمة" onClick={() => setMobileNav(true)}><Menu size={20} /></button>
-            <div><span className="breadcrumb">{systemSettings?.company.displayName || 'شركة الليث العبيدي'} / مساحة العمل</span><h1>{pageTitle[page] ?? 'نظرة عامة'}</h1></div>
-          </div>
-          <div className="topbar-end">
-            <span className="today-date"><Clock3 size={15} />{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { dateStyle: 'full' }).format(new Date())}</span>
-            <button className="profile-trigger" onClick={signOut} title="تسجيل الخروج" aria-label="تسجيل الخروج"><span className="avatar avatar-small">{user.name.slice(0, 1)}</span><span>{user.name}</span><ChevronDown size={15} /></button>
-          </div>
-        </header>
+      {page !== 'home' && currentApp && <Breadcrumbs page={page} app={currentApp} menus={menus} hasParams={route.params.length > 0} />}
 
-        <div className="page-content">
+      <main className={page === 'home' ? 'o-home-area' : 'page-content'}>
           {(error || success) && <div className={`notice ${error ? 'notice-error' : 'notice-success'}`} role="status">
             {error ? <CircleHelp size={17} /> : <Check size={17} />}
             <span>{error || success}</span>
             <button className="icon-button" aria-label="إغلاق التنبيه" onClick={() => { setError(''); setSuccess(''); }}><X size={16} /></button>
           </div>}
 
-          {(page === 'overview' || !pageTitle[page]) && <Dashboard
+          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} />}
+          {(page === 'overview' || !KNOWN_PAGES.includes(page)) && <Dashboard
             employees={employees}
             branches={branches}
             activeEmployees={activeEmployees}
@@ -568,6 +531,9 @@ function Workspace() {
           {page === 'org' && <OrgPage branches={branchOptions} />}
           {page === 'attendance' && can('attendance.view') && <AttendancePage branches={branchOptions} />}
           {page === 'payroll' && can('payroll.view') && <PayrollPage key={route.params[0] ?? 'list'} runId={route.params[0]} branches={branchOptions} />}
+          {page === 'payroll-days' && can('payroll.view') && <DayAdjustmentsPage />}
+          {page === 'loans' && can('payroll.view') && <LoansPage />}
+          {page === 'contract-templates' && can('employees.manage_profile') && <ContractTemplatesPage />}
           {page === 'payslip' && route.params[1] && <PayslipPage runId={route.params[0]} employeeId={route.params[1]} />}
           {page === 'card' && route.params[0] && <EmployeeCardPage employeeId={route.params[0]} />}
           {page === 'finance' && can('finance.view') && <FinancePage key={route.params.join('/')} params={route.params} />}
@@ -576,11 +542,75 @@ function Workspace() {
           {page === 'security' && <SecurityPage onSubmit={handlePasswordChange} />}
           {page === 'settings' && canManageSettings && systemSettings && <SettingsPage value={systemSettings} busy={savingSettings} onSave={handleSettingsSave} />}
 
-          <footer className="page-footer no-print"><span>{systemSettings?.company.displayName || 'شركة الليث العبيدي'}</span><span>نظام الإدارة الداخلي</span></footer>
-        </div>
+          {page !== 'home' && <footer className="page-footer no-print"><span>{systemSettings?.company.displayName || 'شركة الليث العبيدي'}</span><span>نظام الإدارة الداخلي</span></footer>}
       </main>
     </div>
+    </CrumbProvider>
     </SessionProvider>
+  );
+}
+
+const KNOWN_PAGES: string[] = [
+  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans',
+  'contract-templates', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
+];
+
+function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {
+  if (menuPage === page) return true;
+  // Pages reached from a menu (a payslip, an employee card) keep that menu lit.
+  return Boolean(app?.extraPages?.includes(page)) && app?.menus[0]?.page === menuPage;
+}
+
+function Breadcrumbs({ page, app, menus, hasParams }: { page: string; app: AppDefinition; menus: AppMenu[]; hasParams: boolean }) {
+  const extra = useCrumbs();
+  const menu = menus.find((item) => item.page === page) ?? (app.extraPages?.includes(page) ? menus[0] : undefined);
+  const base = menu ? { label: menu.label, href: `#/${menu.page}` } : { label: app.label };
+  const trail = [base, ...extra];
+  const linkBase = extra.length > 0 || (hasParams && !app.extraPages?.includes(page));
+  return (
+    <div className="o-control no-print">
+      <nav aria-label="مسار التنقل"><ol className="o-crumbs">
+        {trail.map((crumb, index) => {
+          const last = index === trail.length - 1 && !(index === 0 && linkBase);
+          return <li key={`${crumb.label}-${index}`}>
+            {!last && crumb.href ? <a href={crumb.href}>{crumb.label}</a> : <span aria-current={last ? 'page' : undefined}>{crumb.label}</span>}
+          </li>;
+        })}
+      </ol></nav>
+    </div>
+  );
+}
+
+function AppLauncher({ companyName, userName, can, isAdmin }: {
+  companyName?: string; userName: string; can: (permission: Permission) => boolean; isAdmin: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const apps = APPS.filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
+    .filter((app) => !query.trim() || `${app.label} ${app.description}`.includes(query.trim()));
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
+  const open = (app: AppDefinition) => {
+    if (app.href) window.open(app.href, '_blank', 'noopener');
+    else navigate(visibleMenus(app, can, isAdmin)[0].page);
+  };
+  return (
+    <section className="o-home">
+      <div className="o-home-head">
+        <img className="o-home-mark" src="/brand/shield-256.png" alt="" />
+        <div><h2>{hour < 12 ? 'صباح الخير' : 'مساء الخير'}، {userName.split(' ')[0]}</h2><p>{companyName || 'شركة الليث العبيدي'}</p></div>
+      </div>
+      <label className="o-home-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن تطبيق…" aria-label="بحث في التطبيقات" /></label>
+      <div className="o-app-grid">
+        {apps.map((app) => {
+          const Icon = app.icon;
+          return <button key={app.id} className="o-app-tile" onClick={() => open(app)} onKeyDown={(event) => { if (event.key === 'Enter') open(app); }}>
+            <span className="o-app-icon" style={{ background: `linear-gradient(145deg, ${app.colors[0]}, ${app.colors[1]})` }}><Icon size={38} strokeWidth={1.6} /></span>
+            <strong>{app.label}</strong>
+            <small>{app.href ? 'يفتح في نافذة جديدة' : app.description}</small>
+          </button>;
+        })}
+        {!apps.length && <p className="o-home-empty">لا يوجد تطبيق بهذا الاسم.</p>}
+      </div>
+    </section>
   );
 }
 
@@ -606,10 +636,6 @@ function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormE
       </section>
     </main>
   );
-}
-
-function NavButton({ active, icon, label, onClick }: { active: boolean; icon: ReactNode; label: string; onClick: () => void }) {
-  return <button className={`nav-item ${active ? 'nav-active' : ''}`} aria-current={active ? 'page' : undefined} onClick={onClick}>{icon}<span>{label}</span>{active && <ArrowDownLeft size={15} className="nav-indicator" />}</button>;
 }
 
 function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCreateEmployees, onNavigate, onAddEmployee, onAddBranch }: {

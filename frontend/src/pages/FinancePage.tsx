@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, CheckCircle2, Download, Landmark, Link2, PlugZap, RefreshCw, Save, Send, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, Landmark, Link2, PlugZap, RefreshCw, Save, Send, XCircle } from 'lucide-react';
 import { Dialog, Empty, Loading, StatusTag, Tabs, Tone, Warning, useReasonPrompt } from '../components/ui';
 import { downloadFile } from '../lib/api';
 import { JOURNAL_STATUS, formatDateTime, formatMoney, formatNumber, monthLabel } from '../lib/format';
 import { navigate } from '../lib/router';
+import { useCrumb } from '../lib/breadcrumbs';
 import { useLoad, useSession } from '../lib/session';
 
 type Tab = 'journals' | 'mappings' | 'sap';
@@ -58,6 +59,7 @@ function JournalView({ id }: { id: string }) {
     status: string; attempts: number; lastError: string | null; sapTransId: number | null; sourceId: string;
     lines: Array<{ lineNo: number; accountCode: string; debit: number; credit: number; costCenter: string | null; memo: string | null }>;
   } | null>(`/finance/journals/${id}`, null);
+  useCrumb(journal.data?.reference);
   const reason = useReasonPrompt();
   const [manual, setManual] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -106,7 +108,6 @@ function JournalView({ id }: { id: string }) {
   if (!data) return null;
   return (
     <section className="screen">
-      <button className="back-link" onClick={() => navigate('finance')}><ArrowRight size={15} />كل القيود</button>
       <div className="screen-heading">
         <div><h2>{data.memo}</h2><p><span className="code-tag" dir="ltr">{data.reference}</span> · {data.entryDate} · <StatusTag map={JOURNAL_STATUS} value={data.status} />{data.sapTransId ? ` · رقم القيد في SAP: ${data.sapTransId}` : ''}</p></div>
         <div className="heading-actions">

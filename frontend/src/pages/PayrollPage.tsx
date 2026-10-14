@@ -11,6 +11,7 @@ import {
   monthLabel, previousPeriod,
 } from '../lib/format';
 import { navigate } from '../lib/router';
+import { useCrumb } from '../lib/breadcrumbs';
 import { useLoad, useSession } from '../lib/session';
 
 interface RunSummary {
@@ -107,6 +108,7 @@ function RunView({ runId }: { runId: string }) {
   const [filter, setFilter] = useState<'all' | 'warnings'>('all');
   const reason = useReasonPrompt();
   const data = run.data;
+  useCrumb(data && `${monthLabel(data.period)} · ${data.currency} · ${data.branchName ?? 'كل الفروع'}`);
 
   async function act(action: string, label: string, body?: unknown) {
     setBusy(action);
@@ -151,7 +153,6 @@ function RunView({ runId }: { runId: string }) {
 
   return (
     <section className="screen">
-      <button className="back-link" onClick={() => navigate('payroll')}><ArrowRight size={15} />كل المسيرات</button>
       <div className="screen-heading">
         <div><h2>رواتب {monthLabel(data.period)} {data.branchName ? `— ${data.branchName}` : '— كل الفروع'}</h2>
           <p><StatusTag map={RUN_STATUS} value={data.status} /> · {data.currency} · أعده {data.createdByName}{data.calculatedByName ? ` · احتسبه ${data.calculatedByName} ${formatDateTime(data.calculatedAt)}` : ''}{data.approvedByName ? ` · اعتمده ${data.approvedByName}` : ''}</p></div>
@@ -313,6 +314,7 @@ interface Payslip {
 
 export function PayslipPage({ runId, employeeId }: { runId: string; employeeId: string }) {
   const slip = useLoad<Payslip | null>(`/payroll/runs/${runId}/payslips/${employeeId}`, null);
+  useCrumb(slip.data && { label: `${monthLabel(slip.data.period)} · ${slip.data.currency}`, href: `#/payroll/${runId}` }, slip.data?.employeeName);
   const data = slip.data;
   if (slip.loading && !data) return <section className="screen"><Loading /></section>;
   if (!data) return null;
