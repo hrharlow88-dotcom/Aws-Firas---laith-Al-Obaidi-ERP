@@ -3,7 +3,8 @@ import { Op, Order } from 'sequelize';
 import { Branch, Employee, SystemSetting } from '../models';
 import type { EmployeeAttributes } from '../models';
 import { DEFAULT_SYSTEM_SETTINGS } from '../config/systemSettings';
-import { audited } from '../utils/audit';
+import { audited, diffFields } from '../utils/audit';
+import { ORG_FIELDS, resolveOrgFields } from '../services/employeeOrg';
 import { isDateOnly, isUuid } from '../utils/validation';
 
 function maySeeEmployeeContact(role: string | undefined): boolean {
@@ -77,10 +78,15 @@ export class EmployeeController {
 
   static async create(req: Request, res: Response): Promise<void> {
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-    if (Object.keys(input).some((field) => !['employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'customFields'].includes(field))) {
+    if (Object.keys(input).some((field) => ![
+      'employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'customFields', ...ORG_FIELDS,
+    ].includes(field))) {
       res.status(400).json({ message: 'يتضمن الطلب حقلاً غير قابل للتعديل.' });
       return;
     }
+    const org = await resolveOrgFields(input);
+    if (org.department) input.department = org.department;
+    if (org.position) input.position = org.position;
     const required = ['employeeNo', 'fullName', 'branchId', 'department', 'position', 'hireDate'];
     if (required.some((field) => typeof input[field] !== 'string' || !String(input[field]).trim())) {
       res.status(400).json({ message: 'أكمل رقم الموظف والاسم والفرع والقسم والمنصب وتاريخ التعيين.' });
@@ -136,6 +142,13 @@ export class EmployeeController {
       position: String(input.position).trim(),
       hireDate: String(input.hireDate),
       customFields: customValues as Record<string, string | number>,
+      departmentId: org.departmentId ?? null,
+      jobTitleId: org.jobTitleId ?? null,
+      managerId: org.managerId ?? null,
+      employmentType: org.employmentType ?? 'permanent',
+      attendancePin: org.attendancePin ?? null,
+      shiftId: org.shiftId ?? null,
+      terminationDate: org.terminationDate ?? null,
     }, { transaction }));
     if (!maySeeEmployeeCustomFields(req.user?.role)) {
       const { customFields: _customFields, ...safeEmployee } = employee.toJSON();
@@ -156,9 +169,15 @@ export class EmployeeController {
       return;
     }
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-    const editableFields = ['employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'employmentStatus'];
+    const editableFields = ['employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'employmentStatus', ...ORG_FIELDS];
     if (Object.keys(input).some((field) => !editableFields.includes(field))) {
       res.status(400).json({ message: 'يتضمن الطلب حقلاً غير قابل للتعديل.' });
+      return;
+    }
+    // Fields that change pay are reserved for HR even when a branch manager may edit the record.
+    const payrollAffecting = ['hireDate', 'terminationDate', 'employmentType', 'shiftId', 'attendancePin'];
+    if (req.user?.role === 'branch_manager' && payrollAffecting.some((field) => input[field] !== undefined)) {
+      res.status(403).json({ message: 'تاريخ التعيين وترك الخدمة ونوع التوظيف والدوام ورقم البصمة تعدلها الموارد البشرية فقط.' });
       return;
     }
     if (
@@ -185,7 +204,20 @@ export class EmployeeController {
       position?: string;
       hireDate?: string;
       employmentStatus?: Employee['employmentStatus'];
+      departmentId?: string | null;
+      jobTitleId?: string | null;
+      managerId?: string | null;
+      employmentType?: Employee['employmentType'];
+      attendancePin?: string | null;
+      shiftId?: string | null;
+      terminationDate?: string | null;
     } = {};
+    const org = await resolveOrgFields(input, employee.id);
+    for (const field of ORG_FIELDS) {
+      if (org[field] !== undefined) (updates as Record<string, unknown>)[field] = org[field];
+    }
+    if (org.department) input.department = org.department;
+    if (org.position) input.position = org.position;
     if (typeof input.employeeNo === 'string') updates.employeeNo = input.employeeNo.trim();
     if (typeof input.fullName === 'string') updates.fullName = input.fullName.trim();
     if (typeof input.email === 'string') updates.email = input.email.trim() || null;
@@ -225,7 +257,14 @@ export class EmployeeController {
         return;
       }
     }
-    const updatedEmployee = await audited(req.user!.id, 'employee.updated', 'employee', (transaction) => employee.update(updates, { transaction }));
+    const before = employee.toJSON() as unknown as Record<string, unknown>;
+    const updatedEmployee = await audited(
+      req.user!.id,
+      'employee.updated',
+      'employee',
+      (transaction) => employee.update(updates, { transaction }),
+      { changes: diffFields(before, updates as Record<string, unknown>) },
+    );
     if (!maySeeEmployeeCustomFields(req.user?.role)) {
       const { customFields: _customFields, ...safeEmployee } = updatedEmployee.toJSON();
       res.json({ data: safeEmployee });

@@ -95,9 +95,24 @@ export interface EmployeeAttributes {
   hireDate: string;
   employmentStatus: 'active' | 'inactive' | 'on_leave';
   customFields: Record<string, string | number>;
+  departmentId: string | null;
+  jobTitleId: string | null;
+  managerId: string | null;
+  employmentType: EmploymentType;
+  attendancePin: string | null;
+  cardToken: string | null;
+  cardIssuedAt: Date | null;
+  photoDocumentId: string | null;
+  terminationDate: string | null;
+  shiftId: string | null;
 }
 
-type EmployeeCreationAttributes = Optional<EmployeeAttributes, 'id' | 'email' | 'phone' | 'employmentStatus' | 'customFields'>;
+export const EMPLOYMENT_TYPES = ['permanent', 'fixed_term', 'probation', 'daily', 'part_time', 'contractor'] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+
+type EmployeeCreationAttributes = Optional<EmployeeAttributes,
+  'id' | 'email' | 'phone' | 'employmentStatus' | 'customFields' | 'departmentId' | 'jobTitleId' | 'managerId' |
+  'employmentType' | 'attendancePin' | 'cardToken' | 'cardIssuedAt' | 'photoDocumentId' | 'terminationDate' | 'shiftId'>;
 
 export class Employee extends Model<EmployeeAttributes, EmployeeCreationAttributes> implements EmployeeAttributes {
   declare id: string;
@@ -111,6 +126,16 @@ export class Employee extends Model<EmployeeAttributes, EmployeeCreationAttribut
   declare hireDate: string;
   declare employmentStatus: 'active' | 'inactive' | 'on_leave';
   declare customFields: Record<string, string | number>;
+  declare departmentId: string | null;
+  declare jobTitleId: string | null;
+  declare managerId: string | null;
+  declare employmentType: EmploymentType;
+  declare attendancePin: string | null;
+  declare cardToken: string | null;
+  declare cardIssuedAt: Date | null;
+  declare photoDocumentId: string | null;
+  declare terminationDate: string | null;
+  declare shiftId: string | null;
 }
 
 Employee.init(
@@ -131,8 +156,25 @@ Employee.init(
       field: 'employment_status',
     },
     customFields: { type: DataTypes.JSONB, allowNull: false, defaultValue: {}, field: 'custom_fields' },
+    departmentId: { type: DataTypes.UUID, allowNull: true, field: 'department_id' },
+    jobTitleId: { type: DataTypes.UUID, allowNull: true, field: 'job_title_id' },
+    managerId: { type: DataTypes.UUID, allowNull: true, field: 'manager_id' },
+    employmentType: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'permanent', field: 'employment_type' },
+    attendancePin: { type: DataTypes.STRING(40), allowNull: true, field: 'attendance_pin' },
+    cardToken: { type: DataTypes.STRING(64), allowNull: true, field: 'card_token' },
+    cardIssuedAt: { type: DataTypes.DATE, allowNull: true, field: 'card_issued_at' },
+    photoDocumentId: { type: DataTypes.UUID, allowNull: true, field: 'photo_document_id' },
+    terminationDate: { type: DataTypes.DATEONLY, allowNull: true, field: 'termination_date' },
+    shiftId: { type: DataTypes.UUID, allowNull: true, field: 'shift_id' },
   },
-  { sequelize, tableName: 'employees', underscored: true },
+  {
+    sequelize,
+    tableName: 'employees',
+    underscored: true,
+    // The card token is a bearer secret for the public verification link; it is
+    // only read explicitly when a card is printed.
+    defaultScope: { attributes: { exclude: ['cardToken'] } },
+  },
 );
 
 interface AuditLogAttributes {

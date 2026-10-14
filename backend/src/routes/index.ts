@@ -6,6 +6,9 @@ import EmployeeController from '../controllers/EmployeeController';
 import UserController from '../controllers/UserController';
 import SettingsController from '../controllers/SettingsController';
 import LeaveController from '../controllers/LeaveController';
+import OrgController from '../controllers/OrgController';
+import EmployeeFileController from '../controllers/EmployeeFileController';
+import { uploadSingle } from '../services/storage';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
@@ -23,6 +26,14 @@ const passwordLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { message: 'محاولات كثيرة. انتظر قليلاً ثم حاول مجدداً.' },
+});
+
+const publicLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'طلبات كثيرة. حاول بعد قليل.' },
 });
 
 function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
@@ -69,5 +80,33 @@ router.put(
   validateUuidParam,
   asyncRoute(EmployeeController.update),
 );
+
+router.get('/employees/:id', requireAuth, validateUuidParam, asyncRoute(EmployeeFileController.detail));
+router.get('/employees/:id/photo', requireAuth, validateUuidParam, asyncRoute(EmployeeFileController.photo));
+router.post('/employees/:id/photo', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, uploadSingle('file'), asyncRoute(EmployeeFileController.uploadPhoto));
+router.get('/employees/:id/profile', requireAuth, allowPermission('employees.view_profile'), validateUuidParam, asyncRoute(EmployeeFileController.getProfile));
+router.put('/employees/:id/profile', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(EmployeeFileController.updateProfile));
+router.get('/employees/:id/compensation', requireAuth, allowPermission('compensation.view'), validateUuidParam, asyncRoute(EmployeeFileController.listCompensation));
+router.post('/employees/:id/compensation', requireAuth, allowPermission('compensation.manage'), validateUuidParam, asyncRoute(EmployeeFileController.addCompensation));
+router.get('/employees/:id/contracts', requireAuth, allowPermission('employees.view_profile'), validateUuidParam, asyncRoute(EmployeeFileController.listContracts));
+router.post('/employees/:id/contracts', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(EmployeeFileController.saveContract));
+router.put('/employees/:id/contracts/:contractId', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(EmployeeFileController.saveContract));
+router.get('/employees/:id/documents', requireAuth, allowPermission('employees.view_profile'), validateUuidParam, asyncRoute(EmployeeFileController.listDocuments));
+router.post('/employees/:id/documents', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, uploadSingle('file'), asyncRoute(EmployeeFileController.uploadDocument));
+router.get('/documents/:documentId/file', requireAuth, allowPermission('employees.view_profile'), asyncRoute(EmployeeFileController.downloadDocument));
+router.delete('/documents/:documentId', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(EmployeeFileController.deleteDocument));
+router.get('/employees/:id/card', requireAuth, allowPermission('employees.view_profile'), validateUuidParam, asyncRoute(EmployeeFileController.card));
+router.post('/employees/:id/card', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(EmployeeFileController.issueCard));
+router.get('/hr/alerts', requireAuth, allowPermission('employees.view_profile'), asyncRoute(EmployeeFileController.alerts));
+
+router.get('/public/cards/:token', publicLimiter, asyncRoute(EmployeeFileController.verifyCard));
+
+router.get('/org/departments', requireAuth, asyncRoute(OrgController.listDepartments));
+router.post('/org/departments', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.createDepartment));
+router.put('/org/departments/:id', requireAuth, allowPermission('org.manage'), validateUuidParam, asyncRoute(OrgController.updateDepartment));
+router.get('/org/job-titles', requireAuth, asyncRoute(OrgController.listJobTitles));
+router.post('/org/job-titles', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.createJobTitle));
+router.put('/org/job-titles/:id', requireAuth, allowPermission('org.manage'), validateUuidParam, asyncRoute(OrgController.updateJobTitle));
+router.get('/org/chart', requireAuth, asyncRoute(OrgController.chart));
 
 export default router;

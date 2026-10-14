@@ -3,6 +3,9 @@ import { SequelizeStorage, Umzug } from 'umzug';
 import { connectionOptions } from './connection';
 import * as m0001 from './migrations/0001-baseline';
 import * as m0002 from './migrations/0002-integrity-and-audit';
+import * as m0003 from './migrations/0003-org-and-employee-file';
+import * as m0004 from './migrations/0004-attendance';
+import * as m0005 from './migrations/0005-payroll-and-finance';
 
 export interface MigrationContext {
   queryInterface: QueryInterface;
@@ -20,6 +23,9 @@ export interface MigrationModule {
 const MIGRATIONS: Array<[string, MigrationModule]> = [
   ['0001-baseline', m0001],
   ['0002-integrity-and-audit', m0002],
+  ['0003-org-and-employee-file', m0003],
+  ['0004-attendance', m0004],
+  ['0005-payroll-and-finance', m0005],
 ];
 
 export function createMigrator(sequelize: Sequelize) {
