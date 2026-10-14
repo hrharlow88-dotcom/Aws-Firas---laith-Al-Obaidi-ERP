@@ -1,0 +1,24 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# The application, over HTTPS with an automatic certificate.
+# For a server reached only inside the company network, put its IP or a local
+# name in ERP_DOMAIN and replace this block's first line with  http://{$ERP_DOMAIN}
+{$ERP_DOMAIN} {
+	encode gzip
+	reverse_proxy web:80
+}
+
+# Fingerprint devices (ZKTeco ADMS) usually cannot do HTTPS. They get a
+# separate plain-HTTP port that only reaches the device endpoint; allow it in
+# the firewall for the branch networks only.
+:8081 {
+	@devices path /iclock/*
+	handle @devices {
+		reverse_proxy web:80
+	}
+	handle {
+		respond 404
+	}
+}
