@@ -195,7 +195,8 @@ export class EmployeeFileController {
     const employee = await employeeInScope(req, req.params.id);
     const rows = await select(
       `SELECT c.id, c.effective_from AS "effectiveFrom", c.gross_salary::float AS "grossSalary", c.currency,
-              c.component_overrides AS "componentOverrides", c.reason, c.created_at AS "createdAt", u.name AS "createdByName"
+              c.component_overrides AS "componentOverrides", c.social_security_base::float AS "socialSecurityBase",
+              c.reason, c.created_at AS "createdAt", u.name AS "createdByName"
        FROM employee_compensation c JOIN users u ON u.id = c.created_by
        WHERE c.employee_id = :id ORDER BY c.effective_from DESC`,
       { id: employee.id },
@@ -206,7 +207,7 @@ export class EmployeeFileController {
   static async addCompensation(req: Request, res: Response): Promise<void> {
     const employee = await employeeInScope(req, req.params.id);
     const input = body(req);
-    assertOnlyKeys(input, ['effectiveFrom', 'grossSalary', 'currency', 'componentOverrides', 'reason']);
+    assertOnlyKeys(input, ['effectiveFrom', 'grossSalary', 'currency', 'componentOverrides', 'socialSecurityBase', 'reason']);
     const effectiveFrom = optionalDate(input, 'effectiveFrom');
     if (!effectiveFrom) throw badRequest('حدد تاريخ سريان الراتب.');
     const grossSalary = optionalNumber(input, 'grossSalary', { min: 0, max: 1e12 });
@@ -215,6 +216,7 @@ export class EmployeeFileController {
     const currency = (optionalText(input, 'currency', 3) || settings.payrollRules.baseCurrency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw badRequest('رمز العملة غير صالح.');
     const reason = requiredText(input, 'reason', 500, 'سبب التعديل');
+    const socialSecurityBase = optionalNumber(input, 'socialSecurityBase', { min: 0, max: 1e12 }) ?? null;
 
     const overrides = input.componentOverrides ?? {};
     if (typeof overrides !== 'object' || overrides === null || Array.isArray(overrides)) throw badRequest('تحقق من المبالغ الثابتة للمكونات.');
@@ -237,13 +239,17 @@ export class EmployeeFileController {
     const id = randomUUID();
     await transaction(async (tx) => {
       await execute(
-        `INSERT INTO employee_compensation (id, employee_id, effective_from, gross_salary, currency, component_overrides, reason, created_by)
-         VALUES (:id, :employeeId, :effectiveFrom, :grossSalary, :currency, :overrides::jsonb, :reason, :userId)`,
-        { id, employeeId: employee.id, effectiveFrom, grossSalary, currency, overrides: JSON.stringify(overrides), reason, userId: req.user!.id },
+        `INSERT INTO employee_compensation (id, employee_id, effective_from, gross_salary, currency, component_overrides,
+           social_security_base, reason, created_by)
+         VALUES (:id, :employeeId, :effectiveFrom, :grossSalary, :currency, :overrides::jsonb, :socialSecurityBase, :reason, :userId)`,
+        {
+          id, employeeId: employee.id, effectiveFrom, grossSalary, currency, overrides: JSON.stringify(overrides),
+          socialSecurityBase, reason, userId: req.user!.id,
+        },
         tx,
       );
       await recordAudit(req, tx, 'employee.compensation_added', 'employee', employee.id, {
-        compensationId: id, effectiveFrom, grossSalary, currency, reason,
+        compensationId: id, effectiveFrom, grossSalary, currency, socialSecurityBase, reason,
       });
     });
     res.status(201).json({ data: { id } });
@@ -471,7 +477,7 @@ export class EmployeeFileController {
     res.json({
       data: {
         ...row,
-        valid: row.employmentStatus !== 'inactive',
+        valid: row.employmentStatus === 'active' || row.employmentStatus === 'on_leave',
         company: settings.company.displayName,
       },
     });

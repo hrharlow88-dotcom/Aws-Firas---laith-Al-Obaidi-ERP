@@ -104,9 +104,16 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
 }
 
 function validatePayrollRules(value: unknown): value is SystemSettings['payrollRules'] {
-  if (!isRecord(value) || !hasOnlyKeys(value, ['baseCurrency', 'monthlyDivisor', 'roundingDigits', 'components'])) {
+  if (!isRecord(value) || !hasOnlyKeys(value, [
+    'baseCurrency', 'monthlyDivisor', 'roundingDigits', 'terminatedPaidBySettlement', 'usdRate', 'branchUsdRates', 'components',
+  ])) {
     return false;
   }
+  const validRate = (rate: unknown) => typeof rate === 'number' && Number.isFinite(rate) && rate > 0 && rate < 1e6;
+  if (value.usdRate !== undefined && !validRate(value.usdRate)) return false;
+  if (value.branchUsdRates !== undefined && (!isRecord(value.branchUsdRates) ||
+    !Object.entries(value.branchUsdRates).every(([branchId, rate]) => /^[0-9a-f-]{36}$/i.test(branchId) && validRate(rate)))) return false;
+  if (value.terminatedPaidBySettlement !== undefined && typeof value.terminatedPaidBySettlement !== 'boolean') return false;
   const components = value.components;
   if (
     !isText(value.baseCurrency, 3) || !/^[A-Z]{3}$/.test(value.baseCurrency) ||
@@ -118,16 +125,25 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
 
   const valid = components.every((item): item is PayrollComponentSetting =>
     isRecord(item) &&
-    hasOnlyKeys(item, ['id', 'name', 'category', 'calculation', 'rate', 'active', 'statutory', 'legalApproved', 'isBasic']) &&
+    hasOnlyKeys(item, [
+      'id', 'name', 'category', 'calculation', 'rate', 'active', 'statutory', 'legalApproved', 'isBasic',
+      'prorate', 'minBase', 'maxBase', 'roundingDigits',
+    ]) &&
     typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
     isText(item.name, 80) && item.name.trim().length > 0 &&
     (item.category === 'earning' || item.category === 'deduction') &&
     (PAYROLL_CALCULATIONS as string[]).includes(String(item.calculation)) &&
     (item.calculation !== 'per_overtime_hour' || item.category === 'earning') &&
     (item.calculation !== 'per_late_minute' || item.category === 'deduction') &&
+    (!['percentage_of_ss_base', 'loan_installments'].includes(String(item.calculation)) || item.category === 'deduction') &&
+    (item.prorate === undefined || typeof item.prorate === 'boolean') &&
+    (item.minBase === undefined || (typeof item.minBase === 'number' && Number.isFinite(item.minBase) && item.minBase >= 0)) &&
+    (item.maxBase === undefined || (typeof item.maxBase === 'number' && Number.isFinite(item.maxBase) && item.maxBase >= 0)) &&
+    (item.minBase === undefined || item.maxBase === undefined || item.minBase <= item.maxBase) &&
+    (item.roundingDigits === undefined || (typeof item.roundingDigits === 'number' && Number.isInteger(item.roundingDigits) && item.roundingDigits >= 0 && item.roundingDigits <= 4)) &&
     (item.isBasic === undefined || (typeof item.isBasic === 'boolean' && (!item.isBasic || item.category === 'earning'))) &&
     typeof item.rate === 'number' && Number.isFinite(item.rate) && item.rate >= 0 && item.rate <= 100000 &&
-    (item.calculation !== 'percentage_of_gross' && item.calculation !== 'percentage_of_basic' || item.rate <= 100) &&
+    (!['percentage_of_gross', 'percentage_of_basic', 'percentage_of_ss_base'].includes(String(item.calculation)) || item.rate <= 100) &&
     typeof item.active === 'boolean' &&
     typeof item.statutory === 'boolean' &&
     typeof item.legalApproved === 'boolean' &&
@@ -135,6 +151,7 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
   );
   return valid &&
     components.filter((item) => item.isBasic).length <= 1 &&
+    components.filter((item) => item.active && item.calculation === 'loan_installments').length <= 1 &&
     new Set(components.map((item) => item.id)).size === components.length &&
     new Set(components.map((item) => item.name.trim().toLocaleLowerCase())).size === components.length &&
     components

@@ -5,7 +5,7 @@ import { EmploymentType } from '../models';
 import { badRequest } from '../utils/http';
 import { computeAttendance, EFFECTIVE_DAY_COLUMNS, loadShifts } from './attendance';
 import { eachDate, scheduledMinutes, weekday } from './attendanceRules';
-import { AttendanceTotals, calculatePayslip, Payslip } from './payrollCalc';
+import { AttendanceTotals, calculatePayslip, DayAdjustment, OpenLoan, Payslip } from './payrollCalc';
 import { getSettings } from './settings';
 
 export function periodBounds(period: string): { start: string; end: string } {
@@ -51,7 +51,16 @@ interface EmployeeForPayroll {
   paymentMethod: string | null;
 }
 
-export interface LineDraft extends Payslip {
+export interface LoanRepaymentDraft {
+  loanId: string;
+  /** In the loan's currency. */
+  amount: number;
+  /** In the run's currency. */
+  payrollAmount: number;
+}
+
+export interface LineDraft extends Omit<Payslip, 'loanRepayments'> {
+  loanRepayments: LoanRepaymentDraft[];
   employeeId: string;
   branchId: string;
   departmentId: string | null;
@@ -79,6 +88,8 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
      WHERE e.hire_date <= :end
        AND (e.termination_date IS NULL OR e.termination_date >= :start)
        AND (e.employment_status <> 'inactive' OR e.termination_date IS NOT NULL)
+       AND e.employment_status <> 'suspended'
+       ${settings.payrollRules.terminatedPaidBySettlement ? 'AND (e.termination_date IS NULL OR e.termination_date > :end)' : ''}
        ${run.branchId ? 'AND e.branch_id = :branchId' : ''}
        AND NOT EXISTS (
          SELECT 1 FROM payroll_lines l JOIN payroll_runs r ON r.id = l.run_id
@@ -95,9 +106,13 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
   if (!employees.length) return [];
   const ids = employees.map((item) => item.id);
 
-  const compensation = await select<{ employeeId: string; effectiveFrom: string; grossSalary: number; componentOverrides: Record<string, number> }>(
+  const compensation = await select<{
+    employeeId: string; effectiveFrom: string; grossSalary: number; componentOverrides: Record<string, number>;
+    socialSecurityBase: number | null;
+  }>(
     `SELECT employee_id AS "employeeId", to_char(effective_from, 'YYYY-MM-DD') AS "effectiveFrom",
-            gross_salary::float AS "grossSalary", component_overrides AS "componentOverrides"
+            gross_salary::float AS "grossSalary", component_overrides AS "componentOverrides",
+            social_security_base::float AS "socialSecurityBase"
      FROM employee_compensation
      WHERE employee_id IN (:ids) AND currency = :currency AND effective_from <= :end
      ORDER BY effective_from`,
@@ -121,6 +136,32 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
     transaction,
   );
 
+  const adjustments = new Map((await select<DayAdjustment & { employeeId: string }>(
+    `SELECT employee_id AS "employeeId", payable_days::float AS "payableDays", absence_days::float AS "absenceDays"
+     FROM payroll_day_adjustments WHERE period = :period AND employee_id IN (:ids)`,
+    { period: run.period, ids },
+    transaction,
+  )).map((row) => [row.employeeId, row]));
+
+  // What each open loan still owes before this run, counting deductions of
+  // earlier runs that were not cancelled.
+  const loans = await select<OpenLoan & { employeeId: string; currency: string }>(
+    `SELECT l.id AS "loanId", l.employee_id AS "employeeId", l.currency, l.installment::float AS installment,
+            (l.principal - l.paid_before - COALESCE(p.amount, 0))::float AS remaining,
+            (l.installments_total IS NOT NULL
+              AND l.installments_paid_before + COALESCE(p.count, 0) + 1 >= l.installments_total) AS final
+     FROM employee_loans l
+     LEFT JOIN LATERAL (
+       SELECT SUM(rp.amount) AS amount, COUNT(*)::int AS count
+       FROM loan_repayments rp JOIN payroll_runs r ON r.id = rp.run_id
+       WHERE rp.loan_id = l.id AND rp.run_id <> :runId AND r.status <> 'cancelled' AND r.period <= :period
+     ) p ON true
+     WHERE l.employee_id IN (:ids) AND l.status = 'active' AND l.start_period <= :period
+     ORDER BY l.start_period, l.created_at`,
+    { ids, runId: run.id, period: run.period },
+    transaction,
+  );
+
   // Untracked employees still lose pay for approved unpaid leave.
   const unpaidTypes = settings.leaveTypes.filter((type) => !type.paid).map((type) => type.id);
   const unpaidLeaves = unpaidTypes.length ? await select<{ employeeId: string; startsOn: string; endsOn: string }>(
@@ -136,7 +177,23 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
   const holidays = new Set(settings.leaveRules.officialHolidays);
   const shifts = await loadShifts(transaction);
 
+  const rules = settings.payrollRules;
+  const cents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  /** Multiplier from a loan's currency to the run's currency, or null when there is no rate for the pair. */
+  const conversion = (from: string, branchId: string): number | null => {
+    if (from === run.currency) return 1;
+    const rate = rules.branchUsdRates?.[branchId] ?? rules.usdRate;
+    if (!rate) return null;
+    if (from === 'IQD' && run.currency === 'USD') return 1 / rate;
+    if (from === 'USD' && run.currency === 'IQD') return rate;
+    return null;
+  };
+
   return employees.map((employee) => {
+    const ownLoans = loans
+      .filter((loan) => loan.employeeId === employee.id && loan.remaining > 0.004)
+      .map((loan) => ({ loan, factor: conversion(loan.currency, employee.branchId) }))
+      .filter((item): item is { loan: typeof item.loan; factor: number } => item.factor !== null);
     const own = days.filter((day) => day.employeeId === employee.id);
     const tracked = Boolean(employee.shiftId) && own.length > 0;
     const shift = employee.shiftId ? shifts.get(employee.shiftId) : undefined;
@@ -175,9 +232,26 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
       attendanceRules: settings.attendanceRules,
       attendance,
       inputs: inputs.filter((item) => item.employeeId === employee.id),
+      adjustment: adjustments.get(employee.id) ?? null,
+      loans: ownLoans.map(({ loan, factor }) => ({
+        loanId: loan.loanId,
+        installment: cents(loan.installment * factor),
+        remaining: cents(loan.remaining * factor),
+        final: loan.final,
+      })),
+    });
+    // Back to the loan's currency: a full instalment stays exact, a capped one is converted.
+    const loanRepayments: LoanRepaymentDraft[] = payslip.loanRepayments.map((item) => {
+      const { loan, factor } = ownLoans.find((entry) => entry.loan.loanId === item.loanId)!;
+      const fullDue = loan.final && loan.remaining < 2 * loan.installment ? loan.remaining : Math.min(loan.installment, loan.remaining);
+      const amount = Math.abs(item.amount - cents(fullDue * factor)) < 0.005
+        ? fullDue
+        : Math.min(loan.remaining, cents(item.amount / factor));
+      return { loanId: item.loanId, amount, payrollAmount: item.amount };
     });
     return {
       ...payslip,
+      loanRepayments,
       employeeId: employee.id,
       branchId: employee.branchId,
       departmentId: employee.departmentId,
@@ -242,24 +316,37 @@ export async function replaceRunLines(run: RunRow, lines: LineDraft[], userId: s
     netPay: line.netPay,
     paymentMethod: line.paymentMethod,
     warnings: line.warnings,
+    payableDays: line.payableDays,
+    socialSecurityBase: line.socialSecurityBase,
   }));
   for (let index = 0; index < rows.length; index += 500) {
     await execute(
       `INSERT INTO payroll_lines (id, run_id, employee_id, branch_id, department_id, cost_center_code, gross_salary, currency,
          period_days, employed_days, scheduled_days, present_days, absent_days, unpaid_leave_days, late_minutes,
          overtime_minutes, attendance_tracked, earnings, deductions, total_earnings, total_deductions, net_pay,
-         payment_method, warnings)
+         payment_method, warnings, payable_days, social_security_base)
        SELECT x.id, :runId, x."employeeId", x."branchId", x."departmentId", x."costCenterCode", x."grossSalary", x.currency,
               x."periodDays", x."employedDays", x."scheduledDays", x."presentDays", x."absentDays", x."unpaidLeaveDays",
               x."lateMinutes", x."overtimeMinutes", x."attendanceTracked", x.earnings, x.deductions, x."totalEarnings",
-              x."totalDeductions", x."netPay", x."paymentMethod", x.warnings
+              x."totalDeductions", x."netPay", x."paymentMethod", x.warnings, x."payableDays", x."socialSecurityBase"
        FROM jsonb_to_recordset(:rows::jsonb) AS x(
          id uuid, "employeeId" uuid, "branchId" uuid, "departmentId" uuid, "costCenterCode" varchar, "grossSalary" numeric,
          currency char(3), "periodDays" int, "employedDays" int, "scheduledDays" int, "presentDays" int, "absentDays" int,
          "unpaidLeaveDays" int, "lateMinutes" int, "overtimeMinutes" int, "attendanceTracked" boolean, earnings jsonb,
          deductions jsonb, "totalEarnings" numeric, "totalDeductions" numeric, "netPay" numeric, "paymentMethod" varchar,
-         warnings jsonb)`,
+         warnings jsonb, "payableDays" numeric, "socialSecurityBase" numeric)`,
       { runId: run.id, rows: JSON.stringify(rows.slice(index, index + 500)) },
+      transaction,
+    );
+  }
+  await execute('DELETE FROM loan_repayments WHERE run_id = :runId', { runId: run.id }, transaction);
+  const repayments = lines.flatMap((line) => line.loanRepayments.map((item) => ({ ...item, period: run.period })));
+  if (repayments.length) {
+    await execute(
+      `INSERT INTO loan_repayments (loan_id, run_id, period, amount, payroll_amount)
+       SELECT x."loanId", :runId, x.period, x.amount, x."payrollAmount"
+       FROM jsonb_to_recordset(:rows::jsonb) AS x("loanId" uuid, period char(7), amount numeric, "payrollAmount" numeric)`,
+      { runId: run.id, rows: JSON.stringify(repayments) },
       transaction,
     );
   }

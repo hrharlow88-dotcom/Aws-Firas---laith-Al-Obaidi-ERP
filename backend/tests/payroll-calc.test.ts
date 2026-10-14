@@ -124,3 +124,83 @@ describe('payroll calculation', () => {
     expect(result.warnings).toContainEqual({ code: 'partial_salary', blocking: false, detail: '10' });
   });
 });
+
+describe('company payroll practice', () => {
+  const SS = '30000000-0000-4000-8000-000000000011';
+  const RAISE = '30000000-0000-4000-8000-000000000014';
+  const LOANS = '30000000-0000-4000-8000-000000000015';
+  const OTHER = '30000000-0000-4000-8000-000000000009';
+  const rules: PayrollRulesSetting = {
+    ...DEFAULT_PAYROLL_RULES,
+    components: DEFAULT_PAYROLL_RULES.components.map((component) =>
+      (component.id === SS ? { ...component, active: true, legalApproved: true } : component)),
+  };
+  const base = (gross: number, extra: Partial<PayslipInput['compensation'][number]> = {}) =>
+    [{ effectiveFrom: '2020-01-01', grossSalary: gross, componentOverrides: {}, ...extra }];
+
+  it('deducts 5% of the declared SS salary clamped to the legal range, rounded to the dinar', () => {
+    expect(amount(slip({ rules, compensation: base(6750000, { socialSecurityBase: 2500000 }) }).deductions, SS)).toBe(87500);
+    expect(amount(slip({ rules, compensation: base(500000, { socialSecurityBase: 300000 }) }).deductions, SS)).toBe(17500);
+    expect(amount(slip({ rules, compensation: base(733333, { socialSecurityBase: 733333 }) }).deductions, SS)).toBe(36667);
+    // Not registered on the platform → nothing deducted.
+    expect(amount(slip({ rules, compensation: base(900000, { socialSecurityBase: 0 }) }).deductions, SS)).toBeUndefined();
+  });
+
+  it('does not prorate social security or the monthly raise for a partial month', () => {
+    const result = slip({
+      rules,
+      compensation: base(900000, { socialSecurityBase: 900000, componentOverrides: { [RAISE]: 100000 } }),
+      adjustment: { payableDays: 10, absenceDays: 0 },
+    });
+    expect(result.payableDays).toBe(10);
+    expect(amount(result.earnings, RAISE)).toBe(100000);
+    expect(amount(result.deductions, SS)).toBe(45000);
+    expect(result.totalEarnings).toBe(300000 + 100000);
+  });
+
+  it('uses the payable days and absence days HR entered, at a daily rate rounded like the sheet', () => {
+    const result = slip({ compensation: base(733333), adjustment: { payableDays: 30, absenceDays: 1.5 } });
+    // ROUND(733333 / 30, 2) = 24444.43 → 1.5 days = 36666.65 (rounded to 36666.65)
+    expect(amount(result.deductions, ABSENCE)).toBe(36666.65);
+    expect(result.totalEarnings).toBe(733333);
+  });
+
+  it('keeps the gross split equal to the rounded prorated gross', () => {
+    const result = slip({ compensation: base(1234567), adjustment: { payableDays: 17, absenceDays: 0 } });
+    // ROUND(1234567 × 17 / 30, 2) = 699587.97
+    expect(result.totalEarnings).toBe(699587.97);
+  });
+
+  it('takes loan instalments last and never beyond what is left', () => {
+    const loans = [
+      { loanId: 'a', installment: 250000, remaining: 250000 },
+      { loanId: 'b', installment: 150000, remaining: 100000 },
+    ];
+    const full = slip({ loans });
+    expect(amount(full.deductions, LOANS)).toBe(350000);
+    expect(full.loanRepayments).toEqual([{ loanId: 'a', amount: 250000 }, { loanId: 'b', amount: 100000 }]);
+
+    const capped = slip({
+      compensation: base(400000),
+      loans,
+      inputs: [{ componentId: OTHER, amount: 100000 }],
+    });
+    expect(amount(capped.deductions, LOANS)).toBe(300000);
+    expect(capped.netPay).toBe(0);
+    expect(capped.loanRepayments).toEqual([{ loanId: 'a', amount: 250000 }, { loanId: 'b', amount: 50000 }]);
+    expect(capped.warnings).toContainEqual({ code: 'loan_capped', blocking: false, detail: '50000' });
+  });
+});
+
+describe('loan final instalment', () => {
+  it('clears rounding on the last agreed instalment but not a changed plan', () => {
+    const LOANS = '30000000-0000-4000-8000-000000000015';
+    const pay = (remaining: number, final: boolean) => amount(
+      slip({ compensation: [{ effectiveFrom: '2020-01-01', grossSalary: 3000000, componentOverrides: {} }], loans: [{ loanId: 'x', installment: 330000, remaining, final }] }).deductions,
+      LOANS,
+    );
+    expect(pay(340000, true)).toBe(340000);
+    expect(pay(340000, false)).toBe(330000);
+    expect(pay(1000000, true)).toBe(330000);
+  });
+});

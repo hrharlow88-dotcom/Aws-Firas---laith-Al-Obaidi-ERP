@@ -20,6 +20,30 @@ export interface CompensationSegment {
   effectiveFrom: string;
   grossSalary: number;
   componentOverrides: Record<string, number>;
+  /** Salary declared on the social security platform; null when not registered. */
+  socialSecurityBase?: number | null;
+}
+
+/** Days HR set by hand for the month (staff without fingerprint tracking). */
+export interface DayAdjustment {
+  /** Days the salary is paid for, out of the monthly divisor. Null keeps the calendar rule. */
+  payableDays: number | null;
+  /** Absence, lateness or missing punches charged at the daily rate. */
+  absenceDays: number;
+}
+
+export interface OpenLoan {
+  loanId: string;
+  installment: number;
+  /** Still owed before this month's deduction. */
+  remaining: number;
+  /**
+   * True when this is the last agreed instalment. It then clears the balance
+   * (the rounding left by equal instalments), but only when what is left is
+   * less than two instalments; a larger balance means the plan was changed and
+   * the normal instalment applies.
+   */
+  final?: boolean;
 }
 
 export interface AttendanceTotals {
@@ -47,6 +71,8 @@ export interface PayslipInput {
   attendanceRules: AttendanceRulesSetting;
   attendance: AttendanceTotals;
   inputs: Array<{ componentId: string; amount: number }>;
+  adjustment?: DayAdjustment | null;
+  loans?: OpenLoan[];
 }
 
 export interface PayslipItem {
@@ -58,7 +84,7 @@ export interface PayslipItem {
 
 export type WarningCode =
   | 'no_salary' | 'partial_salary' | 'incomplete_days' | 'net_negative' | 'daily_without_attendance'
-  | 'earnings_below_gross' | 'component_needs_attendance';
+  | 'earnings_below_gross' | 'component_needs_attendance' | 'loan_capped';
 
 export interface PayslipWarning {
   code: WarningCode;
@@ -75,6 +101,9 @@ export interface Payslip {
   totalEarnings: number;
   totalDeductions: number;
   netPay: number;
+  payableDays: number | null;
+  socialSecurityBase: number | null;
+  loanRepayments: Array<{ loanId: string; amount: number }>;
   warnings: PayslipWarning[];
 }
 
@@ -92,6 +121,7 @@ export function calculatePayslip(input: PayslipInput): Payslip {
   const round = rounder(rules.roundingDigits);
   const divisor = rules.monthlyDivisor;
   const warnings: PayslipWarning[] = [];
+  const adjustment = input.adjustment ?? null;
 
   const periodDates = eachDate(input.periodStart, input.periodEnd);
   const employedDates = periodDates.filter((date) =>
@@ -108,20 +138,26 @@ export function calculatePayslip(input: PayslipInput): Payslip {
     else unpaidDays += 1;
   }
   const latest = salaryOn(input.periodEnd) ?? segments[segments.length - 1];
-  if (!segments.length || unpaidDays === employedDays) {
-    return {
-      grossSalary: 0, periodDays: periodDates.length, employedDays, earnings: [], deductions: [],
-      totalEarnings: 0, totalDeductions: 0, netPay: 0,
-      warnings: [{ code: 'no_salary', blocking: false }],
-    };
-  }
+  const empty = (code: WarningCode): Payslip => ({
+    grossSalary: 0, periodDays: periodDates.length, employedDays, earnings: [], deductions: [],
+    totalEarnings: 0, totalDeductions: 0, netPay: 0, payableDays: null, socialSecurityBase: null, loanRepayments: [],
+    warnings: [{ code, blocking: false }],
+  });
+  if (!segments.length || unpaidDays === employedDays) return empty('no_salary');
   if (unpaidDays) warnings.push({ code: 'partial_salary', blocking: false, detail: `${unpaidDays}` });
 
   const averageGross = employedDays ? weighted / employedDays : 0;
   const isDaily = input.employmentType === 'daily';
-  const factor = employedDays === periodDates.length ? 1 : Math.min(1, employedDays / divisor);
-  const dailyRate = isDaily ? averageGross : averageGross / divisor;
+  const payableDays = !isDaily && adjustment?.payableDays !== null && adjustment?.payableDays !== undefined
+    ? adjustment.payableDays
+    : null;
+  const factor = payableDays !== null
+    ? payableDays / divisor
+    : employedDays === periodDates.length ? 1 : Math.min(1, employedDays / divisor);
+  // The daily rate is rounded before use, as on the payroll sheet (ROUND(gross / 30, 2)).
+  const dailyRate = round(isDaily ? averageGross : averageGross / divisor);
   const minuteRate = dailyRate / Math.max(1, attendance.standardDailyMinutes);
+  const socialSecurityBase = latest?.socialSecurityBase ?? null;
 
   let periodGross: number;
   if (isDaily) {
@@ -144,26 +180,34 @@ export function calculatePayslip(input: PayslipInput): Payslip {
     .reduce((sum, item) => sum + item.amount, 0);
   const active = rules.components.filter((component) => component.active);
   const basicId = basicComponentId(rules);
+  const scaled = (component: PayrollComponentSetting, amount: number) =>
+    (isDaily || component.prorate === false ? amount : amount * factor);
 
   const amountFor = (component: PayrollComponentSetting, basicAmount: number): { amount: number; basis: string } | null => {
     const override = overrides[component.id];
     switch (component.calculation) {
       case 'percentage_of_gross':
-        if (override !== undefined) return { amount: override * (isDaily ? 1 : factor), basis: 'مبلغ ثابت' };
+        if (override !== undefined) return { amount: scaled(component, override), basis: 'مبلغ ثابت' };
         return { amount: periodGross * component.rate / 100, basis: `${formatNumber(component.rate)}% من الإجمالي` };
       case 'percentage_of_basic':
-        if (override !== undefined) return { amount: override * (isDaily ? 1 : factor), basis: 'مبلغ ثابت' };
+        if (override !== undefined) return { amount: scaled(component, override), basis: 'مبلغ ثابت' };
         return { amount: basicAmount * component.rate / 100, basis: `${formatNumber(component.rate)}% من الأساسي` };
+      case 'percentage_of_ss_base': {
+        // Not prorated: the platform charges the declared salary for any month worked.
+        if (!socialSecurityBase) return null;
+        const base = Math.min(component.maxBase ?? Infinity, Math.max(component.minBase ?? 0, socialSecurityBase));
+        return { amount: rounder(component.roundingDigits ?? rules.roundingDigits)(base * component.rate / 100), basis: `${formatNumber(component.rate)}% من ${formatNumber(base)}` };
+      }
       case 'manual': {
-        const amount = inputsFor(component.id) + (override ?? 0) * (isDaily ? 1 : factor);
+        const amount = inputsFor(component.id) + scaled(component, override ?? 0);
         return amount ? { amount, basis: 'إدخال' } : null;
       }
       case 'per_day': {
         if (component.category === 'deduction') {
           if (isDaily) return null;
           // Unpaid leave comes from approved requests, so it applies with or without attendance tracking.
-          const days = (attendance.tracked ? attendance.absentDays : 0) + attendance.unpaidLeaveDays;
-          return days ? { amount: days * dailyRate * component.rate, basis: `${days} يوم` } : null;
+          const days = (attendance.tracked ? attendance.absentDays : 0) + attendance.unpaidLeaveDays + (adjustment?.absenceDays ?? 0);
+          return days ? { amount: days * dailyRate * component.rate, basis: `${formatNumber(days)} يوم` } : null;
         }
         if (!attendance.tracked) return null;
         const days = attendance.presentDays;
@@ -183,6 +227,7 @@ export function calculatePayslip(input: PayslipInput): Payslip {
         return hours ? { amount: hours * minuteRate * 60 * component.rate, basis: `${formatNumber(Math.round(hours * 100) / 100)} ساعة × ${formatNumber(component.rate)}` } : null;
       }
       default:
+        // Loans are settled last, once everything else is known.
         return null;
     }
   };
@@ -203,6 +248,20 @@ export function calculatePayslip(input: PayslipInput): Payslip {
     (component.category === 'earning' ? earnings : deductions).push(item);
   }
 
+  // When the gross is split 100% across components, rounding each share can drift
+  // a fils from the rounded period gross; the last share absorbs the difference.
+  const grossShares = earnings.filter((item) => {
+    const component = active.find((entry) => entry.id === item.componentId);
+    return component?.calculation === 'percentage_of_gross' && overrides[item.componentId] === undefined;
+  });
+  const shareRate = active
+    .filter((component) => component.category === 'earning' && component.calculation === 'percentage_of_gross')
+    .reduce((sum, component) => sum + component.rate, 0);
+  if (grossShares.length > 1 && Math.abs(shareRate - 100) < 1e-9) {
+    const drift = round(round(periodGross) - grossShares.reduce((sum, item) => sum + item.amount, 0));
+    if (drift) grossShares[grossShares.length - 1].amount = round(grossShares[grossShares.length - 1].amount + drift);
+  }
+
   if (!attendance.tracked) {
     const needsAttendance = active.filter((component) =>
       ['per_late_minute', 'per_overtime_hour'].includes(component.calculation));
@@ -211,12 +270,38 @@ export function calculatePayslip(input: PayslipInput): Payslip {
     }
   }
 
+  // Loan instalments: never more than what is left after every other deduction.
+  const loanRepayments: Array<{ loanId: string; amount: number }> = [];
+  const loanComponent = active.find((component) => component.calculation === 'loan_installments');
+  if (loanComponent && input.loans?.length) {
+    const due = input.loans.map((loan) => ({ loan, amount: round(loan.final && loan.remaining < 2 * loan.installment
+      ? loan.remaining
+      : Math.min(loan.installment, loan.remaining)) }))
+      .filter((item) => item.amount > 0);
+    const totalDue = due.reduce((sum, item) => sum + item.amount, 0);
+    const available = Math.max(0, round(
+      earnings.reduce((sum, item) => sum + item.amount, 0) - deductions.reduce((sum, item) => sum + item.amount, 0),
+    ));
+    let left = Math.min(totalDue, available);
+    for (const item of due) {
+      const amount = round(Math.min(item.amount, left));
+      if (amount <= 0) break;
+      loanRepayments.push({ loanId: item.loan.loanId, amount });
+      left = round(left - amount);
+    }
+    const taken = round(loanRepayments.reduce((sum, item) => sum + item.amount, 0));
+    if (taken < round(totalDue)) {
+      warnings.push({ code: 'loan_capped', blocking: false, detail: formatNumber(round(totalDue - taken)) });
+    }
+    if (taken > 0) {
+      deductions.push({ componentId: loanComponent.id, name: loanComponent.name, amount: taken, basis: `${loanRepayments.length} سلفة` });
+    }
+  }
+
   const totalEarnings = round(earnings.reduce((sum, item) => sum + item.amount, 0));
   const totalDeductions = round(deductions.reduce((sum, item) => sum + item.amount, 0));
   const netPay = round(totalEarnings - totalDeductions);
-  const grossShare = earnings
-    .filter((item) => active.find((component) => component.id === item.componentId)?.calculation === 'percentage_of_gross')
-    .reduce((sum, item) => sum + item.amount, 0);
+  const grossShare = grossShares.reduce((sum, item) => sum + item.amount, 0);
   if (periodGross > 0 && grossShare + 0.5 < round(periodGross) && Object.keys(overrides).length === 0) {
     warnings.push({ code: 'earnings_below_gross', blocking: false, detail: formatNumber(round(periodGross - grossShare)) });
   }
@@ -231,6 +316,9 @@ export function calculatePayslip(input: PayslipInput): Payslip {
     totalEarnings,
     totalDeductions,
     netPay,
+    payableDays,
+    socialSecurityBase,
+    loanRepayments,
     warnings,
   };
 }

@@ -189,7 +189,7 @@ export class EmployeeController {
     }
     if (
       input.employmentStatus !== undefined &&
-      !['active', 'inactive', 'on_leave'].includes(String(input.employmentStatus))
+      !['active', 'inactive', 'on_leave', 'suspended'].includes(String(input.employmentStatus))
     ) {
       res.status(400).json({ message: 'حالة الموظف المحددة غير صالحة.' });
       return;
@@ -226,7 +226,7 @@ export class EmployeeController {
     if (typeof input.department === 'string') updates.department = input.department.trim();
     if (typeof input.position === 'string') updates.position = input.position.trim();
     if (typeof input.hireDate === 'string') updates.hireDate = input.hireDate.trim();
-    if (['active', 'inactive', 'on_leave'].includes(String(input.employmentStatus))) {
+    if (['active', 'inactive', 'on_leave', 'suspended'].includes(String(input.employmentStatus))) {
       updates.employmentStatus = input.employmentStatus as Employee['employmentStatus'];
     }
     if (Object.keys(updates).length === 0) {

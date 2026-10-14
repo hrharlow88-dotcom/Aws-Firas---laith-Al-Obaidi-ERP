@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { loadWorkbook } from './xlsx';
 import { RawPunch } from './attendance';
 
 export type DateOrder = 'dmy' | 'mdy';
@@ -161,8 +162,7 @@ function cellText(value: ExcelJS.CellValue): string {
 }
 
 export async function parseExcelPunches(buffer: Buffer, order: DateOrder): Promise<ParsedPunches> {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  const workbook = await loadWorkbook(buffer);
   const sheet = workbook.worksheets[0];
   if (!sheet) return { punches: [], invalid: 0, format: 'xlsx' };
   const rows: string[][] = [];

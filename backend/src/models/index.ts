@@ -93,7 +93,7 @@ export interface EmployeeAttributes {
   department: string;
   position: string;
   hireDate: string;
-  employmentStatus: 'active' | 'inactive' | 'on_leave';
+  employmentStatus: 'active' | 'inactive' | 'on_leave' | 'suspended';
   customFields: Record<string, string | number>;
   departmentId: string | null;
   jobTitleId: string | null;
@@ -124,7 +124,7 @@ export class Employee extends Model<EmployeeAttributes, EmployeeCreationAttribut
   declare department: string;
   declare position: string;
   declare hireDate: string;
-  declare employmentStatus: 'active' | 'inactive' | 'on_leave';
+  declare employmentStatus: 'active' | 'inactive' | 'on_leave' | 'suspended';
   declare customFields: Record<string, string | number>;
   declare departmentId: string | null;
   declare jobTitleId: string | null;
@@ -150,7 +150,7 @@ Employee.init(
     position: { type: DataTypes.STRING(120), allowNull: false },
     hireDate: { type: DataTypes.DATEONLY, allowNull: false, field: 'hire_date' },
     employmentStatus: {
-      type: DataTypes.ENUM('active', 'inactive', 'on_leave'),
+      type: DataTypes.ENUM('active', 'inactive', 'on_leave', 'suspended'),
       allowNull: false,
       defaultValue: 'active',
       field: 'employment_status',

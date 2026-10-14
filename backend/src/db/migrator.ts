@@ -6,6 +6,7 @@ import * as m0002 from './migrations/0002-integrity-and-audit';
 import * as m0003 from './migrations/0003-org-and-employee-file';
 import * as m0004 from './migrations/0004-attendance';
 import * as m0005 from './migrations/0005-payroll-and-finance';
+import * as m0006 from './migrations/0006-payroll-practice';
 
 export interface MigrationContext {
   queryInterface: QueryInterface;
@@ -26,6 +27,7 @@ const MIGRATIONS: Array<[string, MigrationModule]> = [
   ['0003-org-and-employee-file', m0003],
   ['0004-attendance', m0004],
   ['0005-payroll-and-finance', m0005],
+  ['0006-payroll-practice', m0006],
 ];
 
 export function createMigrator(sequelize: Sequelize) {

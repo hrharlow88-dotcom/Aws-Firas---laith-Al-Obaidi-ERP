@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "migrate": "node dist/db/cli.js"
+    "migrate": "node dist/db/cli.js",
+    "import:company": "node dist/db/importCompany.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -18,6 +19,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "multer": "^1.4.5-lts.2",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",

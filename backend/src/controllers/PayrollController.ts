@@ -15,6 +15,7 @@ import {
 import { isUuid } from '../utils/validation';
 import { isXlsx } from '../services/punchParser';
 import { uploadedName } from '../services/storage';
+import { loadWorkbook } from '../services/xlsx';
 
 async function runOr404(id: string): Promise<RunRow> {
   if (!isUuid(id)) throw notFound('مسير الرواتب غير موجود.');
@@ -119,6 +120,7 @@ export class PayrollController {
       `SELECT l.employee_id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
               b.name AS "branchName", COALESCE(d.name, e.department) AS "department",
               l.gross_salary::float AS "grossSalary", l.employed_days AS "employedDays", l.present_days AS "presentDays",
+              l.payable_days::float AS "payableDays",
               l.absent_days AS "absentDays", l.unpaid_leave_days AS "unpaidLeaveDays", l.late_minutes AS "lateMinutes",
               l.overtime_minutes AS "overtimeMinutes", l.attendance_tracked AS "attendanceTracked",
               l.earnings, l.deductions, l.total_earnings::float AS "totalEarnings",
@@ -259,6 +261,7 @@ export class PayrollController {
         grossSalary: Number(line.gross_salary),
         periodDays: line.period_days,
         employedDays: line.employed_days,
+        payableDays: line.payable_days === null ? null : Number(line.payable_days),
         presentDays: line.present_days,
         absentDays: line.absent_days,
         unpaidLeaveDays: line.unpaid_leave_days,
@@ -291,7 +294,8 @@ export class PayrollController {
     }>(
       `SELECT e.employee_no AS "employeeNo", e.full_name AS "employeeName", b.name AS "branchName",
               COALESCE(d.name, e.department) AS department, l.cost_center_code AS "costCenterCode",
-              l.gross_salary::float AS "grossSalary", l.employed_days AS "employedDays", l.absent_days AS "absentDays",
+              l.gross_salary::float AS "grossSalary", l.employed_days AS "employedDays", l.payable_days::float AS "payableDays",
+              l.absent_days AS "absentDays",
               l.unpaid_leave_days AS "unpaidLeaveDays", l.late_minutes AS "lateMinutes", l.overtime_minutes AS "overtimeMinutes",
               l.earnings, l.deductions, l.total_earnings::float AS "totalEarnings",
               l.total_deductions::float AS "totalDeductions", l.net_pay::float AS "netPay"
@@ -316,6 +320,7 @@ export class PayrollController {
       { header: 'مركز الكلفة', key: 'costCenterCode', width: 12 },
       { header: 'الراتب الإجمالي', key: 'grossSalary', width: 14 },
       { header: 'أيام الخدمة', key: 'employedDays', width: 10 },
+      { header: 'أيام الاستحقاق', key: 'payableDays', width: 10 },
       { header: 'غياب', key: 'absentDays', width: 8 },
       { header: 'إجازة بدون راتب', key: 'unpaidLeaveDays', width: 10 },
       { header: 'دقائق تأخير', key: 'lateMinutes', width: 10 },
@@ -334,7 +339,7 @@ export class PayrollController {
     }
     const totalRow = sheet.addRow({ employeeName: 'المجموع' });
     sheet.columns.forEach((column, index) => {
-      if (index >= 5 && column.key && !['employedDays', 'absentDays', 'unpaidLeaveDays', 'lateMinutes', 'overtimeMinutes'].includes(column.key)) {
+      if (index >= 5 && column.key && !['employedDays', 'payableDays', 'absentDays', 'unpaidLeaveDays', 'lateMinutes', 'overtimeMinutes'].includes(column.key)) {
         const letter = sheet.getColumn(index + 1).letter;
         totalRow.getCell(index + 1).value = { formula: `SUM(${letter}2:${letter}${lines.length + 1})` };
       }
@@ -443,6 +448,53 @@ export class PayrollController {
     res.json({ data: { id: row.id } });
   }
 
+  // --- Payable / absence days set by HR -----------------------------------
+
+  static async listAdjustments(req: Request, res: Response): Promise<void> {
+    const period = queryText(req, 'period');
+    periodBounds(period);
+    const branch = branchScope(req);
+    const rows = await select(
+      `SELECT a.employee_id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
+              a.payable_days::float AS "payableDays", a.absence_days::float AS "absenceDays", a.note,
+              a.updated_at AS "updatedAt", u.name AS "updatedByName"
+       FROM payroll_day_adjustments a JOIN employees e ON e.id = a.employee_id JOIN users u ON u.id = a.updated_by
+       WHERE a.period = :period${branch ? ' AND e.branch_id = :branch' : ''}
+       ORDER BY e.employee_no`,
+      { period, branch },
+    );
+    res.json({ data: rows });
+  }
+
+  static async setAdjustment(req: Request, res: Response): Promise<void> {
+    const input = body(req);
+    assertOnlyKeys(input, ['period', 'employeeId', 'payableDays', 'absenceDays', 'note']);
+    const period = requiredText(input, 'period', 7, 'الشهر');
+    periodBounds(period);
+    const employee = await employeeInScope(req, input.employeeId);
+    const payableDays = input.payableDays === null || input.payableDays === '' || input.payableDays === undefined
+      ? null : optionalNumber(input, 'payableDays', { min: 0, max: 31 });
+    const absenceDays = optionalNumber(input, 'absenceDays', { min: 0, max: 31 }) ?? 0;
+    await assertInputsOpen(period, employee.id);
+    await transaction(async (tx) => {
+      if (payableDays === null && !absenceDays) {
+        await execute('DELETE FROM payroll_day_adjustments WHERE period = :period AND employee_id = :employeeId',
+          { period, employeeId: employee.id }, tx);
+      } else {
+        await execute(
+          `INSERT INTO payroll_day_adjustments (period, employee_id, payable_days, absence_days, note, updated_by)
+           VALUES (:period, :employeeId, :payableDays, :absenceDays, :note, :userId)
+           ON CONFLICT (period, employee_id) DO UPDATE SET payable_days = EXCLUDED.payable_days,
+             absence_days = EXCLUDED.absence_days, note = EXCLUDED.note, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+          { period, employeeId: employee.id, payableDays, absenceDays, note: optionalText(input, 'note', 500) ?? null, userId: req.user!.id },
+          tx,
+        );
+      }
+      await recordAudit(req, tx, 'payroll.days_adjusted', 'employee', employee.id, { period, payableDays, absenceDays });
+    });
+    res.json({ data: { employeeId: employee.id } });
+  }
+
   /** Imports variable amounts from Excel: employee number, component name, amount, note. */
   static async importInputs(req: Request, res: Response): Promise<void> {
     const file = req.file;
@@ -451,8 +503,7 @@ export class PayrollController {
     periodBounds(period);
     const settings = await getSettings();
     const manual = settings.payrollRules.components.filter((item) => item.calculation === 'manual');
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(file.buffer as unknown as ArrayBuffer);
+    const workbook = await loadWorkbook(file.buffer);
     const sheet = workbook.worksheets[0];
     const errors: Array<{ row: number; message: string }> = [];
     const rows: Array<{ employeeId: string; componentId: string; amount: number; note: string | null; row: number }> = [];

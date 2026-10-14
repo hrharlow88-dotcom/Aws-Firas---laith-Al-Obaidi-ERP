@@ -9,6 +9,7 @@ import LeaveController from '../controllers/LeaveController';
 import OrgController from '../controllers/OrgController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
 import AttendanceController from '../controllers/AttendanceController';
+import LoanController from '../controllers/LoanController';
 import PayrollController from '../controllers/PayrollController';
 import FinanceController from '../controllers/FinanceController';
 import IntegrationController, { requireApiKey } from '../controllers/IntegrationController';
@@ -157,6 +158,11 @@ router.get('/payroll/inputs', requireAuth, allowPermission('payroll.view'), asyn
 router.post('/payroll/inputs', requireAuth, allowPermission('payroll.prepare'), asyncRoute(PayrollController.addInput));
 router.delete('/payroll/inputs/:id', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.deleteInput));
 router.post('/payroll/inputs/import', requireAuth, allowPermission('payroll.prepare'), uploadSingle('file'), asyncRoute(PayrollController.importInputs));
+router.get('/payroll/day-adjustments', requireAuth, allowPermission('payroll.view'), asyncRoute(PayrollController.listAdjustments));
+router.put('/payroll/day-adjustments', requireAuth, allowPermission('payroll.prepare'), asyncRoute(PayrollController.setAdjustment));
+router.get('/payroll/loans', requireAuth, allowPermission('payroll.view'), asyncRoute(LoanController.list));
+router.post('/payroll/loans', requireAuth, allowPermission('payroll.prepare'), asyncRoute(LoanController.create));
+router.patch('/payroll/loans/:id', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(LoanController.setStatus));
 
 router.get('/finance/mappings', requireAuth, allowPermission('finance.view'), asyncRoute(FinanceController.listMappings));
 router.put('/finance/mappings', requireAuth, allowPermission('finance.manage'), asyncRoute(FinanceController.saveMappings));

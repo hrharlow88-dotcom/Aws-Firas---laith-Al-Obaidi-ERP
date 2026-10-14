@@ -78,10 +78,13 @@ export type PayrollCalculation =
   | 'percentage_of_basic'
   | 'per_day'
   | 'per_late_minute'
-  | 'per_overtime_hour';
+  | 'per_overtime_hour'
+  | 'percentage_of_ss_base'
+  | 'loan_installments';
 
 export const PAYROLL_CALCULATIONS: PayrollCalculation[] = [
   'manual', 'percentage_of_gross', 'percentage_of_basic', 'per_day', 'per_late_minute', 'per_overtime_hour',
+  'percentage_of_ss_base', 'loan_installments',
 ];
 
 /** The component treated as the basic salary when none is flagged with isBasic. */
@@ -97,6 +100,16 @@ export interface PayrollComponentSetting {
   statutory: boolean;
   legalApproved: boolean;
   isBasic?: boolean;
+  /**
+   * Fixed amounts from the salary record follow the days paid in the month
+   * unless this is false (a monthly raise is paid in full, for example).
+   */
+  prorate?: boolean;
+  /** percentage_of_ss_base: the declared salary is clamped to this range first. */
+  minBase?: number;
+  maxBase?: number;
+  /** Rounding for this component only (social security is rounded to whole dinars). */
+  roundingDigits?: number;
 }
 
 export interface AttendanceRulesSetting {
@@ -114,6 +127,15 @@ export interface PayrollRulesSetting {
   baseCurrency: string;
   monthlyDivisor: number;
   roundingDigits: number;
+  /**
+   * When true, an employee who leaves during the month is paid through the
+   * final settlement and not through the monthly run.
+   */
+  terminatedPaidBySettlement?: boolean;
+  /** Dinars per US dollar, used when a loan and the salary are in different currencies. */
+  usdRate?: number;
+  /** Branch-specific dinar rate (branch id → rate), e.g. Erbil buys dollars at another rate. */
+  branchUsdRates?: Record<string, number>;
   components: PayrollComponentSetting[];
 }
 
@@ -197,9 +219,11 @@ export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
     { id: '30000000-0000-4000-8000-000000000008', name: 'غرامات المركبات', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000009', name: 'استقطاع آخر', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000010', name: 'السلف', category: 'deduction', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false },
-    { id: '30000000-0000-4000-8000-000000000011', name: 'الضمان الاجتماعي', category: 'deduction', calculation: 'percentage_of_basic', rate: 5, active: false, statutory: true, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000011', name: 'الضمان الاجتماعي', category: 'deduction', calculation: 'percentage_of_ss_base', rate: 5, active: false, statutory: true, legalApproved: false, minBase: 350000, maxBase: 1750000, roundingDigits: 0 },
     { id: '30000000-0000-4000-8000-000000000012', name: 'العمل الإضافي', category: 'earning', calculation: 'per_overtime_hour', rate: 1.5, active: false, statutory: false, legalApproved: false },
     { id: '30000000-0000-4000-8000-000000000013', name: 'خصم دقائق التأخير', category: 'deduction', calculation: 'per_late_minute', rate: 1, active: false, statutory: false, legalApproved: false },
+    { id: '30000000-0000-4000-8000-000000000014', name: 'الزيادة الشهرية', category: 'earning', calculation: 'manual', rate: 0, active: true, statutory: false, legalApproved: false, prorate: false },
+    { id: '30000000-0000-4000-8000-000000000015', name: 'أقساط القروض', category: 'deduction', calculation: 'loan_installments', rate: 0, active: true, statutory: false, legalApproved: false },
   ],
 };
 
