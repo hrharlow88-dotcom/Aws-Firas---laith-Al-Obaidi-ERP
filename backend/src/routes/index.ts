@@ -8,6 +8,7 @@ import SettingsController from '../controllers/SettingsController';
 import LeaveController from '../controllers/LeaveController';
 import OrgController from '../controllers/OrgController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
+import AttendanceController from '../controllers/AttendanceController';
 import { uploadSingle } from '../services/storage';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
@@ -108,5 +109,25 @@ router.get('/org/job-titles', requireAuth, asyncRoute(OrgController.listJobTitle
 router.post('/org/job-titles', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.createJobTitle));
 router.put('/org/job-titles/:id', requireAuth, allowPermission('org.manage'), validateUuidParam, asyncRoute(OrgController.updateJobTitle));
 router.get('/org/chart', requireAuth, asyncRoute(OrgController.chart));
+
+router.get('/attendance/shifts', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listShifts));
+router.post('/attendance/shifts', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.saveShift));
+router.put('/attendance/shifts/:id', requireAuth, allowPermission('attendance.manage'), validateUuidParam, asyncRoute(AttendanceController.saveShift));
+router.post('/attendance/shifts-assign', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.assignShift));
+router.get('/attendance/devices', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listDevices));
+router.post('/attendance/devices', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.saveDevice));
+router.put('/attendance/devices/:id', requireAuth, allowPermission('attendance.manage'), validateUuidParam, asyncRoute(AttendanceController.saveDevice));
+router.post('/attendance/imports', requireAuth, allowPermission('attendance.manage'), uploadSingle('file'), asyncRoute(AttendanceController.importFile));
+router.get('/attendance/imports', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listImports));
+router.get('/attendance/punches', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listPunches));
+router.post('/attendance/punches', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.addPunch));
+router.post('/attendance/punches/:id/void', requireAuth, allowPermission('attendance.manage'), validateUuidParam, asyncRoute(AttendanceController.voidPunch));
+router.get('/attendance/unmatched', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.unmatched));
+router.post('/attendance/unmatched/assign', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.assignPin));
+router.post('/attendance/compute', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.compute));
+router.get('/attendance/days', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listDays));
+router.get('/attendance/summary', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.summary));
+router.put('/attendance/days/:employeeId/:date', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.overrideDay));
+router.get('/attendance/today', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.today));
 
 export default router;

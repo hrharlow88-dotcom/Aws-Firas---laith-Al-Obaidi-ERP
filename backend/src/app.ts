@@ -2,7 +2,8 @@ import express, { NextFunction, Request, Response } from 'express';
 import path from 'node:path';
 import helmet from 'helmet';
 import routes from './routes';
-import { HttpError } from './utils/http';
+import { asyncRoute, HttpError } from './utils/http';
+import DevicePushController from './controllers/DevicePushController';
 
 export function createApp() {
   const app = express();
@@ -17,6 +18,13 @@ export function createApp() {
       },
     },
   }));
+  // Fingerprint devices (ZKTeco ADMS) push plain-text logs to fixed /iclock paths.
+  const deviceText = express.text({ type: '*/*', limit: '5mb' });
+  app.get('/iclock/cdata', asyncRoute(DevicePushController.handshake));
+  app.post('/iclock/cdata', deviceText, asyncRoute(DevicePushController.upload));
+  app.get('/iclock/getrequest', asyncRoute(DevicePushController.poll));
+  app.post('/iclock/devicecmd', deviceText, asyncRoute(DevicePushController.poll));
+
   app.use(express.json({ limit: '2mb' }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api', routes);

@@ -35,6 +35,17 @@ export function transaction<T>(work: (transaction: Transaction) => Promise<T>): 
 }
 
 /**
+ * Sequelize expands array replacements into comma lists (for IN (...)), so
+ * values written to array columns are passed as Postgres array literals.
+ */
+function columnValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return `{${value.map((item) => (typeof item === 'number' ? String(item) : `"${String(item).replace(/["\\]/g, '\\$&')}"`)).join(',')}}`;
+  }
+  return value;
+}
+
+/**
  * Inserts one row. Only fields present in `columns` are written, so the
  * column names in the SQL always come from code, never from the request.
  */
@@ -46,7 +57,7 @@ export async function insertRow(
 ): Promise<void> {
   const fields = Object.keys(values).filter((field) => values[field] !== undefined && columns[field]);
   const params: Params = {};
-  for (const field of fields) params[`ins_${field}`] = values[field];
+  for (const field of fields) params[`ins_${field}`] = columnValue(values[field]);
   await execute(
     `INSERT INTO ${table} (${fields.map((field) => columns[field]).join(', ')})
      VALUES (${fields.map((field) => `:ins_${field}`).join(', ')})`,
@@ -64,7 +75,7 @@ export function setClause(values: Record<string, unknown>, columns: Record<strin
     const column = columns[field];
     if (!column) continue;
     parts.push(`${column} = :set_${field}`);
-    params[`set_${field}`] = value;
+    params[`set_${field}`] = columnValue(value);
   }
   return { sql: parts.join(', '), params };
 }
