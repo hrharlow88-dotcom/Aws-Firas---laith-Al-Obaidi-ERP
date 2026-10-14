@@ -29,7 +29,7 @@ export async function up({ sequelize }: MigrationContext): Promise<void> {
       CHECK (ends_on >= starts_on)
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS payroll_runs_one_active_per_scope
-      ON payroll_runs (period, COALESCE(branch_id, '00000000-0000-0000-0000-000000000000'::uuid))
+      ON payroll_runs (period, currency, COALESCE(branch_id, '00000000-0000-0000-0000-000000000000'::uuid))
       WHERE status <> 'cancelled'`,
 
     `CREATE TABLE IF NOT EXISTS payroll_lines (

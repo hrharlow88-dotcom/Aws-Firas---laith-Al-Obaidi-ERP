@@ -9,6 +9,7 @@ import LeaveController from '../controllers/LeaveController';
 import OrgController from '../controllers/OrgController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
 import AttendanceController from '../controllers/AttendanceController';
+import PayrollController from '../controllers/PayrollController';
 import { uploadSingle } from '../services/storage';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
@@ -129,5 +130,21 @@ router.get('/attendance/days', requireAuth, allowPermission('attendance.view'), 
 router.get('/attendance/summary', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.summary));
 router.put('/attendance/days/:employeeId/:date', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.overrideDay));
 router.get('/attendance/today', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.today));
+
+router.get('/payroll/runs', requireAuth, allowPermission('payroll.view'), asyncRoute(PayrollController.listRuns));
+router.post('/payroll/runs', requireAuth, allowPermission('payroll.prepare'), asyncRoute(PayrollController.createRun));
+router.get('/payroll/runs/:id', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.getRun));
+router.post('/payroll/runs/:id/calculate', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.calculate));
+router.post('/payroll/runs/:id/approve', requireAuth, allowPermission('payroll.approve'), validateUuidParam, asyncRoute(PayrollController.approve));
+router.post('/payroll/runs/:id/reopen', requireAuth, allowPermission('payroll.approve'), validateUuidParam, asyncRoute(PayrollController.reopen));
+router.post('/payroll/runs/:id/cancel', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.cancel));
+router.get('/payroll/runs/:id/payslips/:employeeId', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.payslip));
+router.get('/payroll/runs/:id/register.xlsx', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.exportRegister));
+router.get('/payroll/runs/:id/bank.csv', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.bankFile));
+router.get('/employees/:id/payslips', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.employeeHistory));
+router.get('/payroll/inputs', requireAuth, allowPermission('payroll.view'), asyncRoute(PayrollController.listInputs));
+router.post('/payroll/inputs', requireAuth, allowPermission('payroll.prepare'), asyncRoute(PayrollController.addInput));
+router.delete('/payroll/inputs/:id', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.deleteInput));
+router.post('/payroll/inputs/import', requireAuth, allowPermission('payroll.prepare'), uploadSingle('file'), asyncRoute(PayrollController.importInputs));
 
 export default router;
