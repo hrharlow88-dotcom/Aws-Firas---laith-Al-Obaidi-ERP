@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, policy-based-leave-rules]
+    branches: [main, erp-phase-2]
 
 permissions:
   contents: read
@@ -12,6 +12,16 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp_dev_pw
+          POSTGRES_DB: laith_erp_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U erp" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,9 +29,11 @@ jobs:
           node-version: 22
       - name: Build API
         run: |
-          npm install --prefix backend
+          npm ci --prefix backend
           npm run build --prefix backend
+      - name: Test API
+        run: npm test --prefix backend
       - name: Build web app
         run: |
-          npm install --prefix frontend
+          npm ci --prefix frontend
           npm run build --prefix frontend
