@@ -10,6 +10,7 @@ import * as m0006 from './migrations/0006-payroll-practice';
 import * as m0007 from './migrations/0007-contract-templates';
 import * as m0008 from './migrations/0008-access-and-roles';
 import * as m0009 from './migrations/0009-job-profiles';
+import * as m0010 from './migrations/0010-leave-accrual';
 
 export interface MigrationContext {
   queryInterface: QueryInterface;
@@ -34,6 +35,7 @@ const MIGRATIONS: Array<[string, MigrationModule]> = [
   ['0007-contract-templates', m0007],
   ['0008-access-and-roles', m0008],
   ['0009-job-profiles', m0009],
+  ['0010-leave-accrual', m0010],
 ];
 
 export function createMigrator(sequelize: Sequelize) {

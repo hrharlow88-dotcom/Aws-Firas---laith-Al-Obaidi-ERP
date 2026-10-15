@@ -54,7 +54,7 @@ interface LedgerEntry {
   id: string;
   leaveTypeName: string;
   quantity: string;
-  entryType: 'opening' | 'adjustment' | 'taken' | 'reversal';
+  entryType: 'opening' | 'adjustment' | 'taken' | 'reversal' | 'accrual';
   reason: string;
   createdAt: string;
 }
@@ -84,6 +84,7 @@ const entryLabels: Record<LedgerEntry['entryType'], string> = {
   adjustment: 'تسوية',
   taken: 'إجازة مصروفة',
   reversal: 'عكس حركة',
+  accrual: 'استحقاق شهري',
 };
 
 async function api<T>(path: string, token: string, method = 'GET', body?: unknown): Promise<T> {

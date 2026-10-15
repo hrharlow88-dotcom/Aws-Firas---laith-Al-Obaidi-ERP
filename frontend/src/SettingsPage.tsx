@@ -74,6 +74,8 @@ export interface SystemSettings {
     dayCountBasis?: 'working' | 'calendar';
     requiresMedicalCertificate?: boolean;
     deductsBalance?: boolean;
+    monthlyAccrual?: boolean;
+    accrualEmploymentTypes?: string[];
   }>;
   approvalSteps: Array<{ id: string; role: UserRole }>;
   roles: Record<UserRole, { label: string; permissions: Permission[] }>;
@@ -101,6 +103,7 @@ export interface SystemSettings {
     hourlyMonthlyQuota: number;
     hourlyMonthlyUsageLimit: number;
     lowBalanceThreshold: number;
+    accrualStartPeriod?: string | null;
   };
 }
 
@@ -427,10 +430,11 @@ export function SettingsPage({ value, busy, onSave }: {
                   {item.unit === 'days' && <label className="field"><span>أساس احتساب الأيام</span><select value={item.dayCountBasis || 'working'} onChange={(event) => updateLeaveType(item.id, { dayCountBasis: event.target.value as 'working' | 'calendar' })}><option value="working">أيام العمل</option><option value="calendar">أيام تقويمية</option></select></label>}
                   {item.name.includes('مرض') && <label className="settings-check"><input type="checkbox" checked={item.requiresMedicalCertificate || false} onChange={(event) => updateLeaveType(item.id, { requiresMedicalCertificate: event.target.checked })} />يتطلب تقريراً طبياً</label>}
                   <label className="settings-check"><input type="checkbox" checked={item.deductsBalance !== false} onChange={(event) => updateLeaveType(item.id, { deductsBalance: event.target.checked })} />يُخصم من دفتر رصيد الإجازات</label>
-                  {item.serviceEntitlements?.length ? (
+                  {item.unit === 'days' && item.annualEntitlement !== null && item.deductsBalance !== false && <label className="settings-check"><input type="checkbox" checked={item.monthlyAccrual === true} onChange={(event) => updateLeaveType(item.id, { monthlyAccrual: event.target.checked })} />يُستحق شهرياً (الاستحقاق السنوي ÷ 12 يُضاف للرصيد كل شهر)</label>}
+                  {item.serviceEntitlements?.length || item.monthlyAccrual ? (
                     <div className="policy-tiers">
                       <strong>الاستحقاق السنوي المرجعي حسب سنوات الخدمة</strong>
-                      {item.serviceEntitlements.map((tier, tierIndex) => (
+                      {(item.serviceEntitlements ?? []).map((tier, tierIndex) => (
                         <div className="policy-tier" key={tier.minimumYears}>
                           <span>من السنة</span>
                           <input aria-label="سنة بدء الشريحة" type="number" min="0" max="60" value={tier.minimumYears} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, minimumYears: Number(event.target.value) } : row) })} />
@@ -449,7 +453,7 @@ export function SettingsPage({ value, busy, onSave }: {
                           }],
                         });
                       }}><Plus size={14} />إضافة شريحة</button>
-                      <small>الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.</small>
+                      <small>{item.monthlyAccrual ? 'الشريحة تُطبق من الشهر الذي يكمل فيه الموظف سنوات خدمتها، ويُرحّل الاستحقاق من «الإجازات ← الاستحقاق الشهري».' : 'الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.'}</small>
                     </div>
                   ) : null}
                   <label className="settings-check"><input type="checkbox" checked={item.paid} onChange={(event) => updateLeaveType(item.id, { paid: event.target.checked })} />إجازة مدفوعة</label>
@@ -484,6 +488,7 @@ export function SettingsPage({ value, busy, onSave }: {
                 <label className="field"><span>الحد الأقصى للإجازة الزمنية للطلب</span><input type="number" min="0.25" max="24" step="0.25" value={settings.leaveRules.maxHoursPerRequest} onChange={(event) => updateLeaveRules({ maxHoursPerRequest: Number(event.target.value) })} /></label>
                 <label className="field"><span>الحصة الشهرية للإجازة بالساعات</span><input type="number" min="0" max="744" step="0.25" value={settings.leaveRules.hourlyMonthlyQuota} onChange={(event) => updateLeaveRules({ hourlyMonthlyQuota: Number(event.target.value) })} /></label>
                 <label className="field"><span>مرات استخدام الساعات شهرياً</span><input type="number" min="0" max="31" step="1" value={settings.leaveRules.hourlyMonthlyUsageLimit} onChange={(event) => updateLeaveRules({ hourlyMonthlyUsageLimit: Number(event.target.value) })} /></label>
+                <label className="field"><span>أول شهر للاستحقاق الشهري</span><input type="month" value={settings.leaveRules.accrualStartPeriod ?? ''} onChange={(event) => updateLeaveRules({ accrualStartPeriod: event.target.value || null })} /><small>الأشهر قبله داخلة في الأرصدة الافتتاحية ولا يُرحّل لها استحقاق.</small></label>
                 <label className="field"><span>تنبيه انخفاض الرصيد</span><input type="number" min="0" max="10000" step="0.25" value={settings.leaveRules.lowBalanceThreshold} onChange={(event) => updateLeaveRules({ lowBalanceThreshold: Number(event.target.value) })} /></label>
               </div>
             </div>

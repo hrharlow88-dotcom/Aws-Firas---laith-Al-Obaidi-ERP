@@ -56,6 +56,10 @@ export interface LeaveTypeSetting {
   dayCountBasis?: 'working' | 'calendar';
   requiresMedicalCertificate?: boolean;
   deductsBalance?: boolean;
+  /** Credit annualEntitlement (or the service tier) / 12 to the balance every month. */
+  monthlyAccrual?: boolean;
+  /** Employment types that accrue; empty or missing = every type. */
+  accrualEmploymentTypes?: string[];
 }
 
 export interface ApprovalStepSetting {
@@ -162,6 +166,8 @@ export interface SystemSettings {
     hourlyMonthlyQuota: number;
     hourlyMonthlyUsageLimit: number;
     lowBalanceThreshold: number;
+    /** First month the monthly accrual may be posted for (YYYY-MM); earlier months are already in the opening balances. */
+    accrualStartPeriod?: string | null;
   };
 }
 
@@ -326,6 +332,7 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
       hourlyMonthlyQuota: value.leaveRules?.hourlyMonthlyQuota ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.hourlyMonthlyQuota,
       hourlyMonthlyUsageLimit: value.leaveRules?.hourlyMonthlyUsageLimit ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.hourlyMonthlyUsageLimit,
       lowBalanceThreshold: value.leaveRules?.lowBalanceThreshold ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.lowBalanceThreshold,
+      accrualStartPeriod: value.leaveRules?.accrualStartPeriod ?? null,
     },
   };
 }

@@ -318,13 +318,14 @@ interface LeaveLedgerEntryAttributes {
   employeeId: string;
   leaveTypeId: string;
   quantity: string;
-  entryType: 'opening' | 'adjustment' | 'taken' | 'reversal';
+  entryType: 'opening' | 'adjustment' | 'taken' | 'reversal' | 'accrual';
+  accrualPeriod?: string | null;
   requestId: string | null;
   reason: string;
   createdBy: string;
 }
 
-type LeaveLedgerEntryCreationAttributes = Optional<LeaveLedgerEntryAttributes, 'id' | 'requestId'>;
+type LeaveLedgerEntryCreationAttributes = Optional<LeaveLedgerEntryAttributes, 'id' | 'requestId' | 'accrualPeriod'>;
 
 export class LeaveLedgerEntry extends Model<LeaveLedgerEntryAttributes, LeaveLedgerEntryCreationAttributes> implements LeaveLedgerEntryAttributes {
   declare id: string;
@@ -332,6 +333,7 @@ export class LeaveLedgerEntry extends Model<LeaveLedgerEntryAttributes, LeaveLed
   declare leaveTypeId: string;
   declare quantity: string;
   declare entryType: LeaveLedgerEntryAttributes['entryType'];
+  declare accrualPeriod: string | null;
   declare requestId: string | null;
   declare reason: string;
   declare createdBy: string;
@@ -343,7 +345,8 @@ LeaveLedgerEntry.init(
     employeeId: { type: DataTypes.UUID, allowNull: false, field: 'employee_id' },
     leaveTypeId: { type: DataTypes.UUID, allowNull: false, field: 'leave_type_id' },
     quantity: { type: DataTypes.DECIMAL(8, 2), allowNull: false },
-    entryType: { type: DataTypes.ENUM('opening', 'adjustment', 'taken', 'reversal'), allowNull: false, field: 'entry_type' },
+    entryType: { type: DataTypes.ENUM('opening', 'adjustment', 'taken', 'reversal', 'accrual'), allowNull: false, field: 'entry_type' },
+    accrualPeriod: { type: DataTypes.CHAR(7), allowNull: true, field: 'accrual_period' },
     requestId: { type: DataTypes.UUID, allowNull: true, field: 'request_id' },
     reason: { type: DataTypes.STRING(1000), allowNull: false },
     createdBy: { type: DataTypes.UUID, allowNull: false, field: 'created_by' },

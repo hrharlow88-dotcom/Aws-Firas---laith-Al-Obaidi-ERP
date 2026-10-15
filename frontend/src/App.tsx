@@ -38,6 +38,7 @@ import { APPS, appForPage, visibleMenus } from './lib/apps';
 import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
+import { LeaveAccrualPage } from './pages/LeaveAccrualPage';
 import { ContractTemplatesPage } from './pages/ContractTemplatesPage';
 import { UsersPage } from './pages/UsersPage';
 import { JobProfilesPage } from './pages/JobProfilesPage';
@@ -46,7 +47,7 @@ import { StatusTag } from './components/ui';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
-  | 'payroll-days' | 'loans' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
+  | 'payroll-days' | 'loans' | 'leave-accrual' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
 
 interface User {
@@ -505,6 +506,7 @@ function Workspace() {
           {page === 'payroll' && can('payroll.view') && <PayrollPage key={route.params[0] ?? 'list'} runId={route.params[0]} branches={branchOptions} />}
           {page === 'payroll-days' && can('payroll.view') && <DayAdjustmentsPage />}
           {page === 'loans' && can('payroll.view') && <LoansPage />}
+          {page === 'leave-accrual' && can('leaves.manage_balances') && <LeaveAccrualPage />}
           {page === 'contract-templates' && can('employees.manage_profile') && <ContractTemplatesPage />}
           {page === 'payslip' && route.params[1] && <PayslipPage runId={route.params[0]} employeeId={route.params[1]} />}
           {page === 'card' && route.params[0] && <EmployeeCardPage employeeId={route.params[0]} />}
@@ -523,7 +525,7 @@ function Workspace() {
 }
 
 const KNOWN_PAGES: string[] = [
-  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans',
+  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual',
   'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
 ];
 

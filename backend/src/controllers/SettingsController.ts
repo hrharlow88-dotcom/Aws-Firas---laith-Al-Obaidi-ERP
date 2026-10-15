@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AuditLog, SystemSetting, sequelize } from '../models';
+import { AuditLog, EMPLOYMENT_TYPES, SystemSetting, sequelize } from '../models';
 import {
   EmployeeFieldSetting,
   LeaveTypeSetting,
@@ -35,7 +35,7 @@ function isOptionalNumber(value: unknown): value is number | null {
 function validateLeaveTypes(value: unknown): value is LeaveTypeSetting[] {
   return Array.isArray(value) && value.length <= MAX_LIST_ITEMS && value.every((item) =>
     isRecord(item) &&
-    hasOnlyKeys(item, ['id', 'name', 'unit', 'paid', 'active', 'annualEntitlement', 'carryForwardLimit', 'serviceEntitlements', 'dayCountBasis', 'requiresMedicalCertificate', 'deductsBalance']) &&
+    hasOnlyKeys(item, ['id', 'name', 'unit', 'paid', 'active', 'annualEntitlement', 'carryForwardLimit', 'serviceEntitlements', 'dayCountBasis', 'requiresMedicalCertificate', 'deductsBalance', 'monthlyAccrual', 'accrualEmploymentTypes']) &&
     typeof item.id === 'string' && /^[0-9a-f-]{36}$/i.test(item.id) &&
     isText(item.name, 80) && item.name.trim().length > 0 &&
     (item.unit === 'days' || item.unit === 'hours') &&
@@ -55,7 +55,11 @@ function validateLeaveTypes(value: unknown): value is LeaveTypeSetting[] {
         ))) &&
     (item.dayCountBasis === undefined || item.dayCountBasis === 'working' || item.dayCountBasis === 'calendar') &&
     (item.requiresMedicalCertificate === undefined || typeof item.requiresMedicalCertificate === 'boolean') &&
-    (item.deductsBalance === undefined || typeof item.deductsBalance === 'boolean'),
+    (item.deductsBalance === undefined || typeof item.deductsBalance === 'boolean') &&
+    (item.monthlyAccrual === undefined || typeof item.monthlyAccrual === 'boolean') &&
+    (item.monthlyAccrual !== true || (item.unit === 'days' && typeof item.annualEntitlement === 'number' && item.deductsBalance !== false)) &&
+    (item.accrualEmploymentTypes === undefined || (Array.isArray(item.accrualEmploymentTypes) &&
+      item.accrualEmploymentTypes.every((type) => typeof type === 'string' && (EMPLOYMENT_TYPES as readonly string[]).includes(type)))),
   ) && new Set(value.map((item) => item.id)).size === value.length;
 }
 
@@ -79,8 +83,10 @@ function validateEmployeeFields(value: unknown): value is EmployeeFieldSetting[]
 function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules'] {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     'workingDays', 'officialHolidays', 'maxHoursPerRequest', 'hourlyMonthlyQuota',
-    'hourlyMonthlyUsageLimit', 'lowBalanceThreshold',
+    'hourlyMonthlyUsageLimit', 'lowBalanceThreshold', 'accrualStartPeriod',
   ])) return false;
+  if (value.accrualStartPeriod !== undefined && value.accrualStartPeriod !== null &&
+    !(typeof value.accrualStartPeriod === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.accrualStartPeriod))) return false;
   const workingDays = value.workingDays;
   const officialHolidays = value.officialHolidays;
   return Array.isArray(workingDays) && workingDays.length > 0 && workingDays.length <= 7 &&

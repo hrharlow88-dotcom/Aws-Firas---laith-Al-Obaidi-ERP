@@ -6,6 +6,7 @@ import EmployeeController from '../controllers/EmployeeController';
 import UserController from '../controllers/UserController';
 import SettingsController from '../controllers/SettingsController';
 import LeaveController from '../controllers/LeaveController';
+import LeaveAccrualController from '../controllers/LeaveAccrualController';
 import OrgController from '../controllers/OrgController';
 import { JobProfileController } from '../controllers/JobProfileController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
@@ -81,6 +82,9 @@ router.get('/leaves', requireAuth, allowPermission('leaves.view'), asyncRoute(Le
 router.post('/leaves', requireAuth, allowPermission('leaves.request'), asyncRoute(LeaveController.createRequest));
 router.get('/leaves/balances', requireAuth, allowPermission('leaves.view'), asyncRoute(LeaveController.balances));
 router.get('/leaves/ledger', requireAuth, allowPermission('leaves.view'), asyncRoute(LeaveController.ledger));
+router.get('/leaves/accruals', requireAuth, allowPermission('leaves.manage_balances'), asyncRoute(LeaveAccrualController.list));
+router.get('/leaves/accruals/preview', requireAuth, allowPermission('leaves.manage_balances'), asyncRoute(LeaveAccrualController.preview));
+router.post('/leaves/accruals', requireAuth, allowPermission('leaves.manage_balances'), asyncRoute(LeaveAccrualController.apply));
 router.post('/leaves/balances', requireAuth, allowPermission('leaves.manage_balances'), asyncRoute(LeaveController.adjustBalance));
 router.post('/leaves/:id/decision', requireAuth, allowPermission('leaves.approve'), validateUuidParam, asyncRoute(LeaveController.decide));
 router.post('/leaves/:id/cancel', requireAuth, allowAnyPermission('leaves.request', 'leaves.manage_balances'), validateUuidParam, asyncRoute(LeaveController.cancel));

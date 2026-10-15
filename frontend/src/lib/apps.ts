@@ -60,7 +60,10 @@ export const APPS: AppDefinition[] = [
   },
   {
     id: 'leaves', label: 'الإجازات', description: 'الطلبات والأرصدة', icon: CalendarDays,
-    colors: ['#5b8def', '#2f5fc4'], menus: [{ page: 'leaves', label: 'الإجازات والأرصدة', permission: 'leaves.view' }],
+    colors: ['#5b8def', '#2f5fc4'], menus: [
+      { page: 'leaves', label: 'الإجازات والأرصدة', permission: 'leaves.view' },
+      { page: 'leave-accrual', label: 'الاستحقاق الشهري', permission: 'leaves.manage_balances' },
+    ],
   },
   {
     id: 'payroll', label: 'الرواتب', description: 'المسيرات والسلف', icon: Wallet,
