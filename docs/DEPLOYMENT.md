@@ -22,6 +22,31 @@ cd laith-erp/deploy
 ### سيرفر داخلي بدون نطاق
 ضع عنوان السيرفر في `ERP_DOMAIN` (مثل `192.168.1.20`)، وفي `deploy/Caddyfile` غيّر السطر الأول من الكتلة إلى `http://{$ERP_DOMAIN}`.
 
+## على Hostinger VPS (الطريقة المعتمدة)
+1. من hPanel اشترِ **VPS** (خطة KVM 1 أو KVM 2 تكفي لـ 160 موظف) واختر نظام **Ubuntu 24.04**.
+2. من صفحة السيرفر خذ: عنوان IP، واسم السيرفر (مثل `srv123456.hstgr.cloud`)، وكلمة سر root.
+3. ادخل على السيرفر من **Browser terminal** في hPanel (أو SSH) ونفّذ:
+```bash
+git clone https://github.com/hrharlow88-dotcom/Aws-Firas---laith-Al-Obaidi-ERP.git laith-erp
+cd laith-erp/deploy
+sudo ADMIN_EMAIL=aws.firas@alobaidi-cars.com ADMIN_NAME="أوس فراس" ./install.sh
+```
+السكربت ينصّب Docker ويفتح المنافذ (22، 80، 443، 8081) ويستخدم اسم السيرفر للشهادة تلقائياً، ثم يطبع كلمة سر المدير.
+4. افتح `https://srv123456.hstgr.cloud` (اسم سيرفرك) وسجّل الدخول.
+
+## المدخل من نظام الأوصاف (alobaidi-hr.github.io/erp)
+صفحة `https://alobaidi-hr.github.io/erp/` في مستودع نظام الأوصاف تحوّل إلى الـ ERP. بعد التنصيب ضع عنوان السيرفر في ملف `erp/config.js` بذلك المستودع:
+```js
+window.LO_ERP = { url: 'https://srv123456.hstgr.cloud' };
+```
+وقبلها تعرض الصفحة أن النظام قيد التنصيب. داخل الـ ERP يفتح تطبيق «الأوصاف الوظيفية» نظام الأوصاف.
+
+### إذا صار عندكم دومين خاص لاحقاً
+أضف سجل **A** (مثل `erp`) يشير إلى IP السيرفر، ثم غيّر `ERP_DOMAIN` في `deploy/.env` وأعد التشغيل:
+```bash
+cd laith-erp/deploy && docker compose -f docker-compose.prod.yml up -d
+```
+
 ## تحميل بيانات الشركة
 ملفات Excel (ملفات رواتب الفروع، السجل الرئيسي، نظام الإجازات) لا تُرفع للمستودع أبداً.
 ```bash

@@ -751,3 +751,5 @@ table.dense td { height: 46px; padding-block: 6px; }
 .field-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 10px; padding: 9px 20px; border-top: 1px solid var(--line-soft); font-size: 12px; }
 .field-codes { display: flex; flex-wrap: wrap; gap: 6px; }
 .code-chip.code-ar { font-family: inherit; }
+.change-line { font-size: 12px; line-height: 1.8; }
+.change-line .muted, td .muted { color: var(--faint); }

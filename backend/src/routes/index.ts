@@ -134,6 +134,9 @@ router.get('/org/job-titles', requireAuth, asyncRoute(OrgController.listJobTitle
 router.post('/org/job-titles', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.createJobTitle));
 router.put('/org/job-titles/:id', requireAuth, allowPermission('org.manage'), validateUuidParam, asyncRoute(OrgController.updateJobTitle));
 router.get('/org/chart', requireAuth, asyncRoute(OrgController.chart));
+router.get('/org/import/template.xlsx', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.importTemplate));
+router.post('/org/import/preview', requireAuth, allowPermission('org.manage'), uploadSingle('file'), asyncRoute(OrgController.importPreview));
+router.post('/org/import/apply', requireAuth, allowPermission('org.manage'), uploadSingle('file'), asyncRoute(OrgController.importApply));
 
 router.get('/attendance/shifts', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listShifts));
 router.post('/attendance/shifts', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.saveShift));

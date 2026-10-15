@@ -7,6 +7,9 @@ import {
 } from '../utils/http';
 import { isUuid } from '../utils/validation';
 import { employeeScopeSql } from '../services/access';
+import { applyOrgPlan, orgTemplate, planOrgImport } from '../services/orgImport';
+import { isXlsx } from '../services/punchParser';
+import { uploadedName } from '../services/storage';
 
 interface DepartmentRow {
   id: string;
@@ -239,6 +242,53 @@ export class OrgController {
     ]);
     res.json({ data: { departments, employees } });
   }
+
+  /** Excel sheet of the current structure, for HR to edit and upload back. */
+  static async importTemplate(req: Request, res: Response): Promise<void> {
+    const workbook = await orgTemplate();
+    await recordAudit(req, null, 'org.template_exported', 'organization', null);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="org-structure.xlsx"');
+    res.setHeader('Cache-Control', 'private, no-store');
+    await workbook.xlsx.write(res);
+    res.end();
+  }
+
+  /** Reads the uploaded sheet and reports every change and problem; writes nothing. */
+  static async importPreview(req: Request, res: Response): Promise<void> {
+    const plan = await readPlan(req);
+    res.json({ data: { rows: plan.rows, newJobTitles: plan.newJobTitles, summary: plan.summary } });
+  }
+
+  /** Applies the same sheet after review. Refused while any row has an error. */
+  static async importApply(req: Request, res: Response): Promise<void> {
+    const count = await transaction(async (tx) => {
+      // Re-read inside the transaction so the plan reflects what is in the database now.
+      const plan = await readPlan(req, tx);
+      if (plan.summary.errors) throw badRequest(`في الملف ${plan.summary.errors} سطر بأخطاء. صححها ثم أعد المعاينة.`);
+      if (!plan.updates.size) throw badRequest('لا توجد تغييرات لاعتمادها.');
+      const updated = await applyOrgPlan(plan, tx);
+      await recordAudit(req, tx, 'org.structure_imported', 'organization', null, {
+        file: uploadedName(req.file!, 'org.xlsx'), employees: updated, managerChanges: plan.summary.managerChanges,
+        newJobTitles: plan.newJobTitles,
+        changes: plan.rows.filter((row) => row.changes.length).slice(0, 400).map((row) => ({ employeeNo: row.employeeNo, changes: row.changes })),
+      });
+      return updated;
+    });
+    res.json({ data: { updated: count } });
+  }
 }
 
 export default OrgController;
+
+async function readPlan(req: Request, tx?: import('sequelize').Transaction) {
+  const file = req.file;
+  if (!file || !isXlsx(file.buffer)) throw badRequest('ارفع ملف Excel (.xlsx) بنفس أعمدة نموذج الهيكل.');
+  try {
+    return await planOrgImport(file.buffer, tx);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'NO_EMPLOYEE_COLUMN') throw badRequest('لم يُعثر على عمود «رقم الموظف». استخدم نموذج الهيكل المنزّل من النظام.');
+    if (error instanceof Error && error.message === 'EMPTY') throw badRequest('الملف فارغ.');
+    throw error;
+  }
+}

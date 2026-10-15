@@ -3,6 +3,7 @@ import { Briefcase, ChevronDown, ChevronLeft, Network, Pencil, Plus, Users } fro
 import { Dialog, Empty, Loading, Tabs, Tone } from '../components/ui';
 import { navigate } from '../lib/router';
 import { useLoad, useSession } from '../lib/session';
+import { OrgImport } from './OrgImport';
 
 export interface Department {
   id: string;
@@ -41,7 +42,7 @@ interface ChartEmployee {
   branchName: string;
 }
 
-type Tab = 'departments' | 'titles' | 'chart';
+type Tab = 'departments' | 'titles' | 'chart' | 'import';
 
 export function OrgPage({ branches }: { branches: Array<{ id: string; name: string }> }) {
   const session = useSession();
@@ -65,7 +66,9 @@ export function OrgPage({ branches }: { branches: Array<{ id: string; name: stri
         { id: 'departments', label: 'الأقسام', badge: departments.data.length },
         { id: 'titles', label: 'المسميات الوظيفية', badge: titles.data.length },
         { id: 'chart', label: 'المخطط التنظيمي' },
+        ...(canManage ? [{ id: 'import' as Tab, label: 'استيراد من Excel' }] : []),
       ]} />
+      {tab === 'import' && canManage && <OrgImport onApplied={() => { departments.reload(); titles.reload(); }} />}
 
       {tab === 'departments' && <DepartmentTree items={departments.data} loading={departments.loading} canManage={canManage} onEdit={setEditingDepartment} />}
       {tab === 'titles' && <section className="panel">
