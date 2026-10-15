@@ -10,6 +10,7 @@ import OrgController from '../controllers/OrgController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
 import AttendanceController from '../controllers/AttendanceController';
 import ContractController from '../controllers/ContractController';
+import SelfController from '../controllers/SelfController';
 import LoanController from '../controllers/LoanController';
 import PayrollController from '../controllers/PayrollController';
 import FinanceController from '../controllers/FinanceController';
@@ -61,6 +62,9 @@ router.post('/auth/login', loginLimiter, asyncRoute(AuthController.login));
 router.get('/auth/me', requireAuth, AuthController.me);
 router.post('/auth/change-password', requireAuth, passwordLimiter, asyncRoute(AuthController.changePassword));
 
+router.get('/me/profile', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.profile));
+router.get('/me/payslips', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.payslips));
+router.get('/me/payslips/:runId', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.payslip));
 router.get('/branches', requireAuth, asyncRoute(BranchController.list));
 router.post('/branches', requireAuth, allowPermission('branches.manage'), asyncRoute(BranchController.create));
 router.put('/branches/:id', requireAuth, allowPermission('branches.manage'), validateUuidParam, asyncRoute(BranchController.update));

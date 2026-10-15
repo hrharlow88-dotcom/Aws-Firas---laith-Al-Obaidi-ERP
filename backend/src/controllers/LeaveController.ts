@@ -1,3 +1,4 @@
+import { employeeScopeWhere, inScope, isScoped } from '../services/access';
 import { Request, Response } from 'express';
 import { Includeable, Op, Transaction } from 'sequelize';
 import {
@@ -76,7 +77,7 @@ async function employeeForRequest(employeeId: string, req: Request, transaction?
     include: [{ model: Branch, as: 'branch', attributes: ['id', 'name', 'city'] }],
   });
   if (!employee) return null;
-  if (req.user?.role === 'branch_manager' && employee.branchId !== req.user.branchId) return null;
+  if (!(await inScope(req, employee.id, transaction))) return null;
   return employee;
 }
 
@@ -115,7 +116,7 @@ export class LeaveController {
       as: 'employee',
       attributes: ['id', 'employeeNo', 'fullName', 'branchId', 'department', 'position'],
       include: [{ model: Branch, as: 'branch', attributes: ['id', 'name', 'city'] }],
-      ...(req.user?.role === 'branch_manager' ? { where: { branchId: req.user.branchId }, required: true } : {}),
+      ...(isScoped(req) ? { where: employeeScopeWhere(req), required: true } : {}),
     };
     const requests = await LeaveRequest.findAll({
       where: status ? { status } : undefined,
@@ -379,6 +380,10 @@ export class LeaveController {
       const requiredRole = request.approvalRoles[request.approvalStepIndex];
       if (req.user!.role !== 'super_admin' && req.user!.role !== requiredRole) {
         return { status: 403, message: 'هذا الطلب بانتظار دور موافقة آخر.' };
+      }
+      // Nobody approves their own leave, whatever their role.
+      if (req.user!.employeeId && req.user!.employeeId === request.employeeId) {
+        return { status: 403, message: 'لا يمكنك اعتماد أو رفض طلب إجازتك.' };
       }
       const action = requestedAction === 'approve' ? 'approved' : 'rejected';
       const isFinalApproval = action === 'approved' && request.approvalStepIndex + 1 >= request.approvalRoles.length;

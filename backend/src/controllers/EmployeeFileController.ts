@@ -83,7 +83,7 @@ export class EmployeeFileController {
   /** One employee with their organizational context. */
   static async detail(req: Request, res: Response): Promise<void> {
     const employee = await employeeInScope(req, req.params.id);
-    const showContact = ['super_admin', 'hr_manager', 'hr_staff', 'branch_manager'].includes(req.user!.role);
+    const showContact = ['super_admin', 'hr_manager', 'hr_staff', 'branch_manager', 'line_manager'].includes(req.user!.role);
     const row = await selectOne<Record<string, unknown>>(
       `SELECT e.id, e.employee_no AS "employeeNo", e.full_name AS "fullName",
               ${showContact ? 'e.email, e.phone,' : ''}

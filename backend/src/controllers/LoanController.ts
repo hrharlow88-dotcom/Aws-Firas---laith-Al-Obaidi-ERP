@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { execute, select, selectOne, transaction } from '../db/query';
-import { branchScope, employeeInScope } from '../services/access';
+import { employeeInScope, employeeScopeSql } from '../services/access';
 import { periodBounds } from '../services/payroll';
 import { recordAudit } from '../utils/audit';
 import {
@@ -35,16 +35,16 @@ const LOAN_FROM = `
 /** Instalment loans and salary advances, repaid through payroll. */
 export class LoanController {
   static async list(req: Request, res: Response): Promise<void> {
-    const branch = branchScope(req);
+    const scope = employeeScopeSql(req);
     const employeeId = typeof req.query.employeeId === 'string' && isUuid(req.query.employeeId) ? req.query.employeeId : null;
     const status = typeof req.query.status === 'string' && ['active', 'suspended', 'closed'].includes(req.query.status)
       ? req.query.status : null;
     const rows = await select(
       `SELECT ${LOAN_COLUMNS} ${LOAN_FROM}
-       WHERE true ${branch ? 'AND e.branch_id = :branch' : ''} ${employeeId ? 'AND l.employee_id = :employeeId' : ''}
+       WHERE true${scope.sql} ${employeeId ? 'AND l.employee_id = :employeeId' : ''}
          ${status ? 'AND l.status = :status' : ''}
        ORDER BY l.status, e.employee_no, l.start_period`,
-      { branch, employeeId, status },
+      { ...scope.params, employeeId, status },
     );
     res.json({ data: rows });
   }

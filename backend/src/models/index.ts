@@ -54,9 +54,14 @@ interface UserAttributes {
   branchId: string | null;
   isActive: boolean;
   tokenVersion: number;
+  employeeId: string | null;
+  failedLogins: number;
+  lockedUntil: Date | null;
+  lastLoginAt: Date | null;
 }
 
-type UserCreationAttributes = Optional<UserAttributes, 'id' | 'branchId' | 'isActive' | 'tokenVersion'>;
+type UserCreationAttributes = Optional<UserAttributes,
+  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt'>;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -67,6 +72,10 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare branchId: string | null;
   declare isActive: boolean;
   declare tokenVersion: number;
+  declare employeeId: string | null;
+  declare failedLogins: number;
+  declare lockedUntil: Date | null;
+  declare lastLoginAt: Date | null;
 }
 
 User.init(
@@ -79,6 +88,10 @@ User.init(
     branchId: { type: DataTypes.UUID, allowNull: true, field: 'branch_id' },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true, field: 'is_active' },
     tokenVersion: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'token_version' },
+    employeeId: { type: DataTypes.UUID, allowNull: true, field: 'employee_id' },
+    failedLogins: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'failed_logins' },
+    lockedUntil: { type: DataTypes.DATE, allowNull: true, field: 'locked_until' },
+    lastLoginAt: { type: DataTypes.DATE, allowNull: true, field: 'last_login_at' },
   },
   { sequelize, tableName: 'users', underscored: true },
 );

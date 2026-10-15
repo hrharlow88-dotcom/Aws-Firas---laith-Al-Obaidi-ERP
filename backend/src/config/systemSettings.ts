@@ -24,6 +24,8 @@ export const PERMISSIONS = [
   'finance.post',
   'audit.view',
   'integrations.manage',
+  // Own record only: profile summary, own payslips, own leave balances.
+  'self.service',
 ] as const;
 
 /** Permissions that existed before settings started recording knownPermissions. */
@@ -173,26 +175,58 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
       'org.manage', 'employees.view_profile', 'employees.manage_profile',
       'compensation.view', 'compensation.manage',
       'attendance.view', 'attendance.manage',
-      'payroll.view', 'payroll.prepare', 'audit.view',
+      'payroll.view', 'payroll.prepare', 'audit.view', 'self.service',
     ] as Permission[],
   },
   hr_staff: {
     label: 'موظف موارد بشرية',
     permissions: [
       'employees.create', 'employees.update', 'leaves.view', 'leaves.request',
-      'employees.view_profile', 'employees.manage_profile', 'attendance.view', 'attendance.manage',
+      'employees.view_profile', 'employees.manage_profile', 'attendance.view', 'attendance.manage', 'self.service',
+    ] as Permission[],
+  },
+  payroll_officer: {
+    label: 'مسؤول الرواتب',
+    permissions: [
+      'compensation.view', 'attendance.view', 'leaves.view', 'payroll.view', 'payroll.prepare', 'self.service',
     ] as Permission[],
   },
   finance: {
     label: 'المالية',
     permissions: [
       'compensation.view', 'payroll.view', 'payroll.approve',
-      'finance.view', 'finance.manage', 'finance.post', 'audit.view',
+      'finance.view', 'finance.manage', 'finance.post', 'audit.view', 'self.service',
     ] as Permission[],
   },
   branch_manager: {
     label: 'مدير فرع',
-    permissions: ['employees.update', 'leaves.view', 'leaves.request', 'leaves.approve', 'attendance.view'] as Permission[],
+    permissions: ['employees.update', 'leaves.view', 'leaves.request', 'leaves.approve', 'attendance.view', 'self.service'] as Permission[],
+  },
+  line_manager: {
+    label: 'مدير مباشر',
+    permissions: ['leaves.view', 'leaves.request', 'leaves.approve', 'attendance.view', 'self.service'] as Permission[],
+  },
+  employee: {
+    label: 'موظف',
+    permissions: ['leaves.view', 'leaves.request', 'self.service'] as Permission[],
+  },
+  auditor: {
+    label: 'تدقيق (قراءة فقط)',
+    permissions: [
+      'employees.view_profile', 'compensation.view', 'attendance.view', 'leaves.view',
+      'payroll.view', 'finance.view', 'audit.view', 'self.service',
+    ] as Permission[],
+  },
+  executive: {
+    label: 'الإدارة العليا',
+    permissions: [
+      'employees.view_profile', 'compensation.view', 'attendance.view', 'leaves.view',
+      'payroll.view', 'finance.view', 'audit.view', 'self.service',
+    ] as Permission[],
+  },
+  it_admin: {
+    label: 'مدير النظام التقني',
+    permissions: ['users.manage', 'integrations.manage', 'self.service'] as Permission[],
   },
   viewer: { label: 'مشاهدة فقط', permissions: ['leaves.view'] },
 };

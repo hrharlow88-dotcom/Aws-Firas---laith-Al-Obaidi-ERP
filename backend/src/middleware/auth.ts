@@ -33,6 +33,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         email: user.email,
         role: user.role,
         branchId: user.branchId,
+        employeeId: user.employeeId,
       };
       next();
     }).catch(next);

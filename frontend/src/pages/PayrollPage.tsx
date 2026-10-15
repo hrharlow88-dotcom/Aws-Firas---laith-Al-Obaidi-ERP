@@ -312,9 +312,12 @@ interface Payslip {
   paymentMethod: string; bankName: string | null; bankAccountTail: string | null;
 }
 
-export function PayslipPage({ runId, employeeId }: { runId: string; employeeId: string }) {
-  const slip = useLoad<Payslip | null>(`/payroll/runs/${runId}/payslips/${employeeId}`, null);
-  useCrumb(slip.data && { label: `${monthLabel(slip.data.period)} · ${slip.data.currency}`, href: `#/payroll/${runId}` }, slip.data?.employeeName);
+/** A printable payslip. With `own`, it is the signed-in employee's own payslip (self-service). */
+export function PayslipPage({ runId, employeeId, own = false }: { runId: string; employeeId?: string; own?: boolean }) {
+  const slip = useLoad<Payslip | null>(own ? `/me/payslips/${runId}` : `/payroll/runs/${runId}/payslips/${employeeId}`, null);
+  useCrumb(slip.data && (own
+    ? `${monthLabel(slip.data.period)} · ${slip.data.currency}`
+    : { label: `${monthLabel(slip.data.period)} · ${slip.data.currency}`, href: `#/payroll/${runId}` }), own ? null : slip.data?.employeeName);
   const data = slip.data;
   if (slip.loading && !data) return <section className="screen"><Loading /></section>;
   if (!data) return null;

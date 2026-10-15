@@ -5,6 +5,12 @@ export const ROLES = [
   'finance',
   'branch_manager',
   'viewer',
+  'employee',
+  'line_manager',
+  'payroll_officer',
+  'auditor',
+  'executive',
+  'it_admin',
 ] as const;
 
 export type UserRole = (typeof ROLES)[number];
@@ -15,6 +21,8 @@ export interface AuthenticatedUser {
   email: string;
   role: UserRole;
   branchId: string | null;
+  /** The employee record of the person behind the account, when linked. */
+  employeeId: string | null;
 }
 
 declare global {

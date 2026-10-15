@@ -10,7 +10,7 @@ export const app = createApp();
 
 let passwordHash: string | null = null;
 
-export async function makeUser(role: UserRole, branchId: string | null = null) {
+export async function makeUser(role: UserRole, branchId: string | null = null, employeeId: string | null = null) {
   passwordHash ??= await bcrypt.hash('TestPassword#1', 4);
   const user = await User.create({
     name: `مستخدم ${role}`,
@@ -18,6 +18,7 @@ export async function makeUser(role: UserRole, branchId: string | null = null) {
     passwordHash,
     role,
     branchId,
+    employeeId,
   });
   const token = jwt.sign({ sub: user.id, ver: user.tokenVersion }, process.env.JWT_SECRET!, { expiresIn: '1h' });
   return { user, token, auth: { Authorization: `Bearer ${token}` } };

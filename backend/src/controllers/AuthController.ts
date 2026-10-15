@@ -3,20 +3,44 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { AuditLog, User, sequelize } from '../models';
 
+/** Wrong passwords in a row before the account is locked, and for how long. */
+const MAX_FAILED_LOGINS = 5;
+const LOCK_MINUTES = 15;
+const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 12);
+
 export class AuthController {
   static async login(req: Request, res: Response): Promise<void> {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = typeof body.password === 'string' ? body.password : '';
     const user = email ? await User.findOne({ where: { email } }) : null;
+    const refused = () => res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
 
-    if (
-      !user ||
-      !user.isActive ||
-      Buffer.byteLength(password, 'utf8') > 72 ||
-      !(await bcrypt.compare(password, user.passwordHash))
-    ) {
-      res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
+    if (user?.lockedUntil && user.lockedUntil > new Date()) {
+      const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
+      res.status(423).json({ message: `الحساب مقفل مؤقتاً بسبب محاولات دخول خاطئة. حاول بعد ${minutes} دقيقة أو اطلب فتحه من مدير النظام.` });
+      return;
+    }
+    // Compare against a dummy hash for unknown e-mails so timing does not reveal which accounts exist.
+    const passwordOk = Buffer.byteLength(password, 'utf8') <= 72 &&
+      await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH) && Boolean(user);
+    if (!user || !passwordOk || !user.isActive) {
+      if (user && !passwordOk) {
+        // Count failures per account; the password itself is never logged.
+        const failures = user.failedLogins + 1;
+        const lock = failures >= MAX_FAILED_LOGINS;
+        await sequelize.transaction(async (transaction) => {
+          await user.update({
+            failedLogins: lock ? 0 : failures,
+            lockedUntil: lock ? new Date(Date.now() + LOCK_MINUTES * 60000) : user.lockedUntil,
+          }, { transaction });
+          await AuditLog.create({
+            userId: user.id, action: lock ? 'auth.account_locked' : 'auth.login_failed', entityType: 'user', entityId: user.id,
+            details: { failures }, ip: (req.ip || '').slice(0, 64) || null,
+          }, { transaction });
+        });
+      }
+      refused();
       return;
     }
 
@@ -25,6 +49,12 @@ export class AuthController {
       res.status(500).json({ message: 'إعدادات تسجيل الدخول غير مكتملة.' });
       return;
     }
+    await sequelize.transaction(async (transaction) => {
+      await user.update({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() }, { transaction });
+      await AuditLog.create({
+        userId: user.id, action: 'auth.login', entityType: 'user', entityId: user.id, ip: (req.ip || '').slice(0, 64) || null,
+      }, { transaction });
+    });
 
     const token = jwt.sign({ sub: user.id, ver: user.tokenVersion }, secret, { expiresIn: '8h' });
     res.json({
@@ -35,6 +65,7 @@ export class AuthController {
         email: user.email,
         role: user.role,
         branchId: user.branchId,
+        employeeId: user.employeeId,
       },
     });
   }

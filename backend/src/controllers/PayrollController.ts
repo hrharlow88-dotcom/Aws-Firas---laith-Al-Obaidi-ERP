@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { execute, select, selectOne, transaction } from '../db/query';
-import { branchScope, employeeInScope } from '../services/access';
+import { employeeInScope, employeeScopeSql } from '../services/access';
 import {
   buildRunLines, linesFingerprint, loadRun, periodBounds, recomputeRunAttendance, replaceRunLines, RunRow, storedLines,
 } from '../services/payroll';
@@ -39,6 +39,56 @@ function csvCell(value: unknown): string {
   // Leading = + - @ would be run as formulas by spreadsheet programs.
   const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
   return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+
+/** One payslip as shown and printed; shared by HR screens and employee self-service. */
+export async function payslipData(run: RunRow, employeeId: string): Promise<Record<string, unknown>> {
+  const line = await selectOne<Record<string, unknown>>(
+    `SELECT l.*, e.employee_no AS "employeeNo", e.full_name AS "employeeName", b.name AS "branchName",
+            COALESCE(d.name, e.department) AS "department", COALESCE(j.name, e."position") AS "position",
+            p.bank_name AS "bankName", p.bank_account_no AS "bankAccountNo"
+     FROM payroll_lines l
+     JOIN employees e ON e.id = l.employee_id
+     JOIN branches b ON b.id = l.branch_id
+     LEFT JOIN departments d ON d.id = l.department_id
+     LEFT JOIN job_titles j ON j.id = e.job_title_id
+     LEFT JOIN employee_profiles p ON p.employee_id = e.id
+     WHERE l.run_id = :runId AND l.employee_id = :employeeId`,
+    { runId: run.id, employeeId },
+  );
+  if (!line) throw notFound('لا توجد قسيمة لهذا الموظف في المسير.');
+  const account = decryptField(line.bankAccountNo as string | null);
+  const settings = await getSettings();
+  return {
+    company: settings.company,
+    period: run.period,
+    status: run.status,
+    currency: run.currency,
+    employeeNo: line.employeeNo,
+    employeeName: line.employeeName,
+    branchName: line.branchName,
+    department: line.department,
+    position: line.position,
+    grossSalary: Number(line.gross_salary),
+    periodDays: line.period_days,
+    employedDays: line.employed_days,
+    payableDays: line.payable_days === null ? null : Number(line.payable_days),
+    presentDays: line.present_days,
+    absentDays: line.absent_days,
+    unpaidLeaveDays: line.unpaid_leave_days,
+    lateMinutes: line.late_minutes,
+    overtimeMinutes: line.overtime_minutes,
+    attendanceTracked: line.attendance_tracked,
+    earnings: line.earnings,
+    deductions: line.deductions,
+    totalEarnings: Number(line.total_earnings),
+    totalDeductions: Number(line.total_deductions),
+    netPay: Number(line.net_pay),
+    paymentMethod: line.payment_method,
+    bankName: line.bankName,
+    bankAccountTail: account ? account.slice(-4) : null,
+    warnings: line.warnings,
+  };
 }
 
 export class PayrollController {
@@ -231,54 +281,7 @@ export class PayrollController {
   static async payslip(req: Request, res: Response): Promise<void> {
     const run = await runOr404(req.params.id);
     const employee = await employeeInScope(req, req.params.employeeId);
-    const line = await selectOne<Record<string, unknown>>(
-      `SELECT l.*, e.employee_no AS "employeeNo", e.full_name AS "employeeName", b.name AS "branchName",
-              COALESCE(d.name, e.department) AS "department", COALESCE(j.name, e."position") AS "position",
-              p.bank_name AS "bankName", p.bank_account_no AS "bankAccountNo"
-       FROM payroll_lines l
-       JOIN employees e ON e.id = l.employee_id
-       JOIN branches b ON b.id = l.branch_id
-       LEFT JOIN departments d ON d.id = l.department_id
-       LEFT JOIN job_titles j ON j.id = e.job_title_id
-       LEFT JOIN employee_profiles p ON p.employee_id = e.id
-       WHERE l.run_id = :runId AND l.employee_id = :employeeId`,
-      { runId: run.id, employeeId: employee.id },
-    );
-    if (!line) throw notFound('لا توجد قسيمة لهذا الموظف في المسير.');
-    const account = decryptField(line.bankAccountNo as string | null);
-    const settings = await getSettings();
-    res.json({
-      data: {
-        company: settings.company,
-        period: run.period,
-        status: run.status,
-        currency: run.currency,
-        employeeNo: line.employeeNo,
-        employeeName: line.employeeName,
-        branchName: line.branchName,
-        department: line.department,
-        position: line.position,
-        grossSalary: Number(line.gross_salary),
-        periodDays: line.period_days,
-        employedDays: line.employed_days,
-        payableDays: line.payable_days === null ? null : Number(line.payable_days),
-        presentDays: line.present_days,
-        absentDays: line.absent_days,
-        unpaidLeaveDays: line.unpaid_leave_days,
-        lateMinutes: line.late_minutes,
-        overtimeMinutes: line.overtime_minutes,
-        attendanceTracked: line.attendance_tracked,
-        earnings: line.earnings,
-        deductions: line.deductions,
-        totalEarnings: Number(line.total_earnings),
-        totalDeductions: Number(line.total_deductions),
-        netPay: Number(line.net_pay),
-        paymentMethod: line.payment_method,
-        bankName: line.bankName,
-        bankAccountTail: account ? account.slice(-4) : null,
-        warnings: line.warnings,
-      },
-    });
+    res.json({ data: await payslipData(run, employee.id) });
   }
 
   /** Full payroll register as an Excel workbook. */
@@ -396,14 +399,14 @@ export class PayrollController {
   static async listInputs(req: Request, res: Response): Promise<void> {
     const period = queryText(req, 'period');
     periodBounds(period);
-    const branch = branchScope(req);
+    const scope = employeeScopeSql(req);
     const rows = await select(
       `SELECT i.id, i.period, i.employee_id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
               i.component_id AS "componentId", i.amount::float AS amount, i.note, i.created_at AS "createdAt", u.name AS "createdByName"
        FROM payroll_inputs i JOIN employees e ON e.id = i.employee_id JOIN users u ON u.id = i.created_by
-       WHERE i.period = :period${branch ? ' AND e.branch_id = :branch' : ''}
+       WHERE i.period = :period${scope.sql}
        ORDER BY e.employee_no, i.created_at`,
-      { period, branch },
+      { period, ...scope.params },
     );
     res.json({ data: rows });
   }
@@ -453,15 +456,15 @@ export class PayrollController {
   static async listAdjustments(req: Request, res: Response): Promise<void> {
     const period = queryText(req, 'period');
     periodBounds(period);
-    const branch = branchScope(req);
+    const scope = employeeScopeSql(req);
     const rows = await select(
       `SELECT a.employee_id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
               a.payable_days::float AS "payableDays", a.absence_days::float AS "absenceDays", a.note,
               a.updated_at AS "updatedAt", u.name AS "updatedByName"
        FROM payroll_day_adjustments a JOIN employees e ON e.id = a.employee_id JOIN users u ON u.id = a.updated_by
-       WHERE a.period = :period${branch ? ' AND e.branch_id = :branch' : ''}
+       WHERE a.period = :period${scope.sql}
        ORDER BY e.employee_no`,
-      { period, branch },
+      { period, ...scope.params },
     );
     res.json({ data: rows });
   }
@@ -507,10 +510,10 @@ export class PayrollController {
     const sheet = workbook.worksheets[0];
     const errors: Array<{ row: number; message: string }> = [];
     const rows: Array<{ employeeId: string; componentId: string; amount: number; note: string | null; row: number }> = [];
-    const branch = branchScope(req);
-    const employees = new Map((await select<{ id: string; employeeNo: string; branchId: string }>(
-      'SELECT id, employee_no AS "employeeNo", branch_id AS "branchId" FROM employees',
-    )).filter((item) => !branch || item.branchId === branch).map((item) => [item.employeeNo, item.id]));
+    const scope = employeeScopeSql(req);
+    const employees = new Map((await select<{ id: string; employeeNo: string }>(
+      `SELECT e.id, e.employee_no AS "employeeNo" FROM employees e WHERE true${scope.sql}`, scope.params,
+    )).map((item) => [item.employeeNo, item.id]));
     sheet?.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       if (rowNumber === 1) return;
       const values = (row.values as ExcelJS.CellValue[]).slice(1).map((value) =>

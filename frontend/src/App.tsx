@@ -16,7 +16,6 @@ import {
   Search,
   ShieldCheck,
   Users,
-  UserRoundCog,
   Wallet,
   X,
 } from 'lucide-react';
@@ -40,11 +39,13 @@ import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
 import { ContractTemplatesPage } from './pages/ContractTemplatesPage';
+import { UsersPage } from './pages/UsersPage';
+import { MySpacePage } from './pages/MySpacePage';
 import { StatusTag } from './components/ui';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
-  | 'payroll-days' | 'loans' | 'contract-templates'
+  | 'payroll-days' | 'loans' | 'contract-templates' | 'my' | 'my-payslip'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
 
 interface User {
@@ -102,6 +103,12 @@ const roleNames: Record<UserRole, string> = {
   hr_staff: 'موظف موارد بشرية',
   finance: 'المالية',
   branch_manager: 'مدير فرع',
+  payroll_officer: 'مسؤول الرواتب',
+  line_manager: 'مدير مباشر',
+  employee: 'موظف',
+  auditor: 'تدقيق (قراءة فقط)',
+  executive: 'الإدارة العليا',
+  it_admin: 'مدير النظام التقني',
   viewer: 'مشاهدة فقط',
 };
 
@@ -112,6 +119,12 @@ const defaultRolePermissions: Record<UserRole, Permission[]> = {
   finance: [],
   branch_manager: ['employees.update'],
   viewer: [],
+  payroll_officer: [],
+  line_manager: [],
+  employee: [],
+  auditor: [],
+  executive: [],
+  it_admin: [],
 };
 
 const statusNames = {
@@ -152,7 +165,6 @@ function Workspace() {
   const [employeeTotal, setEmployeeTotal] = useState(0);
   const [employeePage, setEmployeePage] = useState(1);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
@@ -161,7 +173,6 @@ function Workspace() {
   const [success, setSuccess] = useState('');
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
   const [showBranchForm, setShowBranchForm] = useState(false);
-  const [showUserForm, setShowUserForm] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const rolePermissions = systemSettings?.roles[user?.role || 'viewer'].permissions
     || defaultRolePermissions[user?.role || 'viewer'];
@@ -207,7 +218,6 @@ function Workspace() {
     setUser(null);
     setEmployees([]);
     setBranches([]);
-    setUsers([]);
     setSystemSettings(null);
   }, []);
 
@@ -230,26 +240,22 @@ function Workspace() {
       const employeeQuery = page === 'overview'
         ? '/employees?page=1&pageSize=5&recent=1'
         : `/employees?page=${employeePage}&pageSize=25${search ? `&search=${encodeURIComponent(search)}` : ''}`;
-      const [branchResult, employeeResult, summaryResult, usersResult] = await Promise.all([
+      const [branchResult, employeeResult, summaryResult] = await Promise.all([
         api<ApiResult<Branch[]>>('/branches', token),
         api<{ data: Employee[]; pagination: { total: number } }>(employeeQuery, token),
         api<ApiResult<EmployeeSummary>>('/employees/summary', token),
-        canManageAccess && page === 'access' ? api<ApiResult<User[]>>('/users', token) : Promise.resolve(null),
       ]);
       setBranches(branchResult.data);
       setEmployees(employeeResult.data);
       setEmployeeTotal(employeeResult.pagination.total);
       setEmployeeSummary(summaryResult.data);
-      if (usersResult) {
-        setUsers(usersResult.data);
-      }
     } catch (cause) {
       if (cause instanceof Error && cause.message.includes('تسجيل الدخول')) signOut();
       else notify(cause instanceof Error ? cause.message : 'تعذر تحميل بيانات النظام.', true);
     } finally {
       setBusy(false);
     }
-  }, [token, user, page, search, employeePage, signOut, notify, canManageAccess]);
+  }, [token, user, page, search, employeePage, signOut, notify]);
 
   useEffect(() => {
     if (user) void loadData();
@@ -341,21 +347,6 @@ function Workspace() {
     }
   }
 
-  async function handleUserCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const body = Object.fromEntries(form.entries());
-    try {
-      await api('/users', token, { method: 'POST', body });
-      setShowUserForm(false);
-      formElement.reset();
-      notify('تم إنشاء حساب المستخدم.');
-      await loadData();
-    } catch (cause) {
-      notify(cause instanceof Error ? cause.message : 'تعذر إنشاء الحساب.', true);
-    }
-  }
 
   async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -397,20 +388,6 @@ function Workspace() {
     }
   }
 
-  async function toggleUserStatus(target: User) {
-    const action = target.isActive ? 'تعطيل' : 'إعادة تفعيل';
-    if (target.isActive && !window.confirm(`هل تريد تعطيل حساب ${target.name} ومنعه من الدخول؟`)) return;
-    try {
-      await api(`/users/${target.id}`, token, {
-        method: 'PUT',
-        body: { isActive: !target.isActive },
-      });
-      notify('تم تحديث صلاحية الحساب.');
-      await loadData();
-    } catch (cause) {
-      notify(cause instanceof Error ? cause.message : 'تعذر تحديث الحساب.', true);
-    }
-  }
 
   const session = useMemo(
     () => (token && user && systemSettings ? buildSession(token, user, systemSettings, notify, signOut) : null),
@@ -469,7 +446,7 @@ function Workspace() {
             <button className="icon-button" aria-label="إغلاق التنبيه" onClick={() => { setError(''); setSuccess(''); }}><X size={16} /></button>
           </div>}
 
-          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} />}
+          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} />}
           {(page === 'overview' || !KNOWN_PAGES.includes(page)) && <Dashboard
             employees={employees}
             branches={branches}
@@ -507,16 +484,9 @@ function Workspace() {
             onSubmit={handleBranchCreate}
             showForm={showBranchForm}
           />}
-          {page === 'access' && canManageAccess && <AccessPage
-            users={users}
-            branches={branches}
-            roleNames={roleLabels}
-            canGrantAdmin={user.role === 'super_admin'}
-            onCreate={() => setShowUserForm(!showUserForm)}
-            onSubmit={handleUserCreate}
-            onToggle={toggleUserStatus}
-            showForm={showUserForm}
-          />}
+          {page === 'access' && canManageAccess && <UsersPage roleNames={roleLabels} branches={branchOptions} />}
+          {page === 'my' && can('self.service') && <MySpacePage />}
+          {page === 'my-payslip' && route.params[0] && can('self.service') && <PayslipPage own runId={route.params[0]} />}
           {page === 'leaves' && canViewLeaves && systemSettings && <LeavePage
             token={token}
             userId={user.id}
@@ -552,7 +522,7 @@ function Workspace() {
 
 const KNOWN_PAGES: string[] = [
   'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans',
-  'contract-templates', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
+  'contract-templates', 'my', 'my-payslip', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
 ];
 
 function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {
@@ -581,11 +551,12 @@ function Breadcrumbs({ page, app, menus, hasParams }: { page: string; app: AppDe
   );
 }
 
-function AppLauncher({ companyName, userName, can, isAdmin }: {
-  companyName?: string; userName: string; can: (permission: Permission) => boolean; isAdmin: boolean;
+function AppLauncher({ companyName, userName, can, isAdmin, selfOnly }: {
+  companyName?: string; userName: string; can: (permission: Permission) => boolean; isAdmin: boolean; selfOnly: boolean;
 }) {
   const [query, setQuery] = useState('');
-  const apps = APPS.filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
+  const apps = APPS.filter((app) => !(selfOnly && app.staffOnly))
+    .filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
     .filter((app) => !query.trim() || `${app.label} ${app.description}`.includes(query.trim()));
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
   const open = (app: AppDefinition) => {
@@ -791,40 +762,6 @@ function BranchesPage({ branches, canManage, onCreate, onSubmit, showForm }: {
       {branches.length ? <div className="branch-table-wrap panel"><div className="table-scroll"><table><thead><tr><th>الفرع</th><th>المدينة</th><th>رمز الموقع</th><th>عدد الموظفين</th><th>الحالة</th></tr></thead><tbody>
         {branches.map((branch) => <tr key={branch.id}><td><span className="branch-cell"><span className="branch-symbol"><Building2 size={17} /></span><span><strong>{branch.name}</strong><small>{branch.address || 'لا يوجد عنوان مسجل'}</small></span></span></td><td>{branch.city}</td><td><span className="code-tag">{branch.code}</span></td><td>{(branch.employeeCount || 0).toLocaleString('ar-IQ-u-nu-latn')}</td><td><span className={`state-pill ${branch.isActive ? 'state-active' : 'state-inactive'}`}><i />{branch.isActive ? 'نشط' : 'غير نشط'}</span></td></tr>)}
       </tbody></table></div></div> : <div className="panel"><EmptyState icon={<Building2 size={22} />} title="لا توجد فروع مسجلة" description="أضف أول موقع عمل لتنظيم السجلات حسب الفرع." action={canManage ? 'إضافة فرع' : undefined} onClick={onCreate} /></div>}
-    </section>
-  );
-}
-
-function AccessPage({ users, branches, roleNames, canGrantAdmin, onCreate, onSubmit, onToggle, showForm }: {
-  users: User[];
-  branches: Branch[];
-  roleNames: Record<UserRole, string>;
-  canGrantAdmin: boolean;
-  onCreate: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggle: (user: User) => void;
-  showForm: boolean;
-}) {
-  return (
-    <section className="screen">
-      <div className="screen-heading"><div><h2>المستخدمون والصلاحيات</h2><p>أنشئ حسابات الفريق وامنح كل حساب أقل صلاحية يحتاجها.</p></div><button className="button button-primary" onClick={onCreate}><Plus size={17} />إضافة مستخدم</button></div>
-      <div className="permission-note"><ShieldCheck size={18} /><div><strong>إدارة الوصول مركزية</strong><span>تُتحقق الصلاحيات في الخادم مع كل طلب، ومديرو الفروع محصورون في بيانات مواقعهم.</span></div></div>
-      {showForm && <form className="panel form-panel" onSubmit={onSubmit}>
-        <div className="panel-head"><div><h3>حساب مستخدم جديد</h3><p>استخدم كلمة مرور مؤقتة فريدة وأبلغ المستخدم بها بطريقة آمنة.</p></div><button type="button" className="icon-button" aria-label="إغلاق النموذج" onClick={onCreate}><X size={18} /></button></div>
-        <div className="form-grid">
-          <label className="field"><span>الاسم *</span><input name="name" required maxLength={120} /></label>
-          <label className="field"><span>البريد الإلكتروني *</span><input name="email" type="email" required maxLength={254} dir="ltr" /></label>
-          <label className="field"><span>الدور *</span><select name="role" defaultValue="viewer">{Object.entries(roleNames).filter(([role]) => canGrantAdmin || role !== 'super_admin').map(([role, label]) => <option key={role} value={role}>{label}</option>)}</select></label>
-          <label className="field"><span>الفرع (لمدير الفرع)</span><select name="branchId" defaultValue=""><option value="">غير مرتبط</option>{branches.filter((branch) => branch.isActive).map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-          <label className="field"><span>كلمة المرور المؤقتة *</span><input name="password" type="password" minLength={12} required autoComplete="new-password" dir="ltr" /><small>12 محرفاً على الأقل.</small></label>
-        </div>
-        <div className="form-actions"><button className="button button-primary" type="submit"><Check size={16} />إنشاء الحساب</button><button className="button button-quiet" type="button" onClick={onCreate}>إلغاء</button></div>
-      </form>}
-      <section className="panel directory-panel"><div className="panel-head"><div><h3>حسابات النظام</h3><p>{users.length.toLocaleString('ar-IQ-u-nu-latn')} مستخدم مسجل</p></div></div>
-        {users.length ? <div className="table-scroll"><table><thead><tr><th>المستخدم</th><th>الدور</th><th>الفرع</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>
-          {users.map((account) => <tr key={account.id}><td><span className="person-cell"><span className="person-mark">{account.name.slice(0, 1)}</span><span><strong>{account.name}</strong><small>{account.email}</small></span></span></td><td><span className="role-tag">{roleNames[account.role]}</span></td><td>{branches.find((branch) => branch.id === account.branchId)?.name || 'كل الفروع'}</td><td><span className={`state-pill ${account.isActive ? 'state-active' : 'state-inactive'}`}><i />{account.isActive ? 'نشط' : 'معطل'}</span></td><td><button className="table-action" onClick={() => onToggle(account)}>{account.isActive ? 'تعطيل الحساب' : 'إعادة التفعيل'}</button></td></tr>)}
-        </tbody></table></div> : <EmptyState icon={<UserRoundCog size={22} />} title="لا توجد حسابات إضافية" description="أضف مستخدمين بصلاحيات محدودة بدلاً من مشاركة حساب المدير." /> }
-      </section>
     </section>
   );
 }

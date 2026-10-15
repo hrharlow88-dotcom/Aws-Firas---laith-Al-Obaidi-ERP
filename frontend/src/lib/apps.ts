@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BookOpenCheck, CalendarDays, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  BookOpenCheck, CalendarDays, CircleUserRound, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
 
@@ -28,12 +28,19 @@ export interface AppDefinition {
   extraPages?: string[];
   /** An app that lives elsewhere opens in a new tab. */
   href?: string;
+  /** Not shown to accounts that only see their own record. */
+  staffOnly?: boolean;
 }
 
 export const APPS: AppDefinition[] = [
   {
+    id: 'me', label: 'خدمتي', description: 'ملفي وقسائمي وإجازاتي', icon: CircleUserRound,
+    colors: ['#e7745a', '#b43c1d'], menus: [{ page: 'my', label: 'ملفي', permission: 'self.service' }],
+    extraPages: ['my-payslip'],
+  },
+  {
     id: 'dashboard', label: 'لوحة المعلومات', description: 'ملخص اليوم', icon: LayoutDashboard,
-    colors: ['#3d3a40', '#1d1b1f'], menus: [{ page: 'overview', label: 'نظرة عامة' }],
+    colors: ['#3d3a40', '#1d1b1f'], menus: [{ page: 'overview', label: 'نظرة عامة' }], staffOnly: true,
   },
   {
     id: 'employees', label: 'الموظفون', description: 'الملفات والبطاقات والعقود', icon: Users,
@@ -45,6 +52,7 @@ export const APPS: AppDefinition[] = [
       { page: 'contract-templates', label: 'قوالب العقود', permission: 'employees.manage_profile' },
     ],
     extraPages: ['card'],
+    staffOnly: true,
   },
   {
     id: 'attendance', label: 'الحضور', description: 'البصمة والدوامات', icon: Fingerprint,

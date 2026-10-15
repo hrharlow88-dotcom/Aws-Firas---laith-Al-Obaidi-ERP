@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Check, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 
-export type UserRole = 'super_admin' | 'hr_manager' | 'hr_staff' | 'finance' | 'branch_manager' | 'viewer';
+export type UserRole = 'super_admin' | 'hr_manager' | 'hr_staff' | 'finance' | 'branch_manager' | 'viewer'
+  | 'employee' | 'line_manager' | 'payroll_officer' | 'auditor' | 'executive' | 'it_admin';
 export type Permission =
   | 'branches.manage'
   | 'employees.create'
@@ -25,7 +26,8 @@ export type Permission =
   | 'finance.manage'
   | 'finance.post'
   | 'audit.view'
-  | 'integrations.manage';
+  | 'integrations.manage'
+  | 'self.service';
 
 export type PayrollComponentCategory = 'earning' | 'deduction';
 export type PayrollCalculation =
@@ -108,6 +110,12 @@ const roles: Array<{ id: UserRole; label: string }> = [
   { id: 'hr_staff', label: 'موظف موارد بشرية' },
   { id: 'finance', label: 'المالية' },
   { id: 'branch_manager', label: 'مدير فرع' },
+  { id: 'payroll_officer', label: 'مسؤول الرواتب' },
+  { id: 'line_manager', label: 'مدير مباشر' },
+  { id: 'employee', label: 'موظف' },
+  { id: 'auditor', label: 'تدقيق (قراءة فقط)' },
+  { id: 'executive', label: 'الإدارة العليا' },
+  { id: 'it_admin', label: 'مدير النظام التقني' },
   { id: 'viewer', label: 'مشاهدة فقط' },
 ];
 
@@ -194,6 +202,9 @@ const permissionGroups: Array<{ label: string; items: Array<{ id: Permission; la
     { id: 'audit.view', label: 'عرض سجل التدقيق' },
     { id: 'users.manage', label: 'إدارة حسابات المستخدمين' },
     { id: 'integrations.manage', label: 'مفاتيح الربط مع الأنظمة الأخرى' },
+  ] },
+  { label: 'الخدمة الذاتية', items: [
+    { id: 'self.service', label: 'ملفي وقسائم راتبي (السجل الشخصي فقط)' },
   ] },
 ];
 
