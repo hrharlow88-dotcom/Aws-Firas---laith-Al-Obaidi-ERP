@@ -7,6 +7,8 @@ import { getSettings } from '../services/settings';
 import { ROLES, UserRole } from '../types';
 import { audited } from '../utils/audit';
 import { isUuid } from '../utils/validation';
+import { createSetupToken } from '../services/passwordSetup';
+import { recordAudit } from '../utils/audit';
 
 /** Roles whose data scope comes from the linked employee record. */
 const NEEDS_EMPLOYEE: UserRole[] = ['employee', 'line_manager'];
@@ -222,6 +224,22 @@ export class UserController {
       employeeId: link.id ?? undefined, unlocked: body.unlock === true || undefined,
     });
     res.json({ data: toSafeUser(updatedUser) });
+  }
+
+  /** A one-week link for a staff member to set their own password (sent by WhatsApp, SMS or e-mail). */
+  static async invite(req: Request, res: Response): Promise<void> {
+    const user = await User.findByPk(req.params.id);
+    if (!user || !user.isActive) {
+      res.status(404).json({ message: 'الحساب غير موجود أو موقوف.' });
+      return;
+    }
+    if (user.role === 'super_admin' && req.user!.role !== 'super_admin') {
+      res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' });
+      return;
+    }
+    const token = await createSetupToken(user.id, 7 * 24 * 60);
+    await recordAudit(req, null, 'user.invite_created', 'user', user.id);
+    res.json({ data: { path: `/#/set-password/${token}`, login: user.email.endsWith('@portal.local') ? user.email.slice(4, -13).toUpperCase() : user.email, name: user.name, validDays: 7 } });
   }
 }
 

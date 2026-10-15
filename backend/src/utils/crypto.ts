@@ -64,3 +64,28 @@ export function randomToken(bytes = 24): string {
 export function sha256(data: Buffer | string): string {
   return createHash('sha256').update(data).digest('hex');
 }
+
+/** Files at rest: "LOENC1" + iv(12) + tag(16) + AES-256-GCM ciphertext. Without a key, files stay as they are. */
+const FILE_MAGIC = Buffer.from('LOENC1');
+
+export function isEncryptedFile(buffer: Buffer): boolean {
+  return buffer.length > 34 && buffer.subarray(0, 6).equals(FILE_MAGIC);
+}
+
+export function encryptBuffer(plain: Buffer): Buffer {
+  const secret = key();
+  if (!secret) return plain;
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', secret, iv);
+  const body = Buffer.concat([cipher.update(plain), cipher.final()]);
+  return Buffer.concat([FILE_MAGIC, iv, cipher.getAuthTag(), body]);
+}
+
+export function decryptBuffer(stored: Buffer): Buffer {
+  if (!isEncryptedFile(stored)) return stored;
+  const secret = key();
+  if (!secret) throw new Error('DATA_ENCRYPTION_KEY is needed to read encrypted files');
+  const decipher = createDecipheriv('aes-256-gcm', secret, stored.subarray(6, 18));
+  decipher.setAuthTag(stored.subarray(18, 34));
+  return Buffer.concat([decipher.update(stored.subarray(34)), decipher.final()]);
+}

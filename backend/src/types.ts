@@ -23,6 +23,8 @@ export interface AuthenticatedUser {
   branchId: string | null;
   /** The employee record of the person behind the account, when linked. */
   employeeId: string | null;
+  /** A demo account (demo copy of the system only). */
+  isDemo?: boolean;
 }
 
 declare global {

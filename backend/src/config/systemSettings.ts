@@ -166,7 +166,15 @@ export interface SecuritySettings {
   failedLoginAlertThreshold: number;
   /** Payroll or employee exports by one person within an hour that raise an alert. */
   exportAlertThreshold: number;
+  /** Firewall: block the address automatically after a password-guessing alert, for this many minutes (0 = off). */
+  autoBlockMinutes: number;
+  /** Firewall: refuse requests carrying attack patterns (SQL injection, path traversal, script injection). */
+  wafEnabled: boolean;
+  /** Firewall: requests per minute allowed from one address before it is slowed down. */
+  requestsPerMinute: number;
 }
+
+export interface TextOverride { ar: string; en?: string }
 
 /** Owner-only controls for what the interface shows. */
 export interface InterfaceSettings {
@@ -176,6 +184,8 @@ export interface InterfaceSettings {
   brands: Array<{ id: string; name: string; logoKey: string | null }>;
   /** Accounts responsible for each app (app id → user ids); they are told about its activity. */
   moduleManagers: Record<string, string[]>;
+  /** Texts the owner rewrote: system name, login page lines, and any app or menu label (keyed by its original Arabic). */
+  texts: Record<string, TextOverride>;
 }
 
 export interface PayrollRulesSetting {
@@ -314,6 +324,9 @@ export const DEFAULT_SECURITY: SecuritySettings = {
   workdayEnd: '21:00',
   failedLoginAlertThreshold: 8,
   exportAlertThreshold: 15,
+  autoBlockMinutes: 60,
+  wafEnabled: true,
+  requestsPerMinute: 600,
 };
 
 /** The group's brands, first to last. */
@@ -325,7 +338,7 @@ export const DEFAULT_BRANDS: InterfaceSettings['brands'] = [
   { id: 'multibrand', name: 'MULTI-BRAND', logoKey: null },
 ];
 
-export const DEFAULT_UI: InterfaceSettings = { hiddenApps: [], brands: DEFAULT_BRANDS, moduleManagers: {} };
+export const DEFAULT_UI: InterfaceSettings = { hiddenApps: [], brands: DEFAULT_BRANDS, moduleManagers: {}, texts: {} };
 
 export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
   baseCurrency: 'IQD',
@@ -408,8 +421,9 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
     security: { ...DEFAULT_SECURITY, ...value.security },
     ui: {
       hiddenApps: value.ui?.hiddenApps ?? [],
-      brands: value.ui?.brands?.length ? value.ui.brands : DEFAULT_BRANDS,
+      brands: value.ui?.brands ?? DEFAULT_BRANDS,
       moduleManagers: value.ui?.moduleManagers ?? {},
+      texts: value.ui?.texts ?? {},
     },
     payrollRules: {
       ...DEFAULT_PAYROLL_RULES,

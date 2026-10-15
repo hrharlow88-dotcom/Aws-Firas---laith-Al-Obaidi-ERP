@@ -1,13 +1,16 @@
 import { ChangeEvent, useState } from 'react';
 import {
-  Download, EyeOff, Fingerprint, Image, LogOut, MapPin, RefreshCw, RotateCcw, Save, ShieldCheck, Trash2, Upload,
+  Download, EyeOff, Plus, Fingerprint, Image, LogOut, MapPin, RefreshCw, RotateCcw, Save, ShieldCheck, Trash2, Upload,
 } from 'lucide-react';
 import { Bi, refreshBrands, useBrands } from '../components/Brand';
+import { EDITABLE_TEXTS } from '../lib/texts';
+import { DemoAccounts } from './DemoAccounts';
 import { Dialog, Empty, Loading, Stat, Tabs, Tone, useReasonPrompt } from '../components/ui';
 import { downloadFile } from '../lib/api';
 import { APPS, en } from '../lib/apps';
 import { formatDateTime, formatNumber } from '../lib/format';
 import { useLoad, useSession } from '../lib/session';
+import { FirewallPanel, RadarPanel, ScanPanel } from './SecurityRadar';
 import type { SecuritySettings, SystemSettings } from '../SettingsPage';
 
 const SEVERITY: Record<string, { label: string; tone: string }> = {
@@ -46,7 +49,7 @@ function MapView({ latitude, longitude }: { latitude: number; longitude: number 
 /** The security guard: alerts, the sign-in trail with time and place, who is online, and the audit chain check. */
 export function GuardPage() {
   const session = useSession();
-  const [tab, setTab] = useState<'alerts' | 'logins' | 'online' | 'events'>('alerts');
+  const [tab, setTab] = useState<'radar' | 'scan' | 'firewall' | 'alerts' | 'logins' | 'online' | 'events'>('radar');
   const overview = useLoad<{ openAlerts: number; critical: number; high: number; chain: { entries: number; broken: number; lastHash: string | null };
     online: Array<{ id: string; name: string; role: string; lastSeenAt: string; ip: string | null }>; loginsToday: number; failedLogins24h: number; refused24h: number }
     | null>('/security/overview', null);
@@ -87,9 +90,13 @@ export function GuardPage() {
         <Stat label="دخول اليوم · Sign-ins today" value={formatNumber(o.loginsToday)} foot={`${o.failedLogins24h} محاولة فاشلة · ${o.refused24h} مرفوض (24س)`} />
       </div>}
       <Tabs value={tab} onChange={setTab} items={[
+        { id: 'radar', label: 'الرادار · Radar' }, { id: 'scan', label: 'فحص الثغرات · Scan' }, { id: 'firewall', label: 'جدار الحماية · Firewall' },
         { id: 'alerts', label: 'التنبيهات · Alerts', badge: o?.openAlerts }, { id: 'logins', label: 'سجل الدخول والمواقع · Sign-ins' },
         { id: 'online', label: 'المتصلون · Online', badge: o?.online.length }, { id: 'events', label: 'الأحداث الخام · Events' },
       ]} />
+      {tab === 'radar' && <section className="panel"><RadarPanel /></section>}
+      {tab === 'scan' && <section className="panel"><ScanPanel /></section>}
+      {tab === 'firewall' && <section className="panel"><FirewallPanel /></section>}
       {tab === 'alerts' && <section className="panel">
         <label className="settings-check"><input type="checkbox" checked={allAlerts} onChange={(event) => setAllAlerts(event.target.checked)} />إظهار المعالجة أيضاً</label>
         {alerts.loading ? <Loading /> : !alerts.data.length ? <Empty icon={<ShieldCheck size={22} />} title="لا توجد تنبيهات" text="النظام هادئ. · All quiet." />
@@ -225,7 +232,7 @@ const SECRET_LABEL: Record<string, string> = { email: 'كلمة مرور الب�
 /** Owner console: what the interface shows, the brands, sign-in and guard settings, outside channels, module managers, and the company template. */
 export function OwnerPage() {
   const session = useSession();
-  const [tab, setTab] = useState<'interface' | 'brands' | 'security' | 'channels' | 'managers' | 'clone'>('interface');
+  const [tab, setTab] = useState<'interface' | 'texts' | 'brands' | 'security' | 'channels' | 'managers' | 'demo' | 'clone'>('interface');
   const [draft, setDraft] = useState<SystemSettings>(() => JSON.parse(JSON.stringify(session.settings)));
   const [busy, setBusy] = useState(false);
   const brands = useBrands();
@@ -235,12 +242,18 @@ export function OwnerPage() {
   const [channelDraft, setChannelDraft] = useState<{ enabled: boolean; config: Record<string, string>; secret: string }>({ enabled: false, config: {}, secret: '' });
   const [testTo, setTestTo] = useState('');
   const security: SecuritySettings = draft.security ?? { idleMinutes: 15, askLocationOnLogin: true, workdayStart: '07:00', workdayEnd: '21:00', failedLoginAlertThreshold: 8, exportAlertThreshold: 15 };
-  const ui = draft.ui ?? { hiddenApps: [], brands: [], moduleManagers: {} };
+  const ui = { hiddenApps: [], brands: [], moduleManagers: {}, texts: {}, ...(draft.ui ?? {}) } as NonNullable<SystemSettings['ui']> & { texts: Record<string, { ar: string; en?: string }> };
+  const setText = (key: string, part: 'ar' | 'en', value: string) => setDraft({ ...draft, ui: { ...ui, texts: { ...ui.texts, [key]: { ar: part === 'ar' ? value : ui.texts[key]?.ar ?? '', en: part === 'en' ? value : ui.texts[key]?.en } } } });
 
   async function saveSettings() {
     setBusy(true);
     try {
-      await session.call('/settings', { method: 'PUT', body: draft });
+      // Logos uploaded meanwhile live on the server; keep them.
+      const latest = await session.call<{ data: SystemSettings }>('/settings');
+      const brandsNow = (draft.ui?.brands ?? []).map((brand) => ({ ...brand, logoKey: latest.data.ui?.brands.find((item) => item.id === brand.id)?.logoKey ?? brand.logoKey ?? null }));
+      const texts = Object.fromEntries(Object.entries(ui.texts).filter(([, value]) => value.ar?.trim()).map(([key, value]) => [key, { ar: value.ar.trim(), ...(value.en?.trim() ? { en: value.en.trim() } : {}) }]));
+      await session.call('/settings', { method: 'PUT', body: { ...draft, ui: { ...ui, brands: brandsNow, texts } } });
+      refreshBrands();
       session.notify('حُفظت إعدادات المالك.');
       session.refreshSettings();
     } catch (error) { session.fail(error, 'تعذر الحفظ.'); } finally { setBusy(false); }
@@ -282,9 +295,10 @@ export function OwnerPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="لوحة مالك النظام" en="System owner console" /></h2><p>تحكم مالك النظام وحده: ما يظهر في الواجهة، العلامات وشعاراتها، مدة الجلسة والحارس الأمني، قنوات الإرسال، مسؤولو التطبيقات، واستنساخ النظام لشركة أخرى.</p></div>
-        {['interface', 'security', 'managers'].includes(tab) && <button className="button button-primary" disabled={busy} onClick={() => void saveSettings()}><Save size={16} />حفظ · Save</button>}</div>
+        {['interface', 'texts', 'brands', 'security', 'managers'].includes(tab) && <button className="button button-primary" disabled={busy} onClick={() => void saveSettings()}><Save size={16} />حفظ · Save</button>}</div>
       <Tabs value={tab} onChange={setTab} items={[
-        { id: 'interface', label: 'الواجهة · Interface' }, { id: 'brands', label: 'العلامات · Brands' }, { id: 'security', label: 'الجلسة والأمان · Security' },
+        { id: 'interface', label: 'الواجهة · Interface' }, { id: 'texts', label: 'النصوص والتسميات · Texts' }, { id: 'brands', label: 'العلامات · Brands' }, { id: 'security', label: 'الجلسة والأمان · Security' },
+        { id: 'demo', label: 'الحسابات التجريبية · Demo' },
         { id: 'channels', label: 'القنوات · Channels' }, { id: 'managers', label: 'مسؤولو التطبيقات · App owners' }, { id: 'clone', label: 'استنساخ لشركة · Clone' },
       ]} />
       {tab === 'interface' && <section className="panel">
@@ -296,16 +310,40 @@ export function OwnerPage() {
         </label>; })}</div>
       </section>}
       {tab === 'brands' && <section className="panel">
-        <div className="panel-head"><div><h3>علامات المجموعة وشعاراتها</h3><p>بالترتيب: روكس أولاً وملتي براند آخراً. ارفع شعار كل علامة من ملفاتكم الرسمية (PNG أو JPG، خلفية شفافة أفضل). تظهر تحت اسم النظام في الدخول والرئيسية.</p></div></div>
-        <div className="brand-admin">{brands.map((brand) => <div key={brand.id} className="brand-admin-card">
-          <div className="brand-admin-logo">{brand.logo ? <img src={brand.logo} alt={brand.name} /> : <Image size={28} />}</div>
-          <strong>{brand.name}</strong>
+        <div className="panel-head"><div><h3>العلامات التجارية وشعاراتها · Brands</h3><p>أضف أو احذف أو أعد تسمية أو رتّب العلامات، ثم «حفظ». بعد الحفظ ارفع شعار كل علامة من ملفاتكم الرسمية. تظهر في شاشة الدخول وتحت اسم النظام، وتُربط بشركات المجموعة.</p></div>
+          <button className="button button-quiet" onClick={() => setDraft({ ...draft, ui: { ...ui, brands: [...ui.brands, { id: `brand-${Date.now().toString(36)}`, name: 'علامة جديدة', logoKey: null }] } })}><Plus size={15} />إضافة علامة</button></div>
+        <div className="brand-admin">{ui.brands.map((brand, index) => { const live = brands.find((item) => item.id === brand.id); const saved = Boolean(session.settings.ui?.brands.some((item) => item.id === brand.id)); return <div key={brand.id} className="brand-admin-card">
+          <div className="brand-admin-logo">{live?.logo ? <img src={live.logo} alt={brand.name} /> : <Image size={28} />}</div>
+          <input className="brand-name-input" value={brand.name} maxLength={40} onChange={(event) => setDraft({ ...draft, ui: { ...ui, brands: ui.brands.map((item) => item.id === brand.id ? { ...item, name: event.target.value } : item) } })} />
           <div className="row-actions">
-            <label className="button button-quiet button-small"><Upload size={13} />رفع<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => void uploadLogo(brand.id, event)} /></label>
-            {brand.logo && <button className="button button-quiet button-small" onClick={() => void removeLogo(brand.id)}><Trash2 size={13} /></button>}
+            <button className="icon-button" title="قبل" disabled={index === 0} onClick={() => { const next = [...ui.brands]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; setDraft({ ...draft, ui: { ...ui, brands: next } }); }}>→</button>
+            <button className="icon-button" title="بعد" disabled={index === ui.brands.length - 1} onClick={() => { const next = [...ui.brands]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; setDraft({ ...draft, ui: { ...ui, brands: next } }); }}>←</button>
+            {saved ? <label className="button button-quiet button-small"><Upload size={13} />شعار<input type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(event) => void uploadLogo(brand.id, event)} /></label> : <small className="muted">احفظ أولاً</small>}
+            {live?.logo && <button className="button button-quiet button-small" title="إزالة الشعار" onClick={() => void removeLogo(brand.id)}><Image size={13} />×</button>}
+            <button className="icon-button" title="حذف العلامة" onClick={() => setDraft({ ...draft, ui: { ...ui, brands: ui.brands.filter((item) => item.id !== brand.id) } })}><Trash2 size={14} /></button>
           </div>
+        </div>; })}</div>
+      </section>}
+      {tab === 'texts' && <section className="panel">
+        <div className="panel-head"><div><h3>النصوص والتسميات · Texts & names</h3><p>غيّر اسم النظام ونصوص شاشة الدخول، وأعد تسمية أي تطبيق أو قائمة بالعربي والإنكليزي. اترك الحقل فارغاً لاستعمال النص الأصلي.</p></div></div>
+        <h4>النظام وشاشة الدخول · System & sign-in page</h4>
+        <div className="text-editor">{EDITABLE_TEXTS.map((item) => <div key={item.key} className="text-row">
+          <span className="text-label">{item.label}</span>
+          {item.long ? <textarea rows={2} placeholder={item.ar} value={ui.texts[item.key]?.ar ?? ''} onChange={(event) => setText(item.key, 'ar', event.target.value)} /> : <input placeholder={item.ar} value={ui.texts[item.key]?.ar ?? ''} onChange={(event) => setText(item.key, 'ar', event.target.value)} />}
+          {item.long ? <textarea rows={2} dir="ltr" placeholder={item.en} value={ui.texts[item.key]?.en ?? ''} onChange={(event) => setText(item.key, 'en', event.target.value)} /> : <input dir="ltr" placeholder={item.en} value={ui.texts[item.key]?.en ?? ''} onChange={(event) => setText(item.key, 'en', event.target.value)} />}
+        </div>)}</div>
+        <h4>التطبيقات والقوائم · Apps & menus</h4>
+        <div className="text-editor">{APPS.flatMap((app) => [
+          { key: app.label, label: `تطبيق: ${app.label}`, en: en(app.label) },
+          { key: app.description, label: `وصف: ${app.label}`, en: en(app.description) },
+          ...app.menus.filter((menu) => menu.label !== app.label).map((menu) => ({ key: menu.label, label: `قائمة: ${app.label} ← ${menu.label}`, en: en(menu.label) })),
+        ]).filter((item, index, all) => all.findIndex((other) => other.key === item.key) === index).map((item) => <div key={item.key} className="text-row">
+          <span className="text-label">{item.label}</span>
+          <input placeholder={item.key} value={ui.texts[item.key]?.ar ?? ''} onChange={(event) => setText(item.key, 'ar', event.target.value)} />
+          <input dir="ltr" placeholder={item.en || 'English'} value={ui.texts[item.key]?.en ?? ''} onChange={(event) => setText(item.key, 'en', event.target.value)} />
         </div>)}</div>
       </section>}
+      {tab === 'demo' && <section className="panel"><DemoAccounts /></section>}
       {tab === 'security' && <section className="panel"><div className="form-grid">
         <label className="field"><span>إنهاء الجلسة بعد عدم النشاط (دقيقة) · Idle sign-out</span><input type="number" min={5} max={480} value={security.idleMinutes} onChange={(event) => setSecurity({ idleMinutes: Number(event.target.value) })} /><small>الافتراضي 15 دقيقة. يظهر تنبيه قبلها بدقيقة.</small></label>
         <label className="settings-check"><input type="checkbox" checked={security.askLocationOnLogin} onChange={(event) => setSecurity({ askLocationOnLogin: event.target.checked })} />طلب الموقع عند الدخول (يظهر على الخريطة في الحارس الأمني)</label>
@@ -313,6 +351,9 @@ export function OwnerPage() {
         <label className="field"><span>نهاية الدوام</span><input type="time" value={security.workdayEnd} onChange={(event) => setSecurity({ workdayEnd: event.target.value })} /><small>التعديلات الحساسة خارج هذا الوقت تُنبَّه.</small></label>
         <label className="field"><span>محاولات دخول خاطئة من عنوان واحد خلال 15 دقيقة</span><input type="number" min={3} max={100} value={security.failedLoginAlertThreshold} onChange={(event) => setSecurity({ failedLoginAlertThreshold: Number(event.target.value) })} /></label>
         <label className="field"><span>تنزيلات ملفات من شخص خلال ساعة</span><input type="number" min={3} max={500} value={security.exportAlertThreshold} onChange={(event) => setSecurity({ exportAlertThreshold: Number(event.target.value) })} /></label>
+        <label className="settings-check"><input type="checkbox" checked={security.wafEnabled !== false} onChange={(event) => setSecurity({ wafEnabled: event.target.checked })} />جدار الحماية: صد أنماط الهجوم (SQL، المسارات، السكربت)</label>
+        <label className="field"><span>حظر تلقائي لمن يخمّن كلمات المرور (دقيقة، 0 = إيقاف)</span><input type="number" min={0} max={10080} value={security.autoBlockMinutes ?? 60} onChange={(event) => setSecurity({ autoBlockMinutes: Number(event.target.value) })} /></label>
+        <label className="field"><span>أقصى طلبات من عنوان واحد في الدقيقة</span><input type="number" min={60} max={10000} value={security.requestsPerMinute ?? 600} onChange={(event) => setSecurity({ requestsPerMinute: Number(event.target.value) })} /></label>
       </div></section>}
       {tab === 'channels' && <section className="panel">
         <div className="panel-head"><div><h3>قنوات الإرسال الخارجية</h3><p>لا يُرسل شيء خارج النظام حتى تفعّل القناة هنا بإعدادات مزوّدك. الأسرار تُحفظ مشفّرة ولا تُعرض مرة أخرى. واتساب يحتاج حساب WhatsApp Business على منصة Meta.</p></div></div>

@@ -31,6 +31,14 @@ export class OwnerController {
           id: brand.id, name: brand.name,
           logo: brand.logoKey ? `/api/public/brands/${brand.id}/logo?v=${encodeURIComponent(brand.logoKey.slice(7, 15))}` : null,
         })),
+        companies: (await select<{ id: string; nameAr: string; nameEn: string | null; logo: string | null }>(
+          `SELECT id, name_ar AS "nameAr", name_en AS "nameEn",
+                  CASE WHEN logo_key IS NOT NULL THEN '/api/public/companies/' || id || '/logo?v=' || substr(md5(logo_key), 1, 8) END AS logo
+           FROM companies WHERE is_active ORDER BY sort_order, name_ar`,
+        )),
+        // Only the login-page and naming texts the owner rewrote.
+        texts: settings.ui.texts,
+        demo: process.env.DEMO_MODE === 'true',
       },
     });
   }

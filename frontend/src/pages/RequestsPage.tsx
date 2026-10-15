@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Eye, FileText, Link2, MessageCircle, Paperclip, Search, Wallet, X } from 'lucide-react';
 import { Bi } from '../components/Brand';
+import { InviteDialog, InviteTarget } from '../components/InviteDialog';
 import { Dialog, Empty, Loading, Stat, StatusTag, Tabs } from '../components/ui';
 import { ViewSwitch, useViewMode } from '../components/ViewSwitch';
 import { formatDate, formatDateTime, formatMoney, formatNumber, monthLabel } from '../lib/format';
@@ -154,24 +155,19 @@ export function PortalAccountsPage() {
   const session = useSession();
   const accounts = useLoad<Account[]>('/portal/accounts', []);
   const [query, setQuery] = useState('');
-  const [link, setLink] = useState<{ account: Account; url: string } | null>(null);
+  const [link, setLink] = useState<InviteTarget | null>(null);
   const base = window.location.origin;
   const rows = accounts.data.filter((row) => !query.trim() || `${row.fullName} ${row.employeeNo} ${row.branchName}`.includes(query.trim()));
 
   async function invite(account: Account) {
     try {
       const result = await session.call<{ data: { path: string } }>(`/portal/accounts/${account.id}/invite`, { method: 'POST' });
-      setLink({ account, url: `${base}${result.data.path}` });
+      setLink({ name: account.fullName, login: account.employeeNo, url: `${base}${result.data.path}`, kind: 'portal', phone: account.phone });
       accounts.reload();
     } catch (error) {
       session.fail(error, 'تعذر إنشاء الرابط.');
     }
   }
-  const message = (account: Account, url: string) => `مرحباً ${account.fullName}،\nهذا رابط تفعيل حسابك في بوابة موظفي مجموعة الليث العبيدي. اختر كلمة مرورك من الرابط (صالح 7 أيام)، ثم ادخل برقمك الوظيفي ${account.employeeNo}.\n${url}`;
-  const whatsapp = (account: Account, url: string) => {
-    const phone = (account.phone ?? '').replace(/\D/g, '').replace(/^0/, '964');
-    return `https://wa.me/${phone}?text=${encodeURIComponent(message(account, url))}`;
-  };
 
   return (
     <section className="screen">
@@ -190,20 +186,11 @@ export function PortalAccountsPage() {
             <td>{row.branchName}</td>
             <td dir="ltr">{row.username ?? (row.userId ? '—' : row.employeeNo)}</td>
             <td>{!row.userId ? <span className="muted">بلا حساب</span> : row.lastLoginAt ? <span className="good-text">دخل · {formatDateTime(row.lastLoginAt)}</span> : row.invitePending ? <span className="warn-text">دعوة مرسلة</span> : <span className="muted">لم يدخل بعد</span>}</td>
-            <td>{row.role && row.role !== 'employee' ? <span className="muted">حساب موظفين</span> : <button className="button button-quiet" onClick={() => void invite(row)}><Link2 size={14} />{row.userId ? 'رابط جديد' : 'إنشاء ودعوة'}</button>}</td>
+            <td>{row.role && row.role !== 'employee' ? <span className="muted">حساب موظفين</span> : <button className="button button-quiet" onClick={() => void invite(row)}><Link2 size={14} />{row.userId ? 'دعوة جديدة · واتساب / SMS' : 'إنشاء ودعوة · واتساب / SMS'}</button>}</td>
           </tr>)}</tbody>
         </table></div>}
       </section>
-      <Dialog open={Boolean(link)} title="رابط تفعيل البوابة" subtitle={link ? `${link.account.fullName} · يدخل بالرقم ${link.account.employeeNo}` : ''} onClose={() => setLink(null)}>
-        {link && <div className="invite-link">
-          <textarea readOnly rows={5} value={message(link.account, link.url)} />
-          <div className="dialog-actions">
-            <button className="button button-primary" onClick={() => void navigator.clipboard.writeText(message(link.account, link.url)).then(() => session.notify('نُسخت الرسالة.'))}><Copy size={15} />نسخ الرسالة</button>
-            {link.account.phone && <a className="button button-quiet" href={whatsapp(link.account, link.url)} target="_blank" rel="noopener noreferrer"><MessageCircle size={15} />فتح في واتساب</a>}
-          </div>
-          <p className="muted small">الرابط صالح 7 أيام ويعمل مرة واحدة. إنشاء رابط جديد يلغي السابق.</p>
-        </div>}
-      </Dialog>
+      <InviteDialog target={link} onClose={() => setLink(null)} />
     </section>
   );
 }

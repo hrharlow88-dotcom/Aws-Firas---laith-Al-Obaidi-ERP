@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
 import { Branch, Employee } from '../models';
 import { audited } from '../utils/audit';
+import { selectOne } from '../db/query';
+import { isUuid } from '../utils/validation';
+
+async function companyExists(id: unknown): Promise<boolean> {
+  return isUuid(id) && Boolean(await selectOne('SELECT 1 FROM companies WHERE id = :id', { id }));
+}
 
 export class BranchController {
   static async list(req: Request, res: Response): Promise<void> {
@@ -23,7 +29,11 @@ export class BranchController {
 
   static async create(req: Request, res: Response): Promise<void> {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const { code, name, city, address, phone } = body;
+    const { code, name, city, address, phone, companyId } = body;
+    if (companyId !== undefined && companyId !== null && !(await companyExists(companyId))) {
+      res.status(400).json({ message: 'الشركة غير موجودة.' });
+      return;
+    }
     if (![code, name, city].every((value) => typeof value === 'string' && value.trim())) {
       res.status(400).json({ message: 'رمز الفرع والاسم والمدينة حقول مطلوبة.' });
       return;
@@ -34,6 +44,7 @@ export class BranchController {
       city: city.trim(),
       address: typeof address === 'string' ? address.trim() || null : null,
       phone: typeof phone === 'string' ? phone.trim() || null : null,
+      companyId: typeof companyId === 'string' ? companyId : null,
     }, { transaction }));
     res.status(201).json({ data: branch });
   }
@@ -45,8 +56,8 @@ export class BranchController {
       return;
     }
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const { code, name, city, address, phone, isActive } = body;
-    if (Object.keys(body).some((field) => !['code', 'name', 'city', 'address', 'phone', 'isActive'].includes(field))) {
+    const { code, name, city, address, phone, isActive, companyId } = body;
+    if (Object.keys(body).some((field) => !['code', 'name', 'city', 'address', 'phone', 'isActive', 'companyId'].includes(field))) {
       res.status(400).json({ message: 'يتضمن الطلب حقلاً غير قابل للتعديل.' });
       return;
     }
@@ -57,7 +68,11 @@ export class BranchController {
       res.status(400).json({ message: 'تحقق من رمز الفرع والاسم والمدينة والحالة.' });
       return;
     }
-    if (!['code', 'name', 'city', 'address', 'phone', 'isActive'].some((field) => field in body)) {
+    if (companyId !== undefined && companyId !== null && !(await companyExists(companyId))) {
+      res.status(400).json({ message: 'الشركة غير موجودة.' });
+      return;
+    }
+    if (!['code', 'name', 'city', 'address', 'phone', 'isActive', 'companyId'].some((field) => field in body)) {
       res.status(400).json({ message: 'أرسل حقلاً واحداً على الأقل لتحديثه.' });
       return;
     }
@@ -68,6 +83,7 @@ export class BranchController {
       ...(typeof address === 'string' ? { address: address.trim() || null } : {}),
       ...(typeof phone === 'string' ? { phone: phone.trim() || null } : {}),
       ...(typeof isActive === 'boolean' ? { isActive } : {}),
+      ...(companyId !== undefined ? { companyId: companyId === null ? null : String(companyId) } : {}),
     }, { transaction }));
     res.json({ data: updatedBranch });
   }

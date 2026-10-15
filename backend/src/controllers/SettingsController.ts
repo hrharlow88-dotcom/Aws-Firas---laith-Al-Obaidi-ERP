@@ -192,7 +192,11 @@ function validateSecurity(value: unknown): boolean {
   if (value === undefined) return true;
   return isRecord(value) && hasOnlyKeys(value, [
     'idleMinutes', 'askLocationOnLogin', 'workdayStart', 'workdayEnd', 'failedLoginAlertThreshold', 'exportAlertThreshold',
+    'autoBlockMinutes', 'wafEnabled', 'requestsPerMinute',
   ]) &&
+    (value.autoBlockMinutes === undefined || (Number.isInteger(value.autoBlockMinutes) && Number(value.autoBlockMinutes) >= 0 && Number(value.autoBlockMinutes) <= 10080)) &&
+    (value.wafEnabled === undefined || typeof value.wafEnabled === 'boolean') &&
+    (value.requestsPerMinute === undefined || (Number.isInteger(value.requestsPerMinute) && Number(value.requestsPerMinute) >= 60 && Number(value.requestsPerMinute) <= 10000)) &&
     Number.isInteger(value.idleMinutes) && Number(value.idleMinutes) >= 5 && Number(value.idleMinutes) <= 480 &&
     typeof value.askLocationOnLogin === 'boolean' &&
     typeof value.workdayStart === 'string' && CLOCK.test(value.workdayStart) &&
@@ -203,7 +207,11 @@ function validateSecurity(value: unknown): boolean {
 
 function validateInterface(value: unknown): boolean {
   if (value === undefined) return true;
-  if (!isRecord(value) || !hasOnlyKeys(value, ['hiddenApps', 'brands', 'moduleManagers'])) return false;
+  if (!isRecord(value) || !hasOnlyKeys(value, ['hiddenApps', 'brands', 'moduleManagers', 'texts'])) return false;
+  const texts = value.texts;
+  if (texts !== undefined && !(isRecord(texts) && Object.keys(texts).length <= 400 &&
+    Object.entries(texts).every(([key, text]) => key.length >= 1 && key.length <= 120 && isRecord(text) && hasOnlyKeys(text, ['ar', 'en']) &&
+      isText(text.ar, 300) && (text.en === undefined || isText(text.en, 300))))) return false;
   const managers = value.moduleManagers;
   if (managers !== undefined && !(isRecord(managers) && Object.keys(managers).length <= 50 &&
     Object.entries(managers).every(([app, ids]) => /^[a-z-]{2,30}$/.test(app) && Array.isArray(ids) && ids.length <= 10 &&
@@ -211,7 +219,7 @@ function validateInterface(value: unknown): boolean {
   const apps = value.hiddenApps;
   const brands = value.brands;
   return Array.isArray(apps) && apps.length <= 50 && apps.every((app) => typeof app === 'string' && /^[a-z-]{2,30}$/.test(app)) &&
-    Array.isArray(brands) && brands.length >= 1 && brands.length <= 12 && brands.every((brand) => isRecord(brand) &&
+    Array.isArray(brands) && brands.length >= 0 && brands.length <= 30 && brands.every((brand) => isRecord(brand) &&
       hasOnlyKeys(brand, ['id', 'name', 'logoKey']) &&
       typeof brand.id === 'string' && /^[a-z0-9-]{2,30}$/.test(brand.id) &&
       isText(brand.name, 40) && brand.name.trim().length > 0 &&

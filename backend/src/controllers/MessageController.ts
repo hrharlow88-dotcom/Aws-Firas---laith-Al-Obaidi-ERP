@@ -120,6 +120,51 @@ export class MessageController {
     });
   }
 
+  /**
+   * Sends an account invitation (portal or staff) by WhatsApp, SMS or e-mail:
+   * queued on channels the owner enabled, and always returned as hand-send links.
+   */
+  static async deliverInvite(req: Request, res: Response): Promise<void> {
+    const input = body(req);
+    const link = typeof input.link === 'string' ? input.link.trim() : '';
+    if (!/^https?:\/\/[^\s]+\/#\/set-password\/[A-Za-z0-9_-]{40,60}$/.test(link)) throw badRequest('رابط الدعوة غير صالح.');
+    const name = typeof input.name === 'string' ? input.name.slice(0, 120) : '';
+    const login = typeof input.login === 'string' ? input.login.slice(0, 254) : '';
+    const phone = normalizePhone(typeof input.phone === 'string' ? input.phone : null);
+    const email = typeof input.email === 'string' && EMAIL.test(input.email) ? input.email : null;
+    const template = MESSAGE_TEMPLATES.find((item) => item.id === (input.kind === 'staff' ? 'staff_invite' : 'portal_invite'))!;
+    const values = { name, link, employeeNo: login, login };
+    const subject = fillTemplate(template.subject, values);
+    const text = fillTemplate(template.body, values);
+    const channels = (Array.isArray(input.channels) ? input.channels : []).filter((item): item is Channel => CHANNELS.includes(item as Channel));
+    const enabled = new Set((await channelStates()).filter((state) => state.enabled).map((state) => state.channel));
+    const queued: Array<Record<string, unknown>> = [];
+    for (const channel of channels) {
+      const to = channel === 'email' ? email : phone;
+      if (to && enabled.has(channel)) queued.push({ id: randomUUID(), channel, recipient: to, subject, body: text });
+    }
+    if (queued.length) {
+      await execute(
+        `INSERT INTO outbound_messages (id, channel, recipient, subject, body, related_kind, created_by)
+         SELECT x.id, x.channel, x.recipient, x.subject, x.body, 'invite', :userId
+         FROM jsonb_to_recordset(:rows::jsonb) AS x(id uuid, channel varchar, recipient varchar, subject varchar, body text)`,
+        { rows: JSON.stringify(queued), userId: req.user!.id },
+      );
+    }
+    await recordAudit(req, null, 'messages.invite_sent', 'outbound_message', null, { channels, queued: queued.length, phone: Boolean(phone), email: Boolean(email) });
+    res.json({
+      data: {
+        queued: queued.length, body: text,
+        links: {
+          whatsapp: phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null,
+          sms: phone ? `sms:+${phone}?body=${encodeURIComponent(text)}` : null,
+          email: email ? `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}` : null,
+        },
+        disabledChannels: channels.filter((channel) => !enabled.has(channel)),
+      },
+    });
+  }
+
   static async outbox(_req: Request, res: Response): Promise<void> {
     const rows = await select(
       `SELECT o.id, o.channel, o.recipient, o.subject, o.status, o.attempts, o.error, o.created_at AS "createdAt", o.sent_at AS "sentAt",

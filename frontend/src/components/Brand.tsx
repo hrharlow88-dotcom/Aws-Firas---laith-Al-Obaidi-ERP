@@ -1,10 +1,17 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { setTextOverrides, tAr, tEn, TextOverride } from '../lib/texts';
 import { Language, Mode, THEMES, ThemeId, applyTheme, saveLanguage, savedLanguage, savedMode, savedTheme } from '../lib/theme';
 
-export const SYSTEM_NAME = {
+const DEFAULT_SYSTEM_NAME = {
   ar: 'نظام ERP مجموعة الليث العبيدي للسيارات في العراق',
   en: 'Al-Laith Al-Obaidi Automotive Group — Iraq ERP',
+};
+
+/** The system name, as the owner set it (or the default). */
+export const SYSTEM_NAME = {
+  get ar() { return tAr('system.name', DEFAULT_SYSTEM_NAME.ar); },
+  get en() { return tEn('system.name', DEFAULT_SYSTEM_NAME.en); },
 };
 
 export const DEVELOPER = {
@@ -22,27 +29,49 @@ export const GROUP_BRANDS: BrandItem[] = [
   { id: 'multibrand', name: 'MULTI-BRAND', logo: null },
 ];
 
-let brandCache: Promise<BrandItem[]> | null = null;
-const listeners = new Set<(brands: BrandItem[]) => void>();
+export interface CompanyItem { id: string; nameAr: string; nameEn: string | null; logo: string | null }
+export interface PublicBranding { brands: BrandItem[]; companies: CompanyItem[]; texts: Record<string, TextOverride>; demo: boolean }
+const FALLBACK: PublicBranding = { brands: GROUP_BRANDS, companies: [], texts: {}, demo: false };
 
-/** Loads the brand list once (no sign-in needed); the owner page refreshes it after an upload. */
+let brandCache: Promise<PublicBranding> | null = null;
+const listeners = new Set<(value: PublicBranding) => void>();
+
+/** Loads the public branding once (no sign-in needed); the owner pages refresh it after a change. */
 export function refreshBrands(): void {
   brandCache = fetch('/api/public/branding').then((response) => response.json())
-    .then((result) => (Array.isArray(result?.data?.brands) ? result.data.brands as BrandItem[] : GROUP_BRANDS))
-    .catch(() => GROUP_BRANDS);
-  void brandCache.then((brands) => listeners.forEach((listener) => listener(brands)));
+    .then((result) => ({ ...FALLBACK, ...(result?.data ?? {}) }) as PublicBranding)
+    .catch(() => FALLBACK);
+  void brandCache.then((value) => {
+    setTextOverrides(value.texts);
+    listeners.forEach((listener) => listener(value));
+  });
 }
 
-export function useBrands(): BrandItem[] {
-  const [brands, setBrands] = useState<BrandItem[]>(GROUP_BRANDS);
+export function usePublicBranding(): PublicBranding {
+  const [value, setValue] = useState<PublicBranding>(FALLBACK);
   useEffect(() => {
     if (!brandCache) refreshBrands();
     let live = true;
-    void brandCache!.then((value) => { if (live) setBrands(value); });
-    listeners.add(setBrands);
-    return () => { live = false; listeners.delete(setBrands); };
+    void brandCache!.then((loaded) => { if (live) { setTextOverrides(loaded.texts); setValue(loaded); } });
+    listeners.add(setValue);
+    return () => { live = false; listeners.delete(setValue); };
   }, []);
-  return brands;
+  return value;
+}
+
+export function useBrands(): BrandItem[] {
+  return usePublicBranding().brands;
+}
+
+/** Logos of the group's companies (login page and home). */
+export function CompanyStrip({ tone = 'default' }: { tone?: 'default' | 'light' }) {
+  const companies = usePublicBranding().companies;
+  if (!companies.length) return null;
+  return (
+    <ul className={`company-strip company-strip-${tone}`} aria-label="شركات المجموعة · Group companies">
+      {companies.map((company) => <li key={company.id}>{company.logo && <img src={company.logo} alt="" loading="lazy" />}<span>{company.nameAr}{company.nameEn && <small dir="ltr">{company.nameEn}</small>}</span></li>)}
+    </ul>
+  );
 }
 
 export function BrandStrip({ tone = 'default' }: { tone?: 'default' | 'light' }) {

@@ -37,6 +37,9 @@ import AnnouncementController from '../controllers/AnnouncementController';
 import MessageController from '../controllers/MessageController';
 import ApprovalsController from '../controllers/ApprovalsController';
 import { uploadArchive } from '../services/storage';
+import ChatController from '../controllers/ChatController';
+import CompanyController from '../controllers/CompanyController';
+import DemoController from '../controllers/DemoController';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
@@ -105,6 +108,49 @@ router.get('/messages/outbox', requireAuth, allowPermission('messages.send'), as
 router.get('/approvals/inbox', requireAuth, asyncRoute(ApprovalsController.inbox));
 router.post('/activity/visit', requireAuth, asyncRoute(ActivityController.visit));
 router.get('/activity', requireAuth, allowPermission('audit.view'), asyncRoute(ActivityController.list));
+
+// Internal chat.
+router.get('/chat/channels', requireAuth, asyncRoute(ChatController.channels));
+router.get('/chat/people', requireAuth, asyncRoute(ChatController.people));
+router.get('/chat/unread', requireAuth, asyncRoute(ChatController.unread));
+router.post('/chat/channels', requireAuth, asyncRoute(ChatController.createChannel));
+router.post('/chat/direct', requireAuth, asyncRoute(ChatController.direct));
+router.post('/chat/channels/:id/join', requireAuth, validateUuidParam, asyncRoute(ChatController.join));
+router.post('/chat/channels/:id/leave', requireAuth, validateUuidParam, asyncRoute(ChatController.leave));
+router.get('/chat/channels/:id/members', requireAuth, validateUuidParam, asyncRoute(ChatController.members));
+router.post('/chat/channels/:id/members', requireAuth, validateUuidParam, asyncRoute(ChatController.addMembers));
+router.get('/chat/channels/:id/messages', requireAuth, validateUuidParam, asyncRoute(ChatController.messages));
+router.post('/chat/channels/:id/messages', requireAuth, validateUuidParam, uploadSingle('file'), asyncRoute(ChatController.post));
+router.post('/chat/channels/:id/read', requireAuth, validateUuidParam, asyncRoute(ChatController.read));
+router.patch('/chat/messages/:id', requireAuth, validateUuidParam, asyncRoute(ChatController.edit));
+router.delete('/chat/messages/:id', requireAuth, validateUuidParam, asyncRoute(ChatController.remove));
+router.post('/chat/messages/:id/react', requireAuth, validateUuidParam, asyncRoute(ChatController.react));
+router.get('/chat/messages/:id/file', requireAuth, validateUuidParam, asyncRoute(ChatController.file));
+
+// Group companies.
+router.get('/companies', requireAuth, asyncRoute(CompanyController.list));
+router.post('/companies', requireAuth, allowRoles('super_admin'), asyncRoute(CompanyController.save));
+router.put('/companies/:id', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(CompanyController.save));
+router.post('/companies/:id/logo', requireAuth, allowRoles('super_admin'), validateUuidParam, uploadSingle('file'), asyncRoute(CompanyController.uploadLogo));
+router.get('/public/companies/:id/logo', validateUuidParam, asyncRoute(CompanyController.logo));
+
+// Invitations by WhatsApp / SMS / e-mail.
+router.post('/invites/deliver', requireAuth, allowPermission('users.manage'), asyncRoute(MessageController.deliverInvite));
+router.post('/users/:id/invite', requireAuth, allowPermission('users.manage'), validateUuidParam, asyncRoute(UserController.invite));
+
+// Demo accounts (owner).
+router.get('/owner/demo', requireAuth, allowRoles('super_admin'), asyncRoute(DemoController.list));
+router.post('/owner/demo', requireAuth, allowRoles('super_admin'), asyncRoute(DemoController.create));
+router.patch('/owner/demo/:id', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(DemoController.update));
+router.post('/owner/demo-toggle', requireAuth, allowRoles('super_admin'), asyncRoute(DemoController.toggleAll));
+
+// Radar, scanner and firewall (owner).
+router.get('/security/radar', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.radar));
+router.get('/security/scan-report', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.scanReport));
+router.post('/security/fix/:findingId', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.fix));
+router.get('/security/blocks', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.blocks));
+router.post('/security/blocks', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.block));
+router.post('/security/blocks/:id/lift', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(SecurityController.unblock));
 
 // Calendar.
 router.get('/calendar', requireAuth, asyncRoute(CalendarController.range));

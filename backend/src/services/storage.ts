@@ -3,6 +3,8 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import multer from 'multer';
+import { PassThrough, Readable } from 'node:stream';
+import { decryptBuffer, encryptBuffer, isEncryptedFile } from '../utils/crypto';
 import { badRequest } from '../utils/http';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -48,7 +50,8 @@ export async function storeFile(folder: string, buffer: Buffer, ext: string): Pr
   const key = `${folder}/${randomUUID()}.${ext}`;
   const target = resolveKey(key);
   await fsp.mkdir(path.dirname(target), { recursive: true, mode: 0o750 });
-  await fsp.writeFile(target, buffer, { mode: 0o640, flag: 'wx' });
+  // Encrypted at rest with the server's key (AES-256-GCM); a stolen disk or backup shows nothing.
+  await fsp.writeFile(target, encryptBuffer(buffer), { mode: 0o640, flag: 'wx' });
   return key;
 }
 
@@ -59,8 +62,62 @@ export function resolveKey(key: string): string {
   return target;
 }
 
-export function openStoredFile(key: string): fs.ReadStream {
-  return fs.createReadStream(resolveKey(key));
+export async function readStoredFile(key: string): Promise<Buffer> {
+  return decryptBuffer(await fsp.readFile(resolveKey(key)));
+}
+
+/** The stored file as a stream, decrypted. */
+export function openStoredFile(key: string): Readable {
+  const out = new PassThrough();
+  readStoredFile(key).then((buffer) => out.end(buffer)).catch((error) => out.destroy(error));
+  return out;
+}
+
+/** Encrypts files saved before encryption at rest was switched on. Returns [encrypted, alreadyEncrypted]. */
+export async function encryptExistingFiles(): Promise<[number, number]> {
+  let done = 0;
+  let already = 0;
+  async function walk(dir: string): Promise<void> {
+    let entries: fs.Dirent[] = [];
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { await walk(full); continue; }
+      if (!entry.isFile()) continue;
+      const data = await fsp.readFile(full);
+      if (isEncryptedFile(data)) { already += 1; continue; }
+      const sealed = encryptBuffer(data);
+      if (sealed === data) return;
+      await fsp.writeFile(`${full}.tmp`, sealed, { mode: 0o640 });
+      await fsp.rename(`${full}.tmp`, full);
+      done += 1;
+    }
+  }
+  await walk(uploadRoot());
+  return [done, already];
+}
+
+/** How many stored files are still in plain form. */
+export async function plainFileCount(): Promise<number> {
+  let plain = 0;
+  async function walk(dir: string): Promise<void> {
+    let entries: fs.Dirent[] = [];
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) await walk(full);
+      else if (entry.isFile()) {
+        const handle = await fsp.open(full, 'r');
+        try {
+          const head = Buffer.alloc(40);
+          const { bytesRead } = await handle.read(head, 0, 40, 0);
+          if (!isEncryptedFile(head.subarray(0, bytesRead))) plain += 1;
+        } finally { await handle.close(); }
+      }
+    }
+  }
+  await walk(uploadRoot());
+  return plain;
 }
 
 export async function storedFileExists(key: string): Promise<boolean> {

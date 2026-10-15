@@ -5,7 +5,7 @@ import { execute, select, selectOne, transaction } from '../db/query';
 import { employeeInScope } from '../services/access';
 import { CONTRACT_FIELDS, fillTemplate, templateFields } from '../services/contracts';
 import { getSettings } from '../services/settings';
-import { contentDisposition, resolveKey, storeFile, uploadedName } from '../services/storage';
+import { contentDisposition, readStoredFile, storeFile, uploadedName } from '../services/storage';
 import { recordAudit } from '../utils/audit';
 import { decryptField, sha256 } from '../utils/crypto';
 import { assertOnlyKeys, badRequest, body, conflict, notFound, optionalText, requiredText } from '../utils/http';
@@ -105,7 +105,7 @@ export class ContractController {
     res.setHeader('Content-Type', DOCX_MIME);
     res.setHeader('Content-Disposition', contentDisposition(template.originalName, false));
     res.setHeader('Cache-Control', 'private, no-store');
-    res.send(await fsp.readFile(resolveKey(template.storageKey)));
+    res.send(await readStoredFile(template.storageKey));
   }
 
   static async setTemplateActive(req: Request, res: Response): Promise<void> {
@@ -146,7 +146,7 @@ export class ContractController {
     const contractNo = optionalText(input, 'contractNo', 60) || null;
 
     const values = await contractValues(employee.id, { startsOn, endsOn, probationEndsOn, contractNo });
-    const filled = await fillTemplate(await fsp.readFile(resolveKey(template.storageKey)), values);
+    const filled = await fillTemplate(await readStoredFile(template.storageKey), values);
     const storageKey = await storeFile(`employees/${employee.id}`, filled, 'docx');
     const documentId = randomUUID();
     const contractId = randomUUID();

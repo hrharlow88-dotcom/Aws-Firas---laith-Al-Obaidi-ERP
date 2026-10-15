@@ -1,8 +1,9 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Archive, CalendarRange, ClipboardCheck, Crown, Megaphone, ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  Archive, MessagesSquare, Building, CalendarRange, ClipboardCheck, Crown, Megaphone, ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
+import { tAr, tEn } from './texts';
 
 /**
  * The system as a set of apps, like Odoo: the home screen shows one icon per
@@ -39,6 +40,10 @@ export const APPS: AppDefinition[] = [
     extraPages: ['my-payslip'],
   },
   {
+    id: 'chat', label: 'المحادثات', description: 'القنوات والرسائل المباشرة', icon: MessagesSquare,
+    colors: ['#6a5acd', '#433899'], menus: [{ page: 'chat', label: 'المحادثات' }],
+  },
+  {
     id: 'approvals', label: 'اعتماداتي', description: 'كل ما ينتظر قرارك', icon: ClipboardCheck,
     colors: ['#f0a03c', '#c46f12'], menus: [{ page: 'approvals', label: 'اعتماداتي ومهامي' }],
   },
@@ -64,6 +69,7 @@ export const APPS: AppDefinition[] = [
     menus: [
       { page: 'employees', label: 'الموظفون' },
       { page: 'org', label: 'الأقسام والهيكل' },
+      { page: 'companies', label: 'شركات المجموعة' },
       { page: 'branches', label: 'الفروع' },
       { page: 'contract-templates', label: 'قوالب العقود', permission: 'employees.manage_profile' },
     ],
@@ -209,6 +215,10 @@ export const EN: Record<string, string> = {
   'الموظفون المنفكّون': 'Former Employees', 'حركات النظام': 'System Activity',
   'لوحة المالك': 'Owner Console', 'الحارس الأمني والتحكم الكامل': 'Security guard and full control', 'الحارس الأمني': 'Security Guard',
   'تحكم المالك': 'Owner Controls', 'سلة المحذوفات': 'Recycle Bin',
+  'المحادثات': 'Discuss', 'القنوات والرسائل المباشرة': 'Channels and direct messages', 'شركات المجموعة': 'Group Companies',
   'الطلبات': 'Requests', 'طلبات الموظفين': 'Employee Requests', 'حسابات البوابة': 'Portal Accounts',
 };
-export const en = (label: string): string => EN[label] ?? '';
+/** English label, with the owner's rename if any. */
+export const en = (label: string): string => tEn(label, EN[label] ?? '');
+/** Arabic label, with the owner's rename if any. */
+export const arLabel = (label: string): string => tAr(label, label);

@@ -49,6 +49,28 @@ Please do not share this link with anyone.
 ${SIGNATURE}`,
   },
   {
+    id: 'staff_invite',
+    label: 'دعوة مستخدم للنظام · System user invitation',
+    subject: 'دعوة لاستخدام نظام ERP المجموعة | Invitation to the Group ERP',
+    fields: ['link'],
+    body: `السيد/السيدة {name} المحترم/ة،
+تحية طيبة وبعد،
+
+تمت إضافتكم مستخدماً في نظام ERP مجموعة الليث العبيدي للسيارات. لتفعيل الحساب وتعيين كلمة المرور الخاصة بكم يُرجى فتح الرابط التالي (صالح لمدة سبعة أيام ولمرة واحدة):
+{link}
+
+اسم الدخول: {login}
+
+Dear {name},
+
+You have been added as a user of the Al-Laith Al-Obaidi Automotive Group ERP. To activate your account and set your password, please open the link below (valid once, for seven days):
+{link}
+
+Sign-in: {login}
+
+${SIGNATURE}`,
+  },
+  {
     id: 'meeting_invite',
     label: 'دعوة اجتماع · Meeting invitation',
     subject: 'دعوة لحضور اجتماع: {title} | Meeting invitation: {title}',

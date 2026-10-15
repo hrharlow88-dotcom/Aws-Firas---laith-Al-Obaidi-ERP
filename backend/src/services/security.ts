@@ -123,6 +123,10 @@ export async function runSecurityGuard(now = new Date()): Promise<number> {
     { now: now.toISOString(), limit: rules.failedLoginAlertThreshold },
   );
   for (const item of guessing) {
+    if (rules.autoBlockMinutes > 0) {
+      const { blockIp } = await import('./firewall');
+      await blockIp(item.ip, `حظر تلقائي: ${item.failures} محاولة دخول خاطئة خلال 15 دقيقة`, rules.autoBlockMinutes, null, true);
+    }
     if (await raiseAlert({
       severity: Number(item.accounts) > 2 ? 'critical' : 'high', kind: 'brute_force',
       title: `محاولات دخول خاطئة متكررة من العنوان ${item.ip}`, ip: item.ip,

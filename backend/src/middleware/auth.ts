@@ -32,6 +32,10 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         res.status(401).json({ message: 'الحساب غير نشط أو غير موجود.' });
         return;
       }
+      if (user.isDemo && user.demoExpiresAt && user.demoExpiresAt < new Date()) {
+        res.status(401).json({ message: 'انتهت صلاحية الحساب التجريبي.' });
+        return;
+      }
       // Idle sign-out: a session with no activity for the owner's chosen minutes ends.
       // Background polling (notification counts) does not count as activity.
       const now = Date.now();
@@ -51,6 +55,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         role: user.role,
         branchId: user.branchId,
         employeeId: user.employeeId,
+        isDemo: user.isDemo,
       };
       next();
     }).catch(next);

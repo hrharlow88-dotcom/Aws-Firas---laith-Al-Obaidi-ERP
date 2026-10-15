@@ -73,12 +73,16 @@ export interface SecuritySettings {
   workdayEnd: string;
   failedLoginAlertThreshold: number;
   exportAlertThreshold: number;
+  autoBlockMinutes?: number;
+  wafEnabled?: boolean;
+  requestsPerMinute?: number;
 }
 
 export interface InterfaceSettings {
   hiddenApps: string[];
   brands: Array<{ id: string; name: string; logoKey: string | null }>;
   moduleManagers: Record<string, string[]>;
+  texts?: Record<string, { ar: string; en?: string }>;
 }
 
 export interface SystemSettings {

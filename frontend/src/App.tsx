@@ -25,7 +25,7 @@ import { LeavePage } from './LeavePage';
 import { api as request } from './lib/api';
 import { buildSession, SessionProvider, useLoad, useSession } from './lib/session';
 import { navigate, useRoute } from './lib/router';
-import { AppearanceControls, Bi, BrandStrip, DeveloperCredit, SYSTEM_NAME } from './components/Brand';
+import { AppearanceControls, Bi, BrandStrip, CompanyStrip, DeveloperCredit, SYSTEM_NAME, usePublicBranding } from './components/Brand';
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
 import { MySignature } from './components/Signature';
 import { PortalAccountsPage, RequestsPage } from './pages/RequestsPage';
@@ -41,7 +41,8 @@ import { PayrollPage, PayslipPage } from './pages/PayrollPage';
 import { AuditPage, FinancePage, IntegrationsPage } from './pages/FinancePage';
 import { EmployeeCardPage, VerifyCardPage } from './pages/CardPages';
 import { RUN_STATUS } from './lib/format';
-import { APPS, appForPage, en, hiddenFor, visibleMenus } from './lib/apps';
+import { APPS, appForPage, arLabel, en, hiddenFor, visibleMenus } from './lib/apps';
+import { setTextOverrides, tAr, tEn } from './lib/texts';
 import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
@@ -56,13 +57,15 @@ import { AnnouncementGate, IdleGuard, InstallAppButton, NotificationBell, report
 import { AnnouncementsPage, ApprovalsPage, CalendarPage, MessagesPage, NoticeBoardPage } from './pages/WorkplacePages';
 import { ArchivePage, FormerEmployeesPage, PayrollArchivePage } from './pages/ArchivePages';
 import { ActivityPage, GuardPage, OwnerPage, RecycleBinPage } from './pages/OwnerPages';
+import { ChatButton, ChatPage } from './pages/ChatPage';
+import { CompaniesPage } from './pages/CompaniesPage';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
   | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings'
   | 'approvals' | 'calendar' | 'notices' | 'announcements' | 'messages' | 'archive' | 'former-employees' | 'payroll-archive'
-  | 'activity' | 'guard' | 'owner' | 'recycle-bin';
+  | 'activity' | 'guard' | 'owner' | 'recycle-bin' | 'chat' | 'companies';
 
 interface User {
   id: string;
@@ -285,7 +288,9 @@ function Workspace() {
     let current = true;
     api<ApiResult<SystemSettings>>('/settings', token)
       .then((result) => {
-        if (current) setSystemSettings(result.data);
+        if (!current) return;
+        setTextOverrides(result.data.ui?.texts);
+        setSystemSettings(result.data);
       })
       .catch((cause: unknown) => {
         if (!current) return;
@@ -439,13 +444,14 @@ function Workspace() {
       <header className="o-navbar no-print">
         <button className={`o-apps-button ${page === 'home' ? 'is-home' : ''}`} onClick={() => go('home')} title="كل التطبيقات" aria-label="كل التطبيقات"><LayoutGrid size={20} /></button>
         {currentApp
-          ? <button className="o-app-name" onClick={() => menus[0] && navigate(menus[0].page)}><Bi ar={currentApp.label} en={en(currentApp.label)} /></button>
+          ? <button className="o-app-name" onClick={() => menus[0] && navigate(menus[0].page)}><Bi ar={arLabel(currentApp.label)} en={en(currentApp.label)} /></button>
           : <span className="o-app-name o-brand-name"><BrandMark size={24} /><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} /></span>}
         {menus.length > 1 && <nav className="o-menus" aria-label="قوائم التطبيق">
-          {menus.map((menu) => <button key={menu.page} className={menuActive(menu.page, page, currentApp) ? 'is-active' : ''} aria-current={menuActive(menu.page, page, currentApp) ? 'page' : undefined} onClick={() => navigate(menu.page)}><Bi ar={menu.label} en={en(menu.label)} block /></button>)}
+          {menus.map((menu) => <button key={menu.page} className={menuActive(menu.page, page, currentApp) ? 'is-active' : ''} aria-current={menuActive(menu.page, page, currentApp) ? 'page' : undefined} onClick={() => navigate(menu.page)}><Bi ar={arLabel(menu.label)} en={en(menu.label)} block /></button>)}
         </nav>}
         <div className="o-navbar-end">
           <span className="o-date"><Clock3 size={14} />{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span>
+          <ChatButton />
           <NotificationBell />
           <details className="o-user">
             <summary><span className="avatar avatar-small">{user.name.slice(0, 1)}</span><span className="o-user-name">{user.name}</span><ChevronDown size={14} /></summary>
@@ -460,6 +466,7 @@ function Workspace() {
         </div>
       </header>
 
+      {(user as User & { isDemo?: boolean }).isDemo && <div className="demo-ribbon demo-ribbon-shell">نسخة عرض تجريبية — البيانات وهمية · Demo copy — fictional data</div>}
       <AnnouncementGate />
       <IdleGuard minutes={systemSettings?.security?.idleMinutes ?? 15} />
       <VisitTracker page={page} params={route.params} module={currentApp?.id} />
@@ -559,6 +566,8 @@ function Workspace() {
           {page === 'guard' && isAdmin && <GuardPage />}
           {page === 'owner' && isAdmin && <OwnerPage />}
           {page === 'recycle-bin' && isAdmin && <RecycleBinPage />}
+          {page === 'chat' && <ChatPage key="chat" channelId={route.params[0]} />}
+          {page === 'companies' && <CompaniesPage />}
           </>}
 
           <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /></span><DeveloperCredit /></footer>
@@ -572,7 +581,7 @@ function Workspace() {
 const KNOWN_PAGES: string[] = [
   'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts', 'discipline', 'tickets', 'my-tickets', 'recruitment',
   'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
-  'approvals', 'calendar', 'notices', 'announcements', 'messages', 'archive', 'former-employees', 'payroll-archive', 'activity', 'guard', 'owner', 'recycle-bin',
+  'approvals', 'calendar', 'notices', 'announcements', 'messages', 'archive', 'former-employees', 'payroll-archive', 'activity', 'guard', 'owner', 'recycle-bin', 'chat', 'companies',
 ];
 
 function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {
@@ -593,7 +602,7 @@ function Breadcrumbs({ page, app, menus, hasParams }: { page: string; app: AppDe
         {trail.map((crumb, index) => {
           const last = index === trail.length - 1 && !(index === 0 && linkBase);
           return <li key={`${crumb.label}-${index}`}>
-            {!last && crumb.href ? <a href={crumb.href}><Bi ar={crumb.label} en={en(crumb.label)} /></a> : <span aria-current={last ? 'page' : undefined}><Bi ar={crumb.label} en={en(crumb.label)} /></span>}
+            {!last && crumb.href ? <a href={crumb.href}><Bi ar={arLabel(crumb.label)} en={en(crumb.label)} /></a> : <span aria-current={last ? 'page' : undefined}><Bi ar={arLabel(crumb.label)} en={en(crumb.label)} /></span>}
           </li>;
         })}
       </ol></nav>
@@ -613,7 +622,7 @@ function AppLauncher({ companyName, userName, can, isAdmin, selfOnly, hiddenApps
   const apps = APPS.filter((app) => !(selfOnly && app.staffOnly))
     .filter((app) => !hiddenFor(app, hiddenApps, isAdmin))
     .filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
-    .filter((app) => !query.trim() || `${app.label} ${app.description} ${en(app.label)}`.toLowerCase().includes(query.trim().toLowerCase()));
+    .filter((app) => !query.trim() || `${arLabel(app.label)} ${app.label} ${arLabel(app.description)} ${en(app.label)}`.toLowerCase().includes(query.trim().toLowerCase()));
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
   const open = (app: AppDefinition) => {
     if (app.href) window.open(app.href, '_blank', 'noopener');
@@ -633,8 +642,8 @@ function AppLauncher({ companyName, userName, can, isAdmin, selfOnly, hiddenApps
           const Icon = app.icon;
           return <button key={app.id} className="o-app-tile" onClick={() => open(app)} onKeyDown={(event) => { if (event.key === 'Enter') open(app); }}>
             <span className="o-app-icon" style={{ background: `linear-gradient(145deg, ${app.colors[0]}, ${app.colors[1]})` }}><Icon size={38} strokeWidth={1.6} /></span>
-            <strong><Bi ar={app.label} en={en(app.label)} block /></strong>
-            <small>{app.href ? 'يفتح في نافذة جديدة · Opens in a new tab' : app.description}</small>
+            <strong><Bi ar={arLabel(app.label)} en={en(app.label)} block /></strong>
+            <small>{app.href ? 'يفتح في نافذة جديدة · Opens in a new tab' : arLabel(app.description)}</small>
           </button>;
         })}
         {!apps.length && <p className="o-home-empty">لا يوجد تطبيق بهذا الاسم.</p>}
@@ -696,24 +705,28 @@ function SetPasswordPage({ token }: { token: string }) {
 }
 
 function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; busy: boolean; error: string; companyName?: string }) {
+  const branding = usePublicBranding();
   return (
     <main className="login-layout">
       <section className="login-story">
         <div className="login-brand"><BrandMark size={58} /><img className="login-wordmark" src="/brand/wordmark-white.png" alt={companyName || 'شركة الليث العبيدي'} /></div>
-        <div className="login-message"><span className="gold-rule" /><h1>{SYSTEM_NAME.ar}</h1><p className="login-en" dir="ltr">{SYSTEM_NAME.en}</p><p>الموظفون والحضور والرواتب والتوظيف والمالية في منصة واحدة، مرتبطة بـ SAP Business One.</p></div>
-        <div className="login-bottom"><BrandStrip tone="light" /><DeveloperCredit /></div>
+        <div className="login-message"><span className="gold-rule" /><h1>{SYSTEM_NAME.ar}</h1><p className="login-en" dir="ltr">{SYSTEM_NAME.en}</p>
+          <p>{tAr('login.tagline', 'الموظفون والحضور والرواتب والتوظيف والمالية في منصة واحدة، مرتبطة بـ SAP Business One.')}</p>
+          <p className="login-en" dir="ltr">{tEn('login.tagline', 'People, attendance, payroll, recruitment and finance on one platform, linked to SAP Business One.')}</p></div>
+        <div className="login-bottom"><CompanyStrip tone="light" /><BrandStrip tone="light" /><DeveloperCredit /></div>
       </section>
       <section className="login-panel">
         <form className="login-form" onSubmit={onSubmit}>
           <span className="form-symbol"><ShieldCheck size={22} /></span>
-          <h2>تسجيل الدخول</h2>
-          <p>أدخل بيانات حسابك للوصول إلى مساحة العمل.</p>
+          {branding.demo && <div className="demo-ribbon">نسخة عرض تجريبية ببيانات وهمية · Demo copy with fictional data</div>}
+          <h2>{tAr('login.heading', 'تسجيل الدخول')} <small className="login-en" dir="ltr">{tEn('login.heading', 'Sign in')}</small></h2>
+          <p>{tAr('login.subtitle', 'أدخل بيانات حسابك للوصول إلى مساحة العمل.')}</p>
           {error && <div className="notice notice-error" role="alert"><CircleHelp size={17} /><span>{error}</span></div>}
           <label className="field"><span>البريد الإلكتروني أو الرقم الوظيفي · E-mail or employee ID</span><input name="email" type="text" autoComplete="username" required placeholder="name@company.com · 10123" dir="ltr" /></label>
           <label className="field"><span>كلمة المرور · Password</span><input name="password" type="password" autoComplete="current-password" required minLength={12} dir="ltr" /></label>
           <DeveloperCredit compact />
-          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : 'دخول آمن · Secure sign-in'}<ArrowLeft size={17} /></button>
-          <div className="login-security"><ShieldCheck size={15} /><span>الجلسة تنتهي تلقائياً عند عدم النشاط، ويُسجَّل وقت الدخول ومكانه لحمايتك.</span></div>
+          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : `${tAr('login.button', 'دخول آمن')} · ${tEn('login.button', 'Secure sign-in')}`}<ArrowLeft size={17} /></button>
+          <div className="login-security"><ShieldCheck size={15} /><span>{tAr('login.security', 'الجلسة تنتهي تلقائياً عند عدم النشاط، ويُسجَّل وقت الدخول ومكانه لحمايتك.')}</span></div>
         </form>
       </section>
     </main>

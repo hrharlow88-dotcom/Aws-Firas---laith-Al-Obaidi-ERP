@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
-import { KeyRound, LockOpen, Pencil, Plus, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { KeyRound, LockOpen, Pencil, Plus, Send, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { InviteDialog, InviteTarget } from '../components/InviteDialog';
 import { Dialog, Empty, Loading, Tone } from '../components/ui';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
 import { formatDateTime } from '../lib/format';
@@ -29,6 +30,13 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
   const [role, setRole] = useState<UserRole>('employee');
   const [employee, setEmployee] = useState<PickedEmployee | null>(null);
   const [busy, setBusy] = useState(false);
+  const [invite, setInvite] = useState<InviteTarget | null>(null);
+  async function sendInvite(account: Account) {
+    try {
+      const result = await session.call<{ data: { path: string; login: string; name: string } }>(`/users/${account.id}/invite`, { method: 'POST' });
+      setInvite({ name: result.data.name, login: result.data.login, url: `${window.location.origin}${result.data.path}`, kind: account.role === 'employee' ? 'portal' : 'staff', email: account.email });
+    } catch (error) { session.fail(error, 'تعذر إنشاء الدعوة.'); }
+  }
   const current = editing && editing !== 'new' ? editing : null;
   const isAdmin = session.user.role === 'super_admin';
   const grantable = (Object.keys(roleNames) as UserRole[]).filter((item) => isAdmin || item !== 'super_admin');
@@ -104,12 +112,14 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
               <td className="row-actions">
                 {locked && <button className="text-button" onClick={() => void patch(account, { unlock: true }, 'فُتح الحساب.')}><LockOpen size={14} />فتح القفل</button>}
                 <button className="icon-link" aria-label="تعديل" onClick={() => open(account)}><Pencil size={14} /></button>
+                {account.isActive && <button className="text-button" title="دعوة بواتساب أو رسالة نصية أو بريد" onClick={() => void sendInvite(account)}><Send size={14} />دعوة</button>}
                 {account.id !== session.user.id && <button className="text-button" onClick={() => void patch(account, { isActive: !account.isActive }, account.isActive ? 'عُطّل الحساب.' : 'فُعّل الحساب.')}>{account.isActive ? 'تعطيل' : 'تفعيل'}</button>}
               </td>
             </tr>;
           })}</tbody>
         </table></div> : <Empty icon={<UserRoundCog size={22} />} title="لا توجد حسابات" text="أضف حساباً لكل مستخدم بدل مشاركة حساب المدير." />}
       </section>
+      <InviteDialog target={invite} onClose={() => setInvite(null)} />
 
       <Dialog open={editing !== null} title={current ? 'تعديل الحساب' : 'حساب جديد'} subtitle={current?.email} onClose={() => setEditing(null)}>
         <form onSubmit={save} key={current?.id ?? 'new'}>

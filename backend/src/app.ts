@@ -5,6 +5,7 @@ import routes from './routes';
 import { asyncRoute, HttpError } from './utils/http';
 import DevicePushController from './controllers/DevicePushController';
 import { trackActivity } from './services/activity';
+import { firewall } from './services/firewall';
 
 export function createApp() {
   const app = express();
@@ -30,6 +31,8 @@ export function createApp() {
 
   // The job description export from the performance portal is the largest body (~0.5 MB for 60 jobs).
   app.use(express.json({ limit: '5mb' }));
+  // Application firewall (blocked addresses, attack patterns, rate per address).
+  app.use('/api', firewall);
   // Who did what and when, for every signed-in request.
   app.use('/api', trackActivity);
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));

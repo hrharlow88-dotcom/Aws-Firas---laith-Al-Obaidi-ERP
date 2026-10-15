@@ -18,9 +18,10 @@ interface BranchAttributes {
   address: string | null;
   phone: string | null;
   isActive: boolean;
+  companyId: string | null;
 }
 
-type BranchCreationAttributes = Optional<BranchAttributes, 'id' | 'address' | 'phone' | 'isActive'>;
+type BranchCreationAttributes = Optional<BranchAttributes, 'id' | 'address' | 'phone' | 'isActive' | 'companyId'>;
 
 export class Branch extends Model<BranchAttributes, BranchCreationAttributes> implements BranchAttributes {
   declare id: string;
@@ -30,6 +31,7 @@ export class Branch extends Model<BranchAttributes, BranchCreationAttributes> im
   declare address: string | null;
   declare phone: string | null;
   declare isActive: boolean;
+  declare companyId: string | null;
 }
 
 Branch.init(
@@ -41,6 +43,7 @@ Branch.init(
     address: { type: DataTypes.STRING(240), allowNull: true },
     phone: { type: DataTypes.STRING(40), allowNull: true },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true, field: 'is_active' },
+    companyId: { type: DataTypes.UUID, allowNull: true, field: 'company_id' },
   },
   { sequelize, tableName: 'branches', underscored: true },
 );
@@ -59,10 +62,12 @@ interface UserAttributes {
   lockedUntil: Date | null;
   lastLoginAt: Date | null;
   lastSeenAt: Date | null;
+  isDemo: boolean;
+  demoExpiresAt: Date | null;
 }
 
 type UserCreationAttributes = Optional<UserAttributes,
-  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt' | 'lastSeenAt'>;
+  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt' | 'lastSeenAt' | 'isDemo' | 'demoExpiresAt'>;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -78,6 +83,8 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare lockedUntil: Date | null;
   declare lastLoginAt: Date | null;
   declare lastSeenAt: Date | null;
+  declare isDemo: boolean;
+  declare demoExpiresAt: Date | null;
 }
 
 User.init(
@@ -95,6 +102,8 @@ User.init(
     lockedUntil: { type: DataTypes.DATE, allowNull: true, field: 'locked_until' },
     lastLoginAt: { type: DataTypes.DATE, allowNull: true, field: 'last_login_at' },
     lastSeenAt: { type: DataTypes.DATE, allowNull: true, field: 'last_seen_at' },
+    isDemo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_demo' },
+    demoExpiresAt: { type: DataTypes.DATE, allowNull: true, field: 'demo_expires_at' },
   },
   { sequelize, tableName: 'users', underscored: true },
 );

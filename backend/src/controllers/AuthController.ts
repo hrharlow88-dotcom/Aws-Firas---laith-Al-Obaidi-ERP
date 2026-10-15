@@ -33,7 +33,8 @@ export class AuthController {
     // Compare against a dummy hash for unknown e-mails so timing does not reveal which accounts exist.
     const passwordOk = Buffer.byteLength(password, 'utf8') <= 72 &&
       await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH) && Boolean(user);
-    if (!user || !passwordOk || !user.isActive) {
+    const demoExpired = Boolean(user?.isDemo && user.demoExpiresAt && user.demoExpiresAt < new Date());
+    if (!user || !passwordOk || !user.isActive || demoExpired) {
       await recordSecurityEvent('login_failed', req, { known: Boolean(user) }, user?.id ?? null);
       if (user && !passwordOk) {
         // Count failures per account; the password itself is never logged.
@@ -89,7 +90,9 @@ export class AuthController {
         role: user.role,
         branchId: user.branchId,
         employeeId: user.employeeId,
+        isDemo: user.isDemo,
       },
+      demo: process.env.DEMO_MODE === 'true',
     });
   }
 
@@ -102,6 +105,10 @@ export class AuthController {
       return;
     }
     const user = req.user ? await User.findByPk(req.user.id) : null;
+    if (user?.isDemo) {
+      res.status(403).json({ message: 'كلمة مرور الحساب التجريبي يغيّرها مالك النظام فقط.' });
+      return;
+    }
     if (!user || !(await bcrypt.compare(currentPassword, user.passwordHash))) {
       res.status(400).json({ message: 'كلمة المرور الحالية غير صحيحة.' });
       return;

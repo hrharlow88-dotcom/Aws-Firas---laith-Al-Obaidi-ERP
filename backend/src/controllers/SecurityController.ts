@@ -5,6 +5,8 @@ import { badRequest, body, notFound, optionalText } from '../utils/http';
 import { isDateOnly, isUuid } from '../utils/validation';
 import { getSettings } from '../services/settings';
 import { runSecurityGuard, verifyAuditChain } from '../services/security';
+import { fixFinding, scanSystem } from '../services/scanner';
+import { blockIp, refreshBlocks } from '../services/firewall';
 
 /** The security guard's console. Owner (super_admin) only. */
 export class SecurityController {
@@ -109,6 +111,84 @@ export class SecurityController {
   /** Runs the guard now instead of waiting for its next round. */
   static async scan(_req: Request, res: Response): Promise<void> {
     res.json({ data: { raised: await runSecurityGuard() } });
+  }
+
+  /**
+   * The radar: who is in the system right now (by name, role, device and
+   * place), and which addresses are probing it.
+   */
+  static async radar(_req: Request, res: Response): Promise<void> {
+    const settings = await getSettings();
+    const [people, threats, blocks] = await Promise.all([
+      select(
+        `SELECT u.id, u.name, u.role::text AS role, u.is_demo AS "isDemo", u.last_seen_at AS "lastSeenAt",
+                l.ip, l.user_agent AS "userAgent", l.latitude::float AS latitude, l.longitude::float AS longitude, l.channel,
+                (SELECT a.module FROM activity_log a WHERE a.user_id = u.id ORDER BY a.at DESC LIMIT 1) AS module,
+                (SELECT a.path FROM activity_log a WHERE a.user_id = u.id ORDER BY a.at DESC LIMIT 1) AS path
+         FROM users u
+         LEFT JOIN LATERAL (SELECT * FROM login_events x WHERE x.user_id = u.id ORDER BY x.at DESC LIMIT 1) l ON true
+         WHERE u.is_active AND u.last_seen_at > now() - make_interval(mins => :idle)
+         ORDER BY u.last_seen_at DESC LIMIT 200`,
+        { idle: settings.security.idleMinutes },
+      ),
+      select(
+        `SELECT ip, count(*)::int AS hits, max(at) AS "lastAt", array_agg(DISTINCT kind) AS kinds,
+                EXISTS (SELECT 1 FROM ip_blocks b WHERE b.ip = e.ip AND b.lifted_at IS NULL) AS blocked
+         FROM security_events e WHERE at > now() - interval '60 minutes' AND ip IS NOT NULL
+           AND kind IN ('login_failed','forbidden','waf_blocked','rate_limited')
+         GROUP BY ip ORDER BY count(*) DESC LIMIT 50`,
+      ),
+      select('SELECT count(*)::int AS count FROM ip_blocks WHERE lifted_at IS NULL AND (blocked_until IS NULL OR blocked_until > now())'),
+    ]);
+    res.json({ data: { people, threats, blockedCount: (blocks[0] as { count: number })?.count ?? 0, scannedAt: new Date().toISOString() } });
+  }
+
+  static async scanReport(_req: Request, res: Response): Promise<void> {
+    const findings = await scanSystem();
+    const weights = { critical: 30, high: 15, medium: 6, low: 2, ok: 0 } as const;
+    const score = Math.max(0, 100 - findings.reduce((sum, item) => sum + weights[item.severity], 0));
+    res.json({ data: { findings, score } });
+  }
+
+  static async fix(req: Request, res: Response): Promise<void> {
+    const id = String(req.params.findingId || '');
+    if (!/^[a-z_]{2,40}$/.test(id)) throw badRequest('إجراء غير معروف.');
+    let summary: string;
+    try { summary = await fixFinding(id, req.user!.id); } catch { throw badRequest('لا يوجد إصلاح تلقائي لهذه الملاحظة.'); }
+    await recordAudit(req, null, 'security.fix_applied', 'security_finding', null, { id, summary });
+    res.json({ data: { summary } });
+  }
+
+  static async blocks(_req: Request, res: Response): Promise<void> {
+    const rows = await select(
+      `SELECT b.id, b.ip, b.reason, b.automatic, b.blocked_until AS "blockedUntil", b.created_at AS "createdAt", b.hits,
+              b.lifted_at AS "liftedAt", u.name AS "createdByName"
+       FROM ip_blocks b LEFT JOIN users u ON u.id = b.created_by ORDER BY b.lifted_at IS NULL DESC, b.created_at DESC LIMIT 300`,
+    );
+    res.json({ data: rows });
+  }
+
+  static async block(req: Request, res: Response): Promise<void> {
+    const input = body(req);
+    const ip = typeof input.ip === 'string' ? input.ip.trim() : '';
+    if (!/^[0-9a-f:.]{3,64}$/i.test(ip)) throw badRequest('عنوان IP غير صالح.');
+    if (ip === (req.ip || '')) throw badRequest('هذا عنوانك الحالي؛ لا يمكنك حظر نفسك.');
+    const minutes = input.minutes === null || input.minutes === undefined ? null : Number(input.minutes);
+    if (minutes !== null && !(Number.isInteger(minutes) && minutes > 0 && minutes <= 525600)) throw badRequest('مدة غير صالحة.');
+    const reason = optionalText(input, 'reason', 300) || 'حظر يدوي من مالك النظام';
+    await blockIp(ip, reason, minutes, req.user!.id, false);
+    await recordAudit(req, null, 'security.ip_blocked', 'ip_block', null, { ip, minutes, reason });
+    res.json({ data: { ok: true } });
+  }
+
+  static async unblock(req: Request, res: Response): Promise<void> {
+    const rows = await execute<{ ip: string }>(
+      'UPDATE ip_blocks SET lifted_at = now(), lifted_by = :userId WHERE id = :id AND lifted_at IS NULL RETURNING ip', { id: req.params.id, userId: req.user!.id },
+    );
+    if (!rows.length) throw notFound('الحظر غير موجود.');
+    await refreshBlocks();
+    await recordAudit(req, null, 'security.ip_unblocked', 'ip_block', req.params.id, { ip: rows[0].ip });
+    res.json({ data: { ok: true } });
   }
 
   /** Ends every session of an account at once (its tokens stop working). */
