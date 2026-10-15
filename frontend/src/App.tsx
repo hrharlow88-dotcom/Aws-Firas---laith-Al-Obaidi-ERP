@@ -25,6 +25,8 @@ import { LeavePage } from './LeavePage';
 import { api as request } from './lib/api';
 import { buildSession, SessionProvider, useLoad, useSession } from './lib/session';
 import { navigate, useRoute } from './lib/router';
+import { AppearanceControls, Bi, BrandStrip, DeveloperCredit, SYSTEM_NAME } from './components/Brand';
+import { ViewSwitch, useViewMode } from './components/ViewSwitch';
 import { DOCUMENT_TYPES, EMPLOYMENT_TYPES, formatMoney, monthLabel } from './lib/format';
 import { OrgPage } from './pages/OrgPage';
 import type { Department, JobTitle } from './pages/OrgPage';
@@ -34,7 +36,7 @@ import { PayrollPage, PayslipPage } from './pages/PayrollPage';
 import { AuditPage, FinancePage, IntegrationsPage } from './pages/FinancePage';
 import { EmployeeCardPage, VerifyCardPage } from './pages/CardPages';
 import { RUN_STATUS } from './lib/format';
-import { APPS, appForPage, visibleMenus } from './lib/apps';
+import { APPS, appForPage, en, visibleMenus } from './lib/apps';
 import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
@@ -101,7 +103,7 @@ interface ApiResult<T> {
 }
 
 const roleNames: Record<UserRole, string> = {
-  super_admin: 'مدير النظام',
+  super_admin: 'مالك النظام ومديره',
   hr_manager: 'مدير الموارد البشرية',
   hr_staff: 'موظف موارد بشرية',
   finance: 'المالية',
@@ -423,17 +425,18 @@ function Workspace() {
       <header className="o-navbar no-print">
         <button className={`o-apps-button ${page === 'home' ? 'is-home' : ''}`} onClick={() => go('home')} title="كل التطبيقات" aria-label="كل التطبيقات"><LayoutGrid size={20} /></button>
         {currentApp
-          ? <button className="o-app-name" onClick={() => menus[0] && navigate(menus[0].page)}>{currentApp.label}</button>
-          : <span className="o-app-name o-brand-name"><BrandMark size={24} />{systemSettings?.company.displayName || 'شركة الليث العبيدي'}</span>}
+          ? <button className="o-app-name" onClick={() => menus[0] && navigate(menus[0].page)}><Bi ar={currentApp.label} en={en(currentApp.label)} /></button>
+          : <span className="o-app-name o-brand-name"><BrandMark size={24} /><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} /></span>}
         {menus.length > 1 && <nav className="o-menus" aria-label="قوائم التطبيق">
-          {menus.map((menu) => <button key={menu.page} className={menuActive(menu.page, page, currentApp) ? 'is-active' : ''} aria-current={menuActive(menu.page, page, currentApp) ? 'page' : undefined} onClick={() => navigate(menu.page)}>{menu.label}</button>)}
+          {menus.map((menu) => <button key={menu.page} className={menuActive(menu.page, page, currentApp) ? 'is-active' : ''} aria-current={menuActive(menu.page, page, currentApp) ? 'page' : undefined} onClick={() => navigate(menu.page)}><Bi ar={menu.label} en={en(menu.label)} block /></button>)}
         </nav>}
         <div className="o-navbar-end">
           <span className="o-date"><Clock3 size={14} />{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span>
           <details className="o-user">
             <summary><span className="avatar avatar-small">{user.name.slice(0, 1)}</span><span className="o-user-name">{user.name}</span><ChevronDown size={14} /></summary>
             <div className="o-user-menu">
-              <div className="o-user-head"><strong>{user.name}</strong><span>{roleLabels[user.role]}</span></div>
+              <div className="o-user-head"><strong>{user.name}</strong><span>{roleLabels[user.role]}{user.role === 'super_admin' ? ' · System Owner & Administrator' : ''}</span></div>
+              <AppearanceControls />
               <button onClick={() => navigate('security')}><KeyRound size={15} />أمان الحساب</button>
               <button onClick={signOut}><LogOut size={15} />تسجيل الخروج</button>
             </div>
@@ -519,7 +522,7 @@ function Workspace() {
           {page === 'security' && <SecurityPage onSubmit={handlePasswordChange} />}
           {page === 'settings' && canManageSettings && systemSettings && <SettingsPage value={systemSettings} busy={savingSettings} onSave={handleSettingsSave} />}
 
-          {page !== 'home' && <footer className="page-footer no-print"><span>{systemSettings?.company.displayName || 'شركة الليث العبيدي'}</span><span>نظام الإدارة الداخلي</span></footer>}
+          <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /></span><DeveloperCredit /></footer>
       </main>
     </div>
     </CrumbProvider>
@@ -550,7 +553,7 @@ function Breadcrumbs({ page, app, menus, hasParams }: { page: string; app: AppDe
         {trail.map((crumb, index) => {
           const last = index === trail.length - 1 && !(index === 0 && linkBase);
           return <li key={`${crumb.label}-${index}`}>
-            {!last && crumb.href ? <a href={crumb.href}>{crumb.label}</a> : <span aria-current={last ? 'page' : undefined}>{crumb.label}</span>}
+            {!last && crumb.href ? <a href={crumb.href}><Bi ar={crumb.label} en={en(crumb.label)} /></a> : <span aria-current={last ? 'page' : undefined}><Bi ar={crumb.label} en={en(crumb.label)} /></span>}
           </li>;
         })}
       </ol></nav>
@@ -564,7 +567,7 @@ function AppLauncher({ companyName, userName, can, isAdmin, selfOnly }: {
   const [query, setQuery] = useState('');
   const apps = APPS.filter((app) => !(selfOnly && app.staffOnly))
     .filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
-    .filter((app) => !query.trim() || `${app.label} ${app.description}`.includes(query.trim()));
+    .filter((app) => !query.trim() || `${app.label} ${app.description} ${en(app.label)}`.toLowerCase().includes(query.trim().toLowerCase()));
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
   const open = (app: AppDefinition) => {
     if (app.href) window.open(app.href, '_blank', 'noopener');
@@ -574,16 +577,18 @@ function AppLauncher({ companyName, userName, can, isAdmin, selfOnly }: {
     <section className="o-home">
       <div className="o-home-head">
         <img className="o-home-mark" src="/brand/shield-256.png" alt="" />
-        <div><h2>{hour < 12 ? 'صباح الخير' : 'مساء الخير'}، {userName.split(' ')[0]}</h2><p>{companyName || 'شركة الليث العبيدي'}</p></div>
+        <div><h2>{hour < 12 ? 'صباح الخير' : 'مساء الخير'}، {userName.split(' ')[0]} <span className="o-home-en" dir="ltr">{hour < 12 ? 'Good morning' : 'Good evening'}</span></h2>
+          <p className="o-system-name"><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /></p></div>
       </div>
-      <label className="o-home-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن تطبيق…" aria-label="بحث في التطبيقات" /></label>
+      <BrandStrip />
+      <label className="o-home-search"><Search size={17} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن تطبيق… · Search apps" aria-label="بحث في التطبيقات" /></label>
       <div className="o-app-grid">
         {apps.map((app) => {
           const Icon = app.icon;
           return <button key={app.id} className="o-app-tile" onClick={() => open(app)} onKeyDown={(event) => { if (event.key === 'Enter') open(app); }}>
             <span className="o-app-icon" style={{ background: `linear-gradient(145deg, ${app.colors[0]}, ${app.colors[1]})` }}><Icon size={38} strokeWidth={1.6} /></span>
-            <strong>{app.label}</strong>
-            <small>{app.href ? 'يفتح في نافذة جديدة' : app.description}</small>
+            <strong><Bi ar={app.label} en={en(app.label)} block /></strong>
+            <small>{app.href ? 'يفتح في نافذة جديدة · Opens in a new tab' : app.description}</small>
           </button>;
         })}
         {!apps.length && <p className="o-home-empty">لا يوجد تطبيق بهذا الاسم.</p>}
@@ -622,7 +627,7 @@ function SetPasswordPage({ token }: { token: string }) {
       <section className="login-story">
         <div className="login-brand"><BrandMark size={58} /><img className="login-wordmark" src="/brand/wordmark-white.png" alt="شركة الليث العبيدي" /></div>
         <div className="login-message"><span className="gold-rule" /><h1>كلمة مرورك<br />بيدك وحدك.</h1><p>اختر كلمة مرور تتذكرها. لا تُرسل لأحد ولا يراها أحد غيرك.</p></div>
-        <span className="login-footnote">ROX · DONGFENG · FORTHING</span>
+        <div className="login-bottom"><BrandStrip tone="light" /><DeveloperCredit /></div>
       </section>
       <section className="login-panel">
         {doneEmail ? <div className="login-form">
@@ -649,8 +654,8 @@ function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormE
     <main className="login-layout">
       <section className="login-story">
         <div className="login-brand"><BrandMark size={58} /><img className="login-wordmark" src="/brand/wordmark-white.png" alt={companyName || 'شركة الليث العبيدي'} /></div>
-        <div className="login-message"><span className="gold-rule" /><h1>إدارة موحدة.<br />فروع متصلة.</h1><p>الموظفون والحضور والرواتب والمالية في منصة واحدة، مرتبطة بـ SAP Business One.</p></div>
-        <span className="login-footnote">ROX · DONGFENG · FORTHING</span>
+        <div className="login-message"><span className="gold-rule" /><h1>{SYSTEM_NAME.ar}</h1><p className="login-en" dir="ltr">{SYSTEM_NAME.en}</p><p>الموظفون والحضور والرواتب والتوظيف والمالية في منصة واحدة، مرتبطة بـ SAP Business One.</p></div>
+        <div className="login-bottom"><BrandStrip tone="light" /><DeveloperCredit /></div>
       </section>
       <section className="login-panel">
         <form className="login-form" onSubmit={onSubmit}>
@@ -757,9 +762,15 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
   const activeDepartments = departments.data.filter((item) => item.isActive);
   const activeTitles = titles.data.filter((item) => item.isActive);
   const defaultShift = shifts.data.find((item) => item.isDefault && item.isActive)?.id ?? '';
+  const [view, setView] = useViewMode('employees');
+  const branchName = (employee: Employee) => employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—';
+  const byDepartment = employees.reduce<Record<string, Employee[]>>((groups, employee) => {
+    (groups[employee.department || '—'] ||= []).push(employee);
+    return groups;
+  }, {});
   return (
     <section className="screen">
-      <div className="screen-heading"><div><h2>دليل الموظفين</h2><p>اضغط على أي موظف لفتح ملفه الكامل.</p></div>{canManage && <button className="button button-primary" onClick={onCreate}><Plus size={17} />إضافة موظف</button>}</div>
+      <div className="screen-heading"><div><h2><Bi ar="دليل الموظفين" en="Employee Directory" /></h2><p>اضغط على أي موظف لفتح ملفه الكامل. · Click an employee to open the full file.</p></div>{canManage && <button className="button button-primary" onClick={onCreate}><Plus size={17} />إضافة موظف</button>}</div>
       {showForm && canManage && <form className="panel form-panel" onSubmit={onSubmit} key={`${departments.data.length}-${shifts.data.length}`}>
         <div className="panel-head"><div><h3>موظف جديد</h3><p>البيانات الأساسية. الراتب والمستمسكات تُضاف من ملف الموظف بعد الحفظ.</p></div><button type="button" className="icon-button" aria-label="إغلاق النموذج" onClick={onCreate}><X size={18} /></button></div>
         <div className="form-grid">
@@ -787,10 +798,24 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
         <div className="form-actions"><button className="button button-primary" type="submit"><Check size={16} />حفظ الموظف</button><button className="button button-quiet" type="button" onClick={onCreate}>إلغاء</button></div>
       </form>}
       <section className="panel directory-panel">
-        <div className="filter-bar"><label className="search-field"><Search size={17} /><input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="ابحث بالاسم أو الرقم أو القسم…" aria-label="بحث في الموظفين" /></label><span className="result-count">{total.toLocaleString('ar-IQ-u-nu-latn')} سجل</span></div>
-        {employees.length ? <><div className="table-scroll"><table className="directory-table"><thead><tr><th>الموظف</th><th>القسم والمنصب</th><th>الفرع</th><th>تاريخ التعيين</th><th>الحالة</th>{customFields.map((field) => <th key={field.id}>{field.label}</th>)}{canUpdate && <th>إجراء</th>}</tr></thead><tbody>
+        <div className="filter-bar"><label className="search-field"><Search size={17} /><input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="ابحث بالاسم أو الرقم أو القسم…" aria-label="بحث في الموظفين" /></label><span className="result-count">{total.toLocaleString('ar-IQ-u-nu-latn')} سجل · records</span><ViewSwitch value={view} onChange={setView} /></div>
+        {employees.length ? <>{view === 'kanban' ? <div className="kanban-board">
+          {Object.entries(byDepartment).map(([department, people]) => <div className="kanban-column" key={department}>
+            <div className="kanban-column-head">{department}<span>{people.length}</span></div>
+            {people.map((employee) => <button key={employee.id} className="kanban-card" onClick={() => navigate('employees', employee.id)}>
+              <strong>{employee.fullName}</strong><small>{employee.position}</small>
+              <small>{employee.employeeNo} · {branchName(employee)}</small>
+              <span className={`state-pill state-${employee.employmentStatus}`}><i />{statusNames[employee.employmentStatus]}</span>
+            </button>)}
+          </div>)}
+        </div> : view === 'grid' ? <div className="card-grid">
+          {employees.map((employee) => <button key={employee.id} className="person-card" onClick={() => navigate('employees', employee.id)}>
+            <span className="person-mark">{employee.fullName.slice(0, 1)}</span>
+            <span><strong>{employee.fullName}</strong><small>{employee.position}</small><small>{employee.department} · {branchName(employee)}</small><small dir="ltr">{employee.employeeNo}</small></span>
+          </button>)}
+        </div> : <div className="table-scroll"><table className="directory-table"><thead><tr><th>الموظف</th><th>القسم والمنصب</th><th>الفرع</th><th>تاريخ التعيين</th><th>الحالة</th>{customFields.map((field) => <th key={field.id}>{field.label}</th>)}{canUpdate && <th>إجراء</th>}</tr></thead><tbody>
           {employees.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><span className="person-mark">{employee.fullName.slice(0, 1)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}{employee.email ? ` · ${employee.email}` : ''}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`state-pill state-${employee.employmentStatus}`}><i />{statusNames[employee.employmentStatus]}</span></td>{customFields.map((field) => <td key={field.id}>{employee.customFields?.[field.key] ?? '—'}</td>)}{canUpdate && <td><button className="table-action" onClick={(event) => { event.stopPropagation(); onToggle(employee); }}>{employee.employmentStatus === 'active' ? 'تعطيل' : 'تفعيل'}</button></td>}</tr>)}
-        </tbody></table></div><div className="pagination"><span>عرض {Math.min((page - 1) * 25 + 1, total).toLocaleString('ar-IQ-u-nu-latn')}–{Math.min(page * 25, total).toLocaleString('ar-IQ-u-nu-latn')} من {total.toLocaleString('ar-IQ-u-nu-latn')}</span><div><button className="button button-quiet" disabled={page <= 1 || busy} onClick={() => onPage(page - 1)}>السابق</button><span>{page.toLocaleString('ar-IQ-u-nu-latn')} / {pageCount.toLocaleString('ar-IQ-u-nu-latn')}</span><button className="button button-quiet" disabled={page >= pageCount || busy} onClick={() => onPage(page + 1)}>التالي</button></div></div></> : <EmptyState icon={<Users size={22} />} title={search ? 'لا توجد نتائج مطابقة' : 'دليل الموظفين فارغ'} description={search ? 'جرّب البحث برقم الموظف أو القسم.' : 'ابدأ بإضافة أول سجل موظف واربطه بفرعه.'} action={!search && canManage ? 'إضافة موظف' : undefined} onClick={onCreate} />}
+        </tbody></table></div>}<div className="pagination"><span>عرض {Math.min((page - 1) * 25 + 1, total).toLocaleString('ar-IQ-u-nu-latn')}–{Math.min(page * 25, total).toLocaleString('ar-IQ-u-nu-latn')} من {total.toLocaleString('ar-IQ-u-nu-latn')}</span><div><button className="button button-quiet" disabled={page <= 1 || busy} onClick={() => onPage(page - 1)}>السابق</button><span>{page.toLocaleString('ar-IQ-u-nu-latn')} / {pageCount.toLocaleString('ar-IQ-u-nu-latn')}</span><button className="button button-quiet" disabled={page >= pageCount || busy} onClick={() => onPage(page + 1)}>التالي</button></div></div></> : <EmptyState icon={<Users size={22} />} title={search ? 'لا توجد نتائج مطابقة' : 'دليل الموظفين فارغ'} description={search ? 'جرّب البحث برقم الموظف أو القسم.' : 'ابدأ بإضافة أول سجل موظف واربطه بفرعه.'} action={!search && canManage ? 'إضافة موظف' : undefined} onClick={onCreate} />}
         {busy && <div className="table-loading">جارٍ تحديث السجلات…</div>}
       </section>
     </section>

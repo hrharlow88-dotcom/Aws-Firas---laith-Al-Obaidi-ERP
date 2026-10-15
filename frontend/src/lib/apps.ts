@@ -116,3 +116,27 @@ export function appForPage(page: string): AppDefinition | undefined {
 export function visibleMenus(app: AppDefinition, can: (permission: Permission) => boolean, isAdmin: boolean): AppMenu[] {
   return app.menus.filter((menu) => (menu.adminOnly ? isAdmin : !menu.permission || can(menu.permission)));
 }
+
+/** English for every app, menu and description label, shown beside the Arabic. */
+export const EN: Record<string, string> = {
+  'خدمتي': 'My Portal', 'ملفي وقسائمي وإجازاتي': 'My file, payslips and leave', 'ملفي': 'My Dashboard',
+  'لوحة المعلومات': 'Dashboard', 'ملخص اليوم': "Today's summary", 'نظرة عامة': 'Overview',
+  'الموظفون': 'Employees', 'الملفات والبطاقات والعقود': 'Files, cards and contracts', 'الأقسام والهيكل': 'Departments & Structure',
+  'الفروع': 'Branches', 'قوالب العقود': 'Contract Templates',
+  'الحضور': 'Attendance', 'البصمة والدوامات': 'Fingerprint and shifts', 'الحضور والانصراف': 'Check-in / Check-out',
+  'الإجازات': 'Time Off', 'الطلبات والأرصدة': 'Requests and balances', 'الإجازات والأرصدة': 'Requests & Balances', 'الاستحقاق الشهري': 'Monthly Accrual',
+  'الرواتب': 'Payroll', 'المسيرات والسلف': 'Payroll runs and loans', 'المسيرات': 'Payroll Runs', 'أيام الاستحقاق': 'Payable Days', 'السلف': 'Loans',
+  'أرشيف المسيرات': 'Payroll Archive', 'الاعتمادات': 'Approvals',
+  'الأداء': 'Performance', 'الأوصاف الوظيفية ومؤشرات الأداء': 'Job descriptions and KPIs', 'الأوصاف ومؤشرات الأداء': 'JDs & KPIs',
+  'المالية و SAP': 'Finance & SAP', 'القيود والترحيل': 'Journal entries and posting', 'القيود والربط': 'Entries & Integration',
+  'التدقيق': 'Audit', 'سجل كل العمليات': 'Every action, recorded', 'سجل التدقيق': 'Audit Log',
+  'الربط': 'Integrations', 'مفاتيح الأنظمة الأخرى': 'Keys for other systems', 'مفاتيح الربط': 'API Keys',
+  'بوابة التقييم': 'Evaluation Portal', 'تقييم الأداء في نظام الأوصاف': 'Performance reviews in the JD system',
+  'الإعدادات': 'Settings', 'المستخدمون والصلاحيات': 'Users and permissions', 'إعدادات النظام': 'System Settings',
+  'استيراد بيانات الشركة': 'Company Data Import', 'المستخدمون': 'Users', 'أمان الحساب': 'Account Security',
+  'سجل الموارد البشرية': 'HR Register', 'الإنذارات والعقوبات والمخالفات': 'Warnings, penalties and violations', 'السجل': 'Register',
+  'التذاكر': 'Helpdesk', 'تقنية المعلومات والصيانة والنقل': 'IT, maintenance and transport', 'كل التذاكر': 'All Tickets', 'تذاكري': 'My Tickets',
+  'التوظيف': 'Recruitment', 'الشواغر والمتقدمون': 'Job positions and applicants', 'المتقدمون': 'Applicants', 'الشواغر': 'Job Positions',
+  'الطلبات': 'Requests', 'طلبات الموظفين': 'Employee Requests',
+};
+export const en = (label: string): string => EN[label] ?? '';
