@@ -20,6 +20,13 @@ if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; t
   curl -fsSL https://get.docker.com | sh
 fi
 
+# Small servers (e.g. a 4 GB VPS): a 2 GB swap file keeps the image builds from running out of memory.
+if [ "$(id -u)" -eq 0 ] && [ -z "$(swapon --noheadings 2>/dev/null)" ] && [ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 6000000 ]; then
+  echo "Adding a 2 GB swap file…"
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null && swapon /swapfile
+  grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
 # Firewall: SSH, web, and the plain-HTTP port for fingerprint devices.
 if command -v ufw >/dev/null && [ "$(id -u)" -eq 0 ]; then
   ufw allow OpenSSH >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null; ufw allow "${DEVICE_PORT:-8081}"/tcp >/dev/null
