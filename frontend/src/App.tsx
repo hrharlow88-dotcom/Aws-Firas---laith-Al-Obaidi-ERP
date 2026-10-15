@@ -28,6 +28,7 @@ import { navigate, useRoute } from './lib/router';
 import { AppearanceControls, Bi, BrandStrip, DeveloperCredit, SYSTEM_NAME } from './components/Brand';
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
 import { MySignature } from './components/Signature';
+import { PortalAccountsPage, RequestsPage } from './pages/RequestsPage';
 import { DOCUMENT_TYPES, EMPLOYMENT_TYPES, formatMoney, monthLabel } from './lib/format';
 import { OrgPage } from './pages/OrgPage';
 import type { Department, JobTitle } from './pages/OrgPage';
@@ -51,7 +52,7 @@ import { StatusTag } from './components/ui';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
-  | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
+  | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
 
 interface User {
@@ -514,6 +515,8 @@ function Workspace() {
           {page === 'loans' && can('payroll.view') && <LoansPage />}
           {page === 'leave-accrual' && can('leaves.manage_balances') && <LeaveAccrualPage />}
           {page === 'company-import' && canManageSettings && <CompanyImportPage />}
+          {page === 'requests' && (can('requests.manage') || can('payroll.disburse')) && <RequestsPage />}
+          {page === 'portal-accounts' && canManageAccess && <PortalAccountsPage />}
           {page === 'contract-templates' && can('employees.manage_profile') && <ContractTemplatesPage />}
           {page === 'payslip' && route.params[1] && <PayslipPage runId={route.params[0]} employeeId={route.params[1]} />}
           {page === 'card' && route.params[0] && <EmployeeCardPage employeeId={route.params[0]} />}
@@ -532,7 +535,7 @@ function Workspace() {
 }
 
 const KNOWN_PAGES: string[] = [
-  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import',
+  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts',
   'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
 ];
 
@@ -664,7 +667,7 @@ function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormE
           <h2>تسجيل الدخول</h2>
           <p>أدخل بيانات حسابك للوصول إلى مساحة العمل.</p>
           {error && <div className="notice notice-error" role="alert"><CircleHelp size={17} /><span>{error}</span></div>}
-          <label className="field"><span>البريد الإلكتروني</span><input name="email" type="email" autoComplete="username" required placeholder="name@company.com" dir="ltr" /></label>
+          <label className="field"><span>البريد الإلكتروني أو الرقم الوظيفي · E-mail or employee ID</span><input name="email" type="text" autoComplete="username" required placeholder="name@company.com · 10123" dir="ltr" /></label>
           <label className="field"><span>كلمة المرور</span><input name="password" type="password" autoComplete="current-password" required minLength={12} dir="ltr" /></label>
           <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : 'دخول آمن'}<ArrowLeft size={17} /></button>
           <div className="login-security"><ShieldCheck size={15} /><span>الجلسة محمية وتنتهي تلقائياً بعد 8 ساعات.</span></div>

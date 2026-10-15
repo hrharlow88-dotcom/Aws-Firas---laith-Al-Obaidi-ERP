@@ -7,14 +7,14 @@ export const SETUP_LINK_MINUTES = 30;
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex');
 
 /** Creates a one-time token for the account; earlier unused links stop working. */
-export async function createSetupToken(userId: string): Promise<string> {
+export async function createSetupToken(userId: string, minutes = SETUP_LINK_MINUTES): Promise<string> {
   const token = randomBytes(32).toString('base64url');
   await transaction(async (tx) => {
     await execute('UPDATE password_setup_tokens SET used_at = now() WHERE user_id = :userId AND used_at IS NULL', { userId }, tx);
     await execute(
       `INSERT INTO password_setup_tokens (id, user_id, token_hash, expires_at)
        VALUES (:id, :userId, :hash, now() + make_interval(mins => :minutes))`,
-      { id: randomUUID(), userId, hash: hashToken(token), minutes: SETUP_LINK_MINUTES }, tx,
+      { id: randomUUID(), userId, hash: hashToken(token), minutes }, tx,
     );
   });
   return token;

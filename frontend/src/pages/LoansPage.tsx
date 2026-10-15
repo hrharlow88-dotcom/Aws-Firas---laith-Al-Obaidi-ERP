@@ -242,7 +242,7 @@ function SplitPreview({ principal, months, start }: { principal: number; months:
   return (
     <div className="split-preview">
       <strong>التقسيم على الأشهر · Monthly split</strong>
-      <div className="split-grid">{rows.map((row, index) => <span key={row.period}><small>{index + 1}. {monthLabel(row.period)}</small><b>{formatNumber(row.amount)}</b></span>)}</div>
+      <div className="loan-split-grid">{rows.map((row, index) => <span key={row.period}><small>{index + 1}. {monthLabel(row.period)}</small><b>{formatNumber(row.amount)}</b></span>)}</div>
     </div>
   );
 }

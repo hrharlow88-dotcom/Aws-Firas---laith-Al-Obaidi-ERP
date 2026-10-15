@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  ClipboardList, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
 
@@ -55,6 +55,11 @@ export const APPS: AppDefinition[] = [
     staffOnly: true,
   },
   {
+    id: 'requests', label: 'الطلبات', description: 'طلبات الموظفين', icon: ClipboardList,
+    colors: ['#e0864a', '#b85a1e'], menus: [{ page: 'requests', label: 'طلبات الموظفين', permission: 'requests.manage' }],
+    staffOnly: true,
+  },
+  {
     id: 'attendance', label: 'الحضور', description: 'البصمة والدوامات', icon: Fingerprint,
     colors: ['#3fae8c', '#1f7a5e'], menus: [{ page: 'attendance', label: 'الحضور والانصراف', permission: 'attendance.view' }],
   },
@@ -104,6 +109,7 @@ export const APPS: AppDefinition[] = [
       { page: 'settings', label: 'إعدادات النظام', adminOnly: true },
       { page: 'company-import', label: 'استيراد بيانات الشركة', adminOnly: true },
       { page: 'access', label: 'المستخدمون', permission: 'users.manage' },
+      { page: 'portal-accounts', label: 'حسابات البوابة', permission: 'users.manage' },
       { page: 'security', label: 'أمان الحساب' },
     ],
   },
@@ -137,6 +143,6 @@ export const EN: Record<string, string> = {
   'سجل الموارد البشرية': 'HR Register', 'الإنذارات والعقوبات والمخالفات': 'Warnings, penalties and violations', 'السجل': 'Register',
   'التذاكر': 'Helpdesk', 'تقنية المعلومات والصيانة والنقل': 'IT, maintenance and transport', 'كل التذاكر': 'All Tickets', 'تذاكري': 'My Tickets',
   'التوظيف': 'Recruitment', 'الشواغر والمتقدمون': 'Job positions and applicants', 'المتقدمون': 'Applicants', 'الشواغر': 'Job Positions',
-  'الطلبات': 'Requests', 'طلبات الموظفين': 'Employee Requests',
+  'الطلبات': 'Requests', 'طلبات الموظفين': 'Employee Requests', 'حسابات البوابة': 'Portal Accounts',
 };
 export const en = (label: string): string => EN[label] ?? '';

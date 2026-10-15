@@ -21,6 +21,7 @@ import AuditController from '../controllers/AuditController';
 import { uploadSingle } from '../services/storage';
 import CompanyImportController, { uploadWorkbooks } from '../controllers/CompanyImportController';
 import SignatureController from '../controllers/SignatureController';
+import RequestController from '../controllers/RequestController';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
@@ -71,6 +72,17 @@ router.post('/auth/change-password', requireAuth, passwordLimiter, asyncRoute(Au
 
 router.get('/me/profile', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.profile));
 router.get('/me/payslips', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.payslips));
+router.get('/me/requests', requireAuth, allowPermission('self.service'), asyncRoute(RequestController.mine));
+router.post('/me/requests', requireAuth, allowPermission('self.service'), asyncRoute(RequestController.create));
+router.post('/me/requests/:id/receipt', requireAuth, allowPermission('self.service'), validateUuidParam, uploadSingle('file'), asyncRoute(RequestController.uploadReceipt));
+router.post('/me/requests/:id/cancel', requireAuth, allowPermission('self.service'), validateUuidParam, asyncRoute(RequestController.cancelMine));
+router.get('/me/attendance', requireAuth, allowPermission('self.service'), asyncRoute(RequestController.myAttendance));
+router.get('/requests', requireAuth, allowAnyPermission('requests.manage', 'payroll.disburse'), asyncRoute(RequestController.list));
+router.post('/requests/:id/decision', requireAuth, allowPermission('requests.manage'), validateUuidParam, asyncRoute(RequestController.decide));
+router.post('/requests/:id/paid', requireAuth, allowPermission('payroll.disburse'), validateUuidParam, asyncRoute(RequestController.markPaid));
+router.get('/requests/:id/receipt', requireAuth, validateUuidParam, asyncRoute(RequestController.receipt));
+router.get('/portal/accounts', requireAuth, allowPermission('users.manage'), asyncRoute(RequestController.portalAccounts));
+router.post('/portal/accounts/:employeeId/invite', requireAuth, allowPermission('users.manage'), asyncRoute(RequestController.invite));
 router.get('/me/payslips/:runId', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.payslip));
 router.get('/branches', requireAuth, asyncRoute(BranchController.list));
 router.post('/branches', requireAuth, allowPermission('branches.manage'), asyncRoute(BranchController.create));

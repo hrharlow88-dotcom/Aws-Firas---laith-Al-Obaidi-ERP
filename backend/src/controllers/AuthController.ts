@@ -14,7 +14,10 @@ export class AuthController {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = typeof body.password === 'string' ? body.password : '';
-    const user = email ? await User.findOne({ where: { email } }) : null;
+    // Staff sign in with their e-mail; employees on the portal may use their employee number.
+    const user = !email ? null : email.includes('@')
+      ? await User.findOne({ where: { email } })
+      : await User.findOne({ where: sequelize.where(sequelize.fn('lower', sequelize.col('username')), email) });
     const refused = () => res.status(401).json({ message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.' });
 
     if (user?.lockedUntil && user.lockedUntil > new Date()) {
