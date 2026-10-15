@@ -154,45 +154,83 @@ function DepartmentTree({ items, loading, canManage, onEdit }: {
   return <section className="panel tree">{render(null, 0)}</section>;
 }
 
+/** Position level from the job title, coloured like the company's org chart (managers, supervisors, staff). */
+function levelOf(title: string): 'manager' | 'supervisor' | 'staff' {
+  const t = title.toLowerCase();
+  if (/(مدير|manager|director|رئيس|head|chief|ceo|gm\b)/.test(t)) return 'manager';
+  if (/(مشرف|supervisor|leader|قائد|senior|أقدم|مسؤول)/.test(t)) return 'supervisor';
+  return 'staff';
+}
+
 function OrgChart({ departments }: { departments: Department[] }) {
   const chart = useLoad<{ departments: Department[]; employees: ChartEmployee[] }>('/org/chart', { departments: [], employees: [] });
   const [departmentId, setDepartmentId] = useState<string>('');
+  const [zoom, setZoom] = useState(0.85);
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [expandAll, setExpandAll] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
-  // Wide trees overflow; start the view centred on the top of the hierarchy.
+  const people = chart.data.employees.filter((person) => !departmentId || person.departmentId === departmentId);
+  const ids = new Set(people.map((person) => person.id));
+  const roots = people.filter((person) => !person.managerId || !ids.has(person.managerId));
+  const reportsOf = useMemo(() => {
+    const map = new Map<string, ChartEmployee[]>();
+    for (const person of people) if (person.managerId && ids.has(person.managerId)) map.set(person.managerId, [...(map.get(person.managerId) ?? []), person]);
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chart.data, departmentId]);
+  const withTeams = roots.filter((person) => reportsOf.has(person.id));
+  const loose = roots.filter((person) => !reportsOf.has(person.id));
+  const size = (id: string): number => (reportsOf.get(id) ?? []).reduce((sum, member) => sum + 1 + size(member.id), 0);
   useEffect(() => {
     const element = scroller.current;
     if (!element) return;
     const overflow = element.scrollWidth - element.clientWidth;
-    if (overflow > 0) element.scrollLeft = (getComputedStyle(element).direction === 'rtl' ? -1 : 1) * overflow / 2;
-  }, [chart.data, departmentId]);
-  const people = chart.data.employees.filter((person) => !departmentId || person.departmentId === departmentId);
-  const ids = new Set(people.map((person) => person.id));
-  const roots = people.filter((person) => !person.managerId || !ids.has(person.managerId));
-  const reports = (id: string) => people.filter((person) => person.managerId === id);
+    if (overflow > 0) element.scrollLeft = overflow / 2;
+  }, [chart.data, departmentId, open, zoom]);
+  const toggle = (id: string) => setOpen((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const node = (person: ChartEmployee, depth: number): JSX.Element => {
-    const team = depth < 8 ? reports(person.id) : [];
+    const team = reportsOf.get(person.id) ?? [];
+    const expanded = expandAll || depth < 1 || open.has(person.id);
+    const level = levelOf(person.jobTitle);
     return (
       <li key={person.id}>
-        <button className="chart-card" onClick={() => navigate('employees', person.id)}>
-          <span className="person-mark">{person.fullName.slice(0, 1)}</span>
-          <span><strong>{person.fullName}</strong><small>{person.jobTitle}</small><small>{person.branchName}</small></span>
-        </button>
-        {team.length > 0 && <ul>{team.map((member) => node(member, depth + 1))}</ul>}
+        <div className={`chart-node level-${level}`}>
+          <button className="chart-card" onClick={() => navigate('employees', person.id)}>
+            <strong>{person.fullName}</strong><small>{person.jobTitle}</small><small>{person.branchName}</small>
+          </button>
+          {team.length > 0 && <button className="chart-toggle" onClick={() => toggle(person.id)} aria-expanded={expanded} title={expanded ? 'طي' : 'عرض الفريق'}>
+            {expanded ? '−' : `+${size(person.id)}`}</button>}
+        </div>
+        {team.length > 0 && expanded && <ul>{team.map((member) => node(member, depth + 1))}</ul>}
       </li>
     );
   };
   return (
     <section className="panel">
-      <div className="filter-bar">
+      <div className="filter-bar chart-tools">
         <label className="field inline-field"><span>القسم</span>
           <select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
             <option value="">كل الأقسام</option>
             {departments.filter((item) => item.isActive).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
         </label>
-        <span className="result-count">{people.length} موظف · المدير المباشر يحدَّد من ملف الموظف</span>
+        <div className="segmented chart-zoom">
+          <button type="button" onClick={() => setZoom((value) => Math.max(0.4, +(value - 0.15).toFixed(2)))}>−</button>
+          <button type="button" aria-pressed="true">{Math.round(zoom * 100)}%</button>
+          <button type="button" onClick={() => setZoom((value) => Math.min(1.3, +(value + 0.15).toFixed(2)))}>+</button>
+        </div>
+        <button className="button button-quiet" onClick={() => { setExpandAll(!expandAll); setOpen(new Set()); }}>{expandAll ? 'طي الكل' : 'توسيع الكل'}</button>
+        <ul className="chart-legend"><li className="level-manager">مدراء · Managers</li><li className="level-supervisor">مشرفون · Supervisors</li><li className="level-staff">موظفون · Staff</li></ul>
+        <span className="result-count">{people.length} موظف</span>
       </div>
-      {chart.loading ? <Loading /> : people.length ? <div className="org-chart" ref={scroller}><ul>{roots.map((person) => node(person, 0))}</ul></div>
+      {chart.loading ? <Loading /> : people.length ? <div className="org-chart" ref={scroller}>
+        <div className="org-tree" style={{ zoom }}>
+          <div className="chart-company"><img src="/brand/shield-256.png" alt="" /><strong>مجموعة الليث العبيدي للسيارات</strong><small>Al-Laith Al-Obaidi Automotive Group — Iraq</small></div>
+          <ul>{withTeams.map((person) => node(person, 0))}</ul>
+        </div>
+        {loose.length > 0 && <div className="chart-loose"><strong>بلا مدير مباشر بعد ({loose.length})</strong><span>حدد مديرهم من «استيراد من Excel» أو من ملف الموظف.</span>
+          <div className="chart-loose-list">{loose.map((person) => <button key={person.id} className={`chart-chip level-${levelOf(person.jobTitle)}`} onClick={() => navigate('employees', person.id)}>{person.fullName}<small>{person.jobTitle}</small></button>)}</div></div>}
+      </div>
         : <Empty icon={<Network size={22} />} title="لا يوجد موظفون في هذا القسم" text="اربط الموظفين بالأقسام ومديريهم المباشرين من ملفاتهم." />}
     </section>
   );
