@@ -102,6 +102,7 @@ export const APPS: AppDefinition[] = [
     colors: ['#8a7f7a', '#5c524d'],
     menus: [
       { page: 'settings', label: 'إعدادات النظام', adminOnly: true },
+      { page: 'company-import', label: 'استيراد بيانات الشركة', adminOnly: true },
       { page: 'access', label: 'المستخدمون', permission: 'users.manage' },
       { page: 'security', label: 'أمان الحساب' },
     ],

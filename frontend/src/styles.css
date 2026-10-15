@@ -772,3 +772,8 @@ table.dense td { height: 46px; padding-block: 6px; }
 .chip.jp-beh { background: #fdeee8; color: #9a3a1f; }
 a.button { text-decoration: none; }
 .jp-target { unicode-bidi: isolate; white-space: nowrap; }
+
+/* Company data import */
+.plain-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.plain-list li { display: flex; align-items: center; gap: 6px; }
+.import-log { margin: 0; padding: 12px 14px; background: #f7f5f4; border-radius: 5px; font-size: 11.5px; line-height: 1.7; white-space: pre-wrap; overflow-x: auto; }
