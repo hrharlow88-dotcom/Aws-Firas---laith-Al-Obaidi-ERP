@@ -111,7 +111,7 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
 
 function validatePayrollRules(value: unknown): value is SystemSettings['payrollRules'] {
   if (!isRecord(value) || !hasOnlyKeys(value, [
-    'baseCurrency', 'monthlyDivisor', 'roundingDigits', 'terminatedPaidBySettlement', 'usdRate', 'branchUsdRates', 'components',
+    'baseCurrency', 'monthlyDivisor', 'roundingDigits', 'terminatedPaidBySettlement', 'approvalChain', 'usdRate', 'branchUsdRates', 'components',
   ])) {
     return false;
   }
@@ -120,6 +120,7 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
   if (value.branchUsdRates !== undefined && (!isRecord(value.branchUsdRates) ||
     !Object.entries(value.branchUsdRates).every(([branchId, rate]) => /^[0-9a-f-]{36}$/i.test(branchId) && validRate(rate)))) return false;
   if (value.terminatedPaidBySettlement !== undefined && typeof value.terminatedPaidBySettlement !== 'boolean') return false;
+  if (value.approvalChain !== undefined && typeof value.approvalChain !== 'boolean') return false;
   const components = value.components;
   if (
     !isText(value.baseCurrency, 3) || !/^[A-Z]{3}$/.test(value.baseCurrency) ||

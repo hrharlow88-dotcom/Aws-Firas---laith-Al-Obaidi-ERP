@@ -20,6 +20,7 @@ import IntegrationController, { requireApiKey } from '../controllers/Integration
 import AuditController from '../controllers/AuditController';
 import { uploadSingle } from '../services/storage';
 import CompanyImportController, { uploadWorkbooks } from '../controllers/CompanyImportController';
+import SignatureController from '../controllers/SignatureController';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
@@ -64,6 +65,8 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
 router.post('/auth/login', loginLimiter, asyncRoute(AuthController.login));
 router.get('/auth/me', requireAuth, AuthController.me);
 router.post('/auth/set-password', passwordLimiter, asyncRoute(AuthController.setPasswordWithLink));
+router.get('/auth/signature', requireAuth, asyncRoute(SignatureController.get));
+router.put('/auth/signature', requireAuth, asyncRoute(SignatureController.save));
 router.post('/auth/change-password', requireAuth, passwordLimiter, asyncRoute(AuthController.changePassword));
 
 router.get('/me/profile', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.profile));
@@ -174,6 +177,8 @@ router.post('/payroll/runs', requireAuth, allowPermission('payroll.prepare'), as
 router.get('/payroll/runs/:id', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.getRun));
 router.post('/payroll/runs/:id/calculate', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.calculate));
 router.post('/payroll/runs/:id/approve', requireAuth, allowPermission('payroll.approve'), validateUuidParam, asyncRoute(PayrollController.approve));
+router.post('/payroll/runs/:id/sign', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.sign));
+router.post('/payroll/runs/:id/return', requireAuth, allowAnyPermission('payroll.prepare', 'payroll.audit', 'payroll.approve'), validateUuidParam, asyncRoute(PayrollController.returnRun));
 router.post('/payroll/runs/:id/reopen', requireAuth, allowPermission('payroll.approve'), validateUuidParam, asyncRoute(PayrollController.reopen));
 router.post('/payroll/runs/:id/cancel', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(PayrollController.cancel));
 router.get('/payroll/runs/:id/payslips/:employeeId', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollController.payslip));
@@ -187,6 +192,8 @@ router.post('/payroll/inputs/import', requireAuth, allowPermission('payroll.prep
 router.get('/payroll/day-adjustments', requireAuth, allowPermission('payroll.view'), asyncRoute(PayrollController.listAdjustments));
 router.put('/payroll/day-adjustments', requireAuth, allowPermission('payroll.prepare'), asyncRoute(PayrollController.setAdjustment));
 router.get('/payroll/loans', requireAuth, allowPermission('payroll.view'), asyncRoute(LoanController.list));
+router.get('/payroll/loans/deductions', requireAuth, allowPermission('payroll.view'), asyncRoute(LoanController.deductions));
+router.get('/payroll/loans/:id/schedule', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(LoanController.schedule));
 router.post('/payroll/loans', requireAuth, allowPermission('payroll.prepare'), asyncRoute(LoanController.create));
 router.patch('/payroll/loans/:id', requireAuth, allowPermission('payroll.prepare'), validateUuidParam, asyncRoute(LoanController.setStatus));
 

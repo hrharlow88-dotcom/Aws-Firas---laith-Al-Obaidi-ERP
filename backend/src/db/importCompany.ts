@@ -426,7 +426,7 @@ export async function importCompany(files: WorkbookSource[], importedBy?: string
       calculation: 'percentage_of_ss_base', rate: 5, minBase: 350000, maxBase: 1750000, roundingDigits: 0,
       active: true, legalApproved: true,
     });
-    settings.payrollRules = { ...settings.payrollRules, components, monthlyDivisor: 30, terminatedPaidBySettlement: true };
+    settings.payrollRules = { ...settings.payrollRules, components, monthlyDivisor: 30, terminatedPaidBySettlement: true, approvalChain: true };
     if (!settings.company.legalName) settings.company.legalName = 'شركة ليث العبيدي للسيارات';
     if (!settings.leaveTypes.length) {
       settings.leaveTypes = [

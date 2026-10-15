@@ -27,6 +27,7 @@ import { buildSession, SessionProvider, useLoad, useSession } from './lib/sessio
 import { navigate, useRoute } from './lib/router';
 import { AppearanceControls, Bi, BrandStrip, DeveloperCredit, SYSTEM_NAME } from './components/Brand';
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
+import { MySignature } from './components/Signature';
 import { DOCUMENT_TYPES, EMPLOYMENT_TYPES, formatMoney, monthLabel } from './lib/format';
 import { OrgPage } from './pages/OrgPage';
 import type { Department, JobTitle } from './pages/OrgPage';
@@ -863,6 +864,7 @@ function SecurityPage({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElemen
         </div>
         <div className="form-actions"><button className="button button-primary" type="submit"><ShieldCheck size={16} />تحديث كلمة المرور</button></div>
       </form>
+      <MySignature />
     </section>
   );
 }

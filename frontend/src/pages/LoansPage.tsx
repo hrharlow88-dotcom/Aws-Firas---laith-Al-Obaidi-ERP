@@ -23,8 +23,10 @@ const LOAN_STATUS: Record<Loan['status'], { label: string; tone: string }> = {
 /** Instalment loans: what was lent, what payroll has taken back, what is left. */
 export function LoansPage() {
   const session = useSession();
-  const [status, setStatus] = useState<'active' | 'all'>('active');
-  const loans = useLoad<Loan[]>(`/payroll/loans${status === 'active' ? '?status=active' : ''}`, []);
+  const [status, setStatus] = useState<'active' | 'all' | 'months'>('active');
+  const loans = useLoad<Loan[]>(status === 'months' ? null : `/payroll/loans${status === 'active' ? '?status=active' : ''}`, []);
+  const [scheduleOf, setScheduleOf] = useState<Loan | null>(null);
+  const [draft, setDraft] = useState({ principal: 0, months: 0, start: previousPeriod() });
   const [creating, setCreating] = useState(false);
   const [employee, setEmployee] = useState<PickedEmployee | null>(null);
   const [editing, setEditing] = useState<Loan | null>(null);
@@ -84,15 +86,15 @@ export function LoansPage() {
         <Stat label="المتبقي بالدولار" value={formatMoney(owed('USD'), 'USD')} foot={`قسط الشهر ${formatMoney(monthly('USD'), 'USD')}`} />
       </div>
       <section className="panel">
-        <div className="panel-head"><Tabs<'active' | 'all'> value={status} onChange={setStatus} items={[{ id: 'active', label: 'قيد الاستقطاع' }, { id: 'all', label: 'كل السلف' }]} /></div>
-        {loans.loading ? <Loading /> : loans.data.length ? <div className="table-scroll"><table className="dense">
+        <div className="panel-head"><Tabs<'active' | 'all' | 'months'> value={status} onChange={setStatus} items={[{ id: 'active', label: 'قيد الاستقطاع · Active' }, { id: 'all', label: 'كل السلف · All' }, { id: 'months', label: 'أرشيف الاستقطاع الشهري · Monthly archive' }]} /></div>
+        {status === 'months' ? <MonthlyDeductions /> : loans.loading ? <Loading /> : loans.data.length ? <div className="table-scroll"><table className="dense">
           <thead><tr><th>الموظف</th><th>مبلغ السلفة</th><th>القسط</th><th>الأقساط</th><th>المسدد</th><th>المتبقي</th><th>آخر استقطاع</th><th>الحالة</th>{canEdit && <th />}</tr></thead>
           <tbody>{loans.data.map((loan) => {
             const paid = loan.paidBefore + loan.repaidByPayroll;
             const progress = Math.min(100, Math.round((paid / loan.principal) * 100));
             return <tr key={loan.id}>
               <td><button className="text-button" onClick={() => navigate('employees', loan.employeeId)}><strong>{loan.employeeName}</strong></button><small className="table-sub">{loan.employeeNo}{loan.notes ? ` · ${loan.notes.slice(0, 60)}` : ''}</small></td>
-              <td><strong>{formatMoney(loan.principal, loan.currency)}</strong><small className="table-sub">من {monthLabel(loan.startPeriod)}</small></td>
+              <td><button className="text-button" onClick={() => setScheduleOf(loan)}><strong>{formatMoney(loan.principal, loan.currency)}</strong></button><small className="table-sub">من {monthLabel(loan.startPeriod)} · <button className="link-inline" onClick={() => setScheduleOf(loan)}>جدول الأشهر</button></small></td>
               <td>{formatMoney(loan.installment, loan.currency)}</td>
               <td>{loan.installmentsTotal ? `${formatNumber(loan.installmentsPaid)} من ${formatNumber(loan.installmentsTotal)}` : formatNumber(loan.installmentsPaid)}</td>
               <td><span className="progress" aria-label={`${progress}%`}><i style={{ width: `${progress}%` }} /></span><small className="table-sub">{formatMoney(paid, loan.currency)}</small></td>
@@ -110,14 +112,16 @@ export function LoansPage() {
           <div className="form-grid">
             <EmployeePicker label="الموظف *" value={employee} onChange={setEmployee} />
             <label className="field"><span>العملة</span><select name="currency" defaultValue=""><option value="">عملة راتب الموظف</option><option value="IQD">دينار عراقي</option><option value="USD">دولار أمريكي</option></select></label>
-            <label className="field"><span>مبلغ السلفة *</span><input name="principal" type="number" min={0.01} step="0.01" required /></label>
-            <label className="field"><span>القسط الشهري *</span><input name="installment" type="number" min={0.01} step="0.01" required /></label>
-            <label className="field"><span>عدد الأقساط</span><input name="installmentsTotal" type="number" min={1} max={240} step={1} /></label>
-            <label className="field"><span>أول شهر استقطاع *</span><input name="startPeriod" type="month" required defaultValue={previousPeriod()} /></label>
+            <label className="field"><span>مبلغ السلفة *</span><input name="principal" type="number" min={0.01} step="0.01" required onChange={(event) => setDraft({ ...draft, principal: Number(event.target.value) })} /></label>
+            <label className="field"><span>عدد الأشهر (الأقساط)</span><input name="installmentsTotal" type="number" min={1} max={240} step={1} onChange={(event) => setDraft({ ...draft, months: Number(event.target.value) })} /></label>
+            <label className="field"><span>القسط الشهري *</span><input name="installment" type="number" min={0.01} step="0.01" required key={`${draft.principal}-${draft.months}`}
+              defaultValue={draft.principal && draft.months ? Math.floor(draft.principal / draft.months) : undefined} /><small>يُحسب من المبلغ ÷ الأشهر، والقسط الأخير يأخذ الباقي.</small></label>
+            <label className="field"><span>أول شهر استقطاع *</span><input name="startPeriod" type="month" required defaultValue={previousPeriod()} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label>
             <label className="field"><span>مسدد سابقاً</span><input name="paidBefore" type="number" min={0} step="0.01" defaultValue={0} /></label>
             <label className="field"><span>رقم المستند</span><input name="reference" maxLength={60} /></label>
             <label className="field field-wide"><span>ملاحظات</span><input name="notes" maxLength={1000} /></label>
           </div>
+          {draft.principal > 0 && draft.months > 0 && <SplitPreview principal={draft.principal} months={draft.months} start={draft.start} />}
           <div className="dialog-actions"><button className="button button-primary" disabled={!employee}>حفظ</button><button type="button" className="button button-quiet" onClick={() => setCreating(false)}>إلغاء</button></div>
         </form>
       </Dialog>
@@ -134,6 +138,9 @@ export function LoansPage() {
             {editing.status !== 'closed' && <button type="button" className="button button-quiet danger" onClick={() => void update(editing, { status: 'closed' })}>إغلاق السلفة</button>}
           </div>
         </form>}
+      </Dialog>
+      <Dialog open={Boolean(scheduleOf)} title="جدول السلفة شهراً بشهر · Loan schedule" subtitle={scheduleOf ? `${scheduleOf.employeeName} · ${formatMoney(scheduleOf.principal, scheduleOf.currency)}` : ''} onClose={() => setScheduleOf(null)}>
+        {scheduleOf && <LoanSchedule loan={scheduleOf} />}
       </Dialog>
       {reason.element}
     </section>
@@ -217,4 +224,70 @@ export function DayAdjustmentsPage() {
       </section>
     </section>
   );
+}
+
+
+function addMonths(period: string, count: number): string {
+  const [year, month] = period.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1 + count, 1)).toISOString().slice(0, 7);
+}
+
+/** How a new loan will be split over the months, before it is saved. */
+function SplitPreview({ principal, months, start }: { principal: number; months: number; start: string }) {
+  const installment = Math.floor(principal / months);
+  const rows = Array.from({ length: Math.min(months, 60) }, (_, index) => ({
+    period: addMonths(start, index),
+    amount: index === months - 1 ? principal - installment * (months - 1) : installment,
+  }));
+  return (
+    <div className="split-preview">
+      <strong>التقسيم على الأشهر · Monthly split</strong>
+      <div className="split-grid">{rows.map((row, index) => <span key={row.period}><small>{index + 1}. {monthLabel(row.period)}</small><b>{formatNumber(row.amount)}</b></span>)}</div>
+    </div>
+  );
+}
+
+const KIND: Record<string, { label: string; tone: string }> = {
+  before: { label: 'مسدد قبل النظام', tone: 'muted' },
+  deducted: { label: 'مستقطع', tone: 'good' },
+  pending: { label: 'بمسير غير معتمد', tone: 'warn' },
+  planned: { label: 'مخطط', tone: 'info' },
+};
+
+function LoanSchedule({ loan }: { loan: Loan }) {
+  const schedule = useLoad<{ rows: Array<{ period: string | null; amount: number; kind: string; balanceAfter: number }> } | null>(`/payroll/loans/${loan.id}/schedule`, null);
+  if (!schedule.data) return <Loading />;
+  return <div className="table-scroll"><table className="dense">
+    <thead><tr><th>الشهر</th><th>القسط</th><th>الحالة</th><th>المتبقي بعده</th></tr></thead>
+    <tbody>{schedule.data.rows.map((row, index) => <tr key={`${row.period}-${index}`} className={row.kind === 'planned' ? 'row-muted' : ''}>
+      <td>{row.period ? monthLabel(row.period) : '—'}</td>
+      <td><strong>{formatMoney(row.amount, loan.currency)}</strong></td>
+      <td><Tone tone={KIND[row.kind].tone}>{KIND[row.kind].label}</Tone></td>
+      <td>{formatMoney(row.balanceAfter, loan.currency)}</td>
+    </tr>)}</tbody>
+  </table></div>;
+}
+
+/** Everything deducted for loans in a month: the deduction archive. */
+function MonthlyDeductions() {
+  const [period, setPeriod] = useState(previousPeriod());
+  const data = useLoad<{ rows: Array<{ loanId: string; employeeId: string; employeeNo: string; employeeName: string; loanCurrency: string; amount: number; payrollCurrency: string; payrollAmount: number; runStatus: string; reference: string | null }>; months: string[] } | null>(`/payroll/loans/deductions?period=${period}`, null);
+  const totals = (data.data?.rows ?? []).reduce<Record<string, number>>((sum, row) => ({ ...sum, [row.payrollCurrency]: (sum[row.payrollCurrency] ?? 0) + row.payrollAmount }), {});
+  return <div>
+    <div className="filter-bar">
+      <label className="field"><span>الشهر</span><input type="month" value={period} onChange={(event) => setPeriod(event.target.value)} /></label>
+      {data.data?.months.length ? <div className="month-chips">{data.data.months.slice(0, 12).map((month) => <button key={month} className={month === period ? 'is-on' : ''} onClick={() => setPeriod(month)}>{monthLabel(month)}</button>)}</div> : null}
+      <span className="result-count">{Object.entries(totals).map(([currency, total]) => formatMoney(total, currency)).join(' + ') || '—'}</span>
+    </div>
+    {!data.data ? <Loading /> : data.data.rows.length ? <div className="table-scroll"><table className="dense">
+      <thead><tr><th>الموظف</th><th>المستقطع</th><th>بعملة السلفة</th><th>المسير</th><th>المستند</th></tr></thead>
+      <tbody>{data.data.rows.map((row) => <tr key={`${row.loanId}-${row.employeeId}`}>
+        <td><strong>{row.employeeName}</strong><small className="table-sub">{row.employeeNo}</small></td>
+        <td><strong>{formatMoney(row.payrollAmount, row.payrollCurrency)}</strong></td>
+        <td>{formatMoney(row.amount, row.loanCurrency)}</td>
+        <td><Tone tone={['approved', 'posted'].includes(row.runStatus) ? 'good' : 'warn'}>{['approved', 'posted'].includes(row.runStatus) ? 'معتمد' : 'غير معتمد بعد'}</Tone></td>
+        <td>{row.reference ?? '—'}</td>
+      </tr>)}</tbody>
+    </table></div> : <Empty icon={<CalendarClock size={22} />} title="لا استقطاعات لهذا الشهر" text="تظهر هنا أقساط السلف بعد احتساب مسير الشهر." />}
+  </div>;
 }

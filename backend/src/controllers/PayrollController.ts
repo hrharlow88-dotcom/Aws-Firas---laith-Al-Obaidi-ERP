@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Transaction } from 'sequelize';
 import { randomUUID } from 'node:crypto';
 import ExcelJS from 'exceljs';
 import { execute, select, selectOne, transaction } from '../db/query';
@@ -8,6 +9,7 @@ import {
 } from '../services/payroll';
 import { can, getSettings } from '../services/settings';
 import { recordAudit } from '../utils/audit';
+import { STEPS, STEP_LABELS, SignStep, addSignoff, liveSignoffs, userSignature, voidSignoffs } from '../services/signatures';
 import { decryptField } from '../utils/crypto';
 import {
   assertOnlyKeys, badRequest, body, conflict, forbidden, notFound, optionalNumber, optionalText, queryText, requiredText,
@@ -91,6 +93,48 @@ export async function payslipData(run: RunRow, employeeId: string): Promise<Reco
   };
 }
 
+/**
+ * Approval: the run is recalculated from current data and must match what
+ * was reviewed; anything changed since then sends it back for recalculation.
+ * `inside` runs in the same transaction (the executive's sign-off).
+ */
+async function approveRun(req: Request, run: RunRow, inside?: (tx: Transaction) => Promise<void>): Promise<void> {
+  if (run.status !== 'calculated') throw conflict('يجب احتساب المسير قبل اعتماده.');
+  if (run.calculatedBy === req.user!.id || run.createdBy === req.user!.id) {
+    throw forbidden('يعتمد المسير شخص غير الذي أعدّه أو احتسبه (فصل المهام).');
+  }
+  await recomputeRunAttendance(run);
+  await transaction(async (tx) => {
+    const locked = await loadRun(run.id, tx, true);
+    if (!locked || locked.status !== 'calculated') throw conflict('تغيرت حالة المسير. حدّث الصفحة.');
+    const fresh = await buildRunLines(locked, tx);
+    const stored = await storedLines(run.id, tx);
+    if (linesFingerprint(fresh) !== linesFingerprint(stored)) {
+      throw conflict('تغيرت بيانات الحضور أو الرواتب منذ الاحتساب. أعد احتساب المسير وراجعه قبل الاعتماد.');
+    }
+    const blocking = fresh.filter((line) => line.warnings.some((warning) => warning.blocking));
+    if (blocking.length) {
+      throw conflict(`يوجد ${blocking.length} موظف بتنبيهات تمنع الاعتماد (صافي سالب أو أجر يومي بلا حضور).`, {
+        employees: blocking.map((line) => line.employeeId),
+      });
+    }
+    await execute(
+      `UPDATE payroll_runs SET status = 'approved', approved_by = :userId, approved_at = now(), updated_at = now() WHERE id = :id`,
+      { id: run.id, userId: req.user!.id },
+      tx,
+    );
+    await execute(
+      `UPDATE attendance_days SET payroll_run_id = :id
+       WHERE work_date BETWEEN :start AND :end AND payroll_run_id IS NULL
+         AND employee_id IN (SELECT employee_id FROM payroll_lines WHERE run_id = :id)`,
+      { id: run.id, start: run.startsOn, end: run.endsOn },
+      tx,
+    );
+    if (inside) await inside(tx);
+    await recordAudit(req, tx, 'payroll.run_approved', 'payroll_run', run.id, { period: run.period });
+  });
+}
+
 export class PayrollController {
   static async listRuns(_req: Request, res: Response): Promise<void> {
     const rows = await select(
@@ -99,14 +143,15 @@ export class PayrollController {
               r.total_deductions::float AS "totalDeductions", r.total_net::float AS "totalNet", r.warning_count AS "warningCount",
               r.calculated_at AS "calculatedAt", r.approved_at AS "approvedAt", r.posted_at AS "postedAt",
               cu.name AS "createdByName", ca.name AS "calculatedByName", ap.name AS "approvedByName",
-              je.status AS "journalStatus"
+              je.status AS "journalStatus", r.paid_at AS "paidAt",
+              COALESCE((SELECT array_agg(s.step::text) FROM payroll_run_signoffs s WHERE s.run_id = r.id AND s.voided_at IS NULL), '{}') AS "signedSteps"
        FROM payroll_runs r
        LEFT JOIN branches b ON b.id = r.branch_id
        JOIN users cu ON cu.id = r.created_by
        LEFT JOIN users ca ON ca.id = r.calculated_by
        LEFT JOIN users ap ON ap.id = r.approved_by
        LEFT JOIN journal_entries je ON je.source_type = 'payroll' AND je.source_id = r.id AND je.status <> 'cancelled'
-       ORDER BY r.period DESC, r.created_at DESC LIMIT 120`,
+       ORDER BY r.period DESC, r.created_at DESC LIMIT 240`,
     );
     res.json({ data: rows });
   }
@@ -183,7 +228,12 @@ export class PayrollController {
        WHERE l.run_id = :id ORDER BY e.employee_no`,
       { id: run.id },
     );
-    res.json({ data: { ...summary, lines } });
+    const settings = await getSettings();
+    const paid = await selectOne<{ paidAt: string | null; paidByName: string | null }>(
+      `SELECT r.paid_at AS "paidAt", u.name AS "paidByName" FROM payroll_runs r LEFT JOIN users u ON u.id = r.paid_by WHERE r.id = :id`,
+      { id: run.id },
+    );
+    res.json({ data: { ...summary, ...paid, approvalChain: Boolean(settings.payrollRules.approvalChain), signoffs: await liveSignoffs(run.id), lines } });
   }
 
   static async calculate(req: Request, res: Response): Promise<void> {
@@ -195,6 +245,7 @@ export class PayrollController {
       if (!locked || !['draft', 'calculated'].includes(locked.status)) throw conflict('تغيرت حالة المسير. حدّث الصفحة.');
       const lines = await buildRunLines(locked, tx);
       await replaceRunLines(locked, lines, req.user!.id, tx);
+      await voidSignoffs(run.id, 'أُعيد احتساب المسير', tx);
       await recordAudit(req, tx, 'payroll.run_calculated', 'payroll_run', run.id, {
         employees: lines.length, totalNet: lines.reduce((sum, line) => sum + line.netPay, 0),
       });
@@ -209,38 +260,69 @@ export class PayrollController {
    */
   static async approve(req: Request, res: Response): Promise<void> {
     const run = await runOr404(req.params.id);
-    if (run.status !== 'calculated') throw conflict('يجب احتساب المسير قبل اعتماده.');
-    if (run.calculatedBy === req.user!.id || run.createdBy === req.user!.id) {
-      throw forbidden('يعتمد المسير شخص غير الذي أعدّه أو احتسبه (فصل المهام).');
+    if ((await getSettings()).payrollRules.approvalChain) {
+      throw conflict('الاعتماد يمر بسلسلة التواقيع: الموارد البشرية ← التدقيق ← المدير التنفيذي ← المالية.');
     }
-    await recomputeRunAttendance(run);
+    await approveRun(req, run);
+    res.json({ data: { id: run.id } });
+  }
+
+  /**
+   * One step of the approval chain, signed with the person's saved e-signature:
+   * HR → audit → chief executive (approves the run) → finance (records payment).
+   * Steps go in order and one person signs one step only.
+   */
+  static async sign(req: Request, res: Response): Promise<void> {
+    const input = body(req);
+    assertOnlyKeys(input, ['step', 'note']);
+    const step = input.step as SignStep;
+    if (!STEPS.includes(step)) throw badRequest('خطوة الاعتماد غير صالحة.');
+    const note = optionalText(input, 'note', 500) ?? null;
+    const run = await runOr404(req.params.id);
+    const settings = await getSettings();
+    if (!settings.payrollRules.approvalChain) throw conflict('سلسلة الاعتماد غير مفعّلة في إعدادات الرواتب.');
+    const permission = { hr: 'payroll.prepare', audit: 'payroll.audit', ceo: 'payroll.approve', finance: 'payroll.disburse' }[step];
+    if (!(await can(req, permission as Parameters<typeof can>[1]))) throw forbidden(`لا تملك صلاحية توقيع خطوة «${STEP_LABELS[step]}».`);
+    const signature = await userSignature(req.user!.id);
+    if (!signature) throw badRequest('ارسم توقيعك الإلكتروني أولاً من «أمان الحساب ← توقيعي».');
+    const ip = (req.ip || '').slice(0, 64) || null;
+    const signed = await liveSignoffs(run.id);
+    if (signed.some((item) => item.step === step)) throw conflict(`خطوة «${STEP_LABELS[step]}» موقّعة مسبقاً.`);
+    if (signed.some((item) => item.userId === req.user!.id)) throw forbidden('وقّعت خطوة أخرى من هذا المسير؛ كل خطوة يوقّعها شخص مختلف.');
+    const previous = STEPS[STEPS.indexOf(step) - 1];
+    if (previous && !signed.some((item) => item.step === previous)) throw conflict(`بانتظار توقيع «${STEP_LABELS[previous]}» أولاً.`);
+
+    if (step === 'ceo') {
+      await approveRun(req, run, async (tx) => {
+        await addSignoff(run.id, step, req.user!.id, signature, note, ip, tx);
+      });
+    } else if (step === 'finance') {
+      if (!['approved', 'posted'].includes(run.status)) throw conflict('يُصرف المسير بعد اعتماده من المدير التنفيذي.');
+      await transaction(async (tx) => {
+        await addSignoff(run.id, step, req.user!.id, signature, note, ip, tx);
+        await execute('UPDATE payroll_runs SET paid_at = now(), paid_by = :userId, updated_at = now() WHERE id = :id', { id: run.id, userId: req.user!.id }, tx);
+        await recordAudit(req, tx, 'payroll.run_paid', 'payroll_run', run.id, { period: run.period });
+      });
+    } else {
+      if (run.status !== 'calculated') throw conflict('يُوقّع المسير بعد احتسابه وقبل اعتماده.');
+      await transaction(async (tx) => {
+        const locked = await loadRun(run.id, tx, true);
+        if (!locked || locked.status !== 'calculated') throw conflict('تغيرت حالة المسير. حدّث الصفحة.');
+        await addSignoff(run.id, step, req.user!.id, signature, note, ip, tx);
+        await recordAudit(req, tx, `payroll.run_signed_${step}`, 'payroll_run', run.id, { period: run.period, note });
+      });
+    }
+    res.json({ data: { id: run.id, signoffs: await liveSignoffs(run.id) } });
+  }
+
+  /** Sends a run back before approval; the sign-offs so far stop counting. */
+  static async returnRun(req: Request, res: Response): Promise<void> {
+    const run = await runOr404(req.params.id);
+    if (run.status !== 'calculated') throw conflict('يُعاد المسير قبل اعتماده فقط؛ بعد الاعتماد استخدم «إعادة فتح».');
+    const reason = requiredText(body(req), 'reason', 500, 'سبب الإرجاع');
     await transaction(async (tx) => {
-      const locked = await loadRun(run.id, tx, true);
-      if (!locked || locked.status !== 'calculated') throw conflict('تغيرت حالة المسير. حدّث الصفحة.');
-      const fresh = await buildRunLines(locked, tx);
-      const stored = await storedLines(run.id, tx);
-      if (linesFingerprint(fresh) !== linesFingerprint(stored)) {
-        throw conflict('تغيرت بيانات الحضور أو الرواتب منذ الاحتساب. أعد احتساب المسير وراجعه قبل الاعتماد.');
-      }
-      const blocking = fresh.filter((line) => line.warnings.some((warning) => warning.blocking));
-      if (blocking.length) {
-        throw conflict(`يوجد ${blocking.length} موظف بتنبيهات تمنع الاعتماد (صافي سالب أو أجر يومي بلا حضور).`, {
-          employees: blocking.map((line) => line.employeeId),
-        });
-      }
-      await execute(
-        `UPDATE payroll_runs SET status = 'approved', approved_by = :userId, approved_at = now(), updated_at = now() WHERE id = :id`,
-        { id: run.id, userId: req.user!.id },
-        tx,
-      );
-      await execute(
-        `UPDATE attendance_days SET payroll_run_id = :id
-         WHERE work_date BETWEEN :start AND :end AND payroll_run_id IS NULL
-           AND employee_id IN (SELECT employee_id FROM payroll_lines WHERE run_id = :id)`,
-        { id: run.id, start: run.startsOn, end: run.endsOn },
-        tx,
-      );
-      await recordAudit(req, tx, 'payroll.run_approved', 'payroll_run', run.id, { period: run.period });
+      const count = await voidSignoffs(run.id, `أُرجع: ${reason}`, tx);
+      await recordAudit(req, tx, 'payroll.run_returned', 'payroll_run', run.id, { reason, voided: count });
     });
     res.json({ data: { id: run.id } });
   }
@@ -258,8 +340,10 @@ export class PayrollController {
       if (pending) throw conflict('قيد هذا المسير في طابور الترحيل أو مرحّل. ألغِ القيد أولاً.');
       await execute(`UPDATE journal_entries SET status = 'cancelled', updated_at = now()
                      WHERE source_type = 'payroll' AND source_id = :id AND status IN ('draft','failed')`, { id: run.id }, tx);
-      await execute(`UPDATE payroll_runs SET status = 'calculated', approved_by = NULL, approved_at = NULL, updated_at = now() WHERE id = :id`,
+      await execute(`UPDATE payroll_runs SET status = 'calculated', approved_by = NULL, approved_at = NULL,
+                       paid_at = NULL, paid_by = NULL, updated_at = now() WHERE id = :id`,
         { id: run.id }, tx);
+      await voidSignoffs(run.id, `أُعيد فتح المسير: ${reason}`, tx);
       await execute('UPDATE attendance_days SET payroll_run_id = NULL WHERE payroll_run_id = :id', { id: run.id }, tx);
       await recordAudit(req, tx, 'payroll.run_reopened', 'payroll_run', run.id, { reason });
     });

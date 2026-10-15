@@ -32,8 +32,91 @@ const LOAN_FROM = `
     WHERE x.loan_id = l.id AND r.status <> 'cancelled'
   ) rp ON true`;
 
+function nextPeriod(period: string, months = 1): string {
+  const [y, m] = period.split('-').map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + months, 1));
+  return date.toISOString().slice(0, 7);
+}
+
 /** Instalment loans and salary advances, repaid through payroll. */
 export class LoanController {
+  /**
+   * The loan month by month: what was taken before the system, what each
+   * approved payroll deducted, what a calculated run is about to deduct, and
+   * the plan for the remaining months (the last instalment takes the rest).
+   */
+  static async schedule(req: Request, res: Response): Promise<void> {
+    const scope = employeeScopeSql(req);
+    const loan = await selectOne<{
+      id: string; employeeName: string; employeeNo: string; currency: string; principal: number; installment: number;
+      paidBefore: number; installmentsPaidBefore: number; installmentsTotal: number | null; startPeriod: string; status: string;
+    }>(
+      `SELECT l.id, e.full_name AS "employeeName", e.employee_no AS "employeeNo", l.currency, l.principal::float AS principal,
+              l.installment::float AS installment, l.paid_before::float AS "paidBefore",
+              l.installments_paid_before AS "installmentsPaidBefore", l.installments_total AS "installmentsTotal",
+              l.start_period AS "startPeriod", l.status
+       FROM employee_loans l JOIN employees e ON e.id = l.employee_id WHERE l.id = :id${scope.sql}`,
+      { ...scope.params, id: req.params.id },
+    );
+    if (!loan) throw notFound('السلفة غير موجودة.');
+    const taken = await select<{ period: string; amount: number; payrollAmount: number; runStatus: string; runId: string }>(
+      `SELECT x.period, x.amount::float AS amount, x.payroll_amount::float AS "payrollAmount", r.status AS "runStatus", r.id AS "runId"
+       FROM loan_repayments x JOIN payroll_runs r ON r.id = x.run_id
+       WHERE x.loan_id = :id AND r.status <> 'cancelled' ORDER BY x.period`,
+      { id: loan.id },
+    );
+    const rows: Array<{ period: string | null; amount: number; kind: 'before' | 'deducted' | 'pending' | 'planned'; balanceAfter: number; runId?: string }> = [];
+    let balance = loan.principal;
+    if (loan.paidBefore > 0) {
+      balance -= loan.paidBefore;
+      rows.push({ period: null, amount: loan.paidBefore, kind: 'before', balanceAfter: Math.round(balance * 100) / 100 });
+    }
+    for (const item of taken) {
+      balance -= item.amount;
+      rows.push({
+        period: item.period, amount: item.amount, kind: ['approved', 'posted'].includes(item.runStatus) ? 'deducted' : 'pending',
+        balanceAfter: Math.round(balance * 100) / 100, runId: item.runId,
+      });
+    }
+    let period = taken.length ? nextPeriod(taken[taken.length - 1].period) : loan.startPeriod;
+    let count = loan.installmentsPaidBefore + taken.length;
+    let guard = 0;
+    while (loan.status === 'active' && balance > 0.004 && guard < 240) {
+      count += 1;
+      // Same rule as payroll: the agreed last instalment clears a balance under two instalments.
+      const last = loan.installmentsTotal !== null && count >= loan.installmentsTotal && balance < 2 * loan.installment;
+      const take = Math.round((last ? balance : Math.min(loan.installment, balance)) * 100) / 100;
+      balance = Math.round((balance - take) * 100) / 100;
+      rows.push({ period, amount: take, kind: 'planned', balanceAfter: balance });
+      period = nextPeriod(period);
+      guard += 1;
+    }
+    res.json({ data: { loan, rows } });
+  }
+
+  /** Everything deducted for loans in one month, by employee: the monthly deduction archive. */
+  static async deductions(req: Request, res: Response): Promise<void> {
+    const period = typeof req.query.period === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.period) ? req.query.period : null;
+    if (!period) throw badRequest('حدد الشهر.');
+    const scope = employeeScopeSql(req);
+    const rows = await select(
+      `SELECT x.loan_id AS "loanId", e.id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
+              l.currency AS "loanCurrency", x.amount::float AS amount, r.currency AS "payrollCurrency",
+              x.payroll_amount::float AS "payrollAmount", r.status AS "runStatus", r.id AS "runId", l.reference
+       FROM loan_repayments x
+       JOIN payroll_runs r ON r.id = x.run_id
+       JOIN employee_loans l ON l.id = x.loan_id
+       JOIN employees e ON e.id = l.employee_id
+       WHERE x.period = :period AND r.status <> 'cancelled'${scope.sql}
+       ORDER BY e.employee_no`,
+      { ...scope.params, period },
+    );
+    const months = await select<{ period: string }>(
+      `SELECT DISTINCT x.period FROM loan_repayments x JOIN payroll_runs r ON r.id = x.run_id WHERE r.status <> 'cancelled' ORDER BY x.period DESC LIMIT 60`,
+    );
+    res.json({ data: { period, rows, months: months.map((item) => item.period) } });
+  }
+
   static async list(req: Request, res: Response): Promise<void> {
     const scope = employeeScopeSql(req);
     const employeeId = typeof req.query.employeeId === 'string' && isUuid(req.query.employeeId) ? req.query.employeeId : null;

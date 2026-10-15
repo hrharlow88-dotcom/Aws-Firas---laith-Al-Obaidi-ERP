@@ -19,6 +19,16 @@ export const PERMISSIONS = [
   'payroll.view',
   'payroll.prepare',
   'payroll.approve',
+  // Approval chain: audit review before the executive, then finance pays out.
+  'payroll.audit',
+  'payroll.disburse',
+  // Employee requests (leave, hourly, loans, work expenses) handled by HR.
+  'requests.manage',
+  'discipline.view',
+  'discipline.manage',
+  'tickets.manage',
+  'recruitment.view',
+  'recruitment.manage',
   'finance.view',
   'finance.manage',
   'finance.post',
@@ -138,6 +148,8 @@ export interface PayrollRulesSetting {
    * final settlement and not through the monthly run.
    */
   terminatedPaidBySettlement?: boolean;
+  /** HR → audit → executive sign-offs (with e-signatures) before a run is approved; finance then records payment. */
+  approvalChain?: boolean;
   /** Dinars per US dollar, used when a loan and the salary are in different currencies. */
   usdRate?: number;
   /** Branch-specific dinar rate (branch id → rate), e.g. Erbil buys dollars at another rate. */
@@ -182,6 +194,7 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
       'compensation.view', 'compensation.manage',
       'attendance.view', 'attendance.manage',
       'payroll.view', 'payroll.prepare', 'audit.view', 'self.service',
+      'requests.manage', 'discipline.view', 'discipline.manage', 'recruitment.view', 'recruitment.manage',
     ] as Permission[],
   },
   hr_staff: {
@@ -189,6 +202,7 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
     permissions: [
       'employees.create', 'employees.update', 'leaves.view', 'leaves.request',
       'employees.view_profile', 'employees.manage_profile', 'attendance.view', 'attendance.manage', 'self.service',
+      'requests.manage', 'discipline.view', 'recruitment.view', 'recruitment.manage',
     ] as Permission[],
   },
   payroll_officer: {
@@ -200,7 +214,7 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
   finance: {
     label: 'المالية',
     permissions: [
-      'compensation.view', 'payroll.view', 'payroll.approve',
+      'compensation.view', 'payroll.view', 'payroll.approve', 'payroll.disburse',
       'finance.view', 'finance.manage', 'finance.post', 'audit.view', 'self.service',
     ] as Permission[],
   },
@@ -220,19 +234,19 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
     label: 'تدقيق (قراءة فقط)',
     permissions: [
       'employees.view_profile', 'compensation.view', 'attendance.view', 'leaves.view',
-      'payroll.view', 'finance.view', 'audit.view', 'self.service',
+      'payroll.view', 'finance.view', 'audit.view', 'self.service', 'payroll.audit', 'discipline.view',
     ] as Permission[],
   },
   executive: {
     label: 'الإدارة العليا',
     permissions: [
       'employees.view_profile', 'compensation.view', 'attendance.view', 'leaves.view',
-      'payroll.view', 'finance.view', 'audit.view', 'self.service',
+      'payroll.view', 'finance.view', 'audit.view', 'self.service', 'payroll.approve', 'discipline.view', 'recruitment.view',
     ] as Permission[],
   },
   it_admin: {
     label: 'مدير النظام التقني',
-    permissions: ['users.manage', 'integrations.manage', 'self.service'] as Permission[],
+    permissions: ['users.manage', 'integrations.manage', 'self.service', 'tickets.manage'] as Permission[],
   },
   viewer: { label: 'مشاهدة فقط', permissions: ['leaves.view'] },
 };

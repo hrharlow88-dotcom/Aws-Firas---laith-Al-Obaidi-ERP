@@ -22,6 +22,14 @@ export type Permission =
   | 'payroll.view'
   | 'payroll.prepare'
   | 'payroll.approve'
+  | 'payroll.audit'
+  | 'payroll.disburse'
+  | 'requests.manage'
+  | 'discipline.view'
+  | 'discipline.manage'
+  | 'tickets.manage'
+  | 'recruitment.view'
+  | 'recruitment.manage'
   | 'finance.view'
   | 'finance.manage'
   | 'finance.post'
@@ -91,6 +99,7 @@ export interface SystemSettings {
   payrollRules: {
     baseCurrency: string;
     monthlyDivisor: number;
+    approvalChain?: boolean;
     roundingDigits: number;
     components: PayrollComponentSetting[];
   };
@@ -196,7 +205,19 @@ const permissionGroups: Array<{ label: string; items: Array<{ id: Permission; la
     { id: 'compensation.manage', label: 'تعديل الرواتب وطرق الدفع' },
     { id: 'payroll.view', label: 'عرض مسيرات الرواتب والقسائم' },
     { id: 'payroll.prepare', label: 'إعداد واحتساب المسيرات' },
-    { id: 'payroll.approve', label: 'اعتماد المسيرات وإعادة فتحها' },
+    { id: 'payroll.approve', label: 'اعتماد المسيرات (المدير التنفيذي) وإعادة فتحها' },
+    { id: 'payroll.audit', label: 'تدقيق المسيرات والتوقيع عليها' },
+    { id: 'payroll.disburse', label: 'صرف الرواتب (المالية)' },
+  ] },
+  { label: 'الطلبات والانضباط', items: [
+    { id: 'requests.manage', label: 'معالجة طلبات الموظفين (إجازات، سلف، تكاليف عمل)' },
+    { id: 'discipline.view', label: 'عرض سجل الإنذارات والعقوبات' },
+    { id: 'discipline.manage', label: 'تسجيل الإنذارات والعقوبات والمخالفات' },
+  ] },
+  { label: 'التوظيف والتذاكر', items: [
+    { id: 'recruitment.view', label: 'عرض الشواغر والمتقدمين' },
+    { id: 'recruitment.manage', label: 'إدارة التوظيف ومراحل المتقدمين' },
+    { id: 'tickets.manage', label: 'معالجة التذاكر (تقنية، صيانة، نقل)' },
   ] },
   { label: 'المالية والرقابة', items: [
     { id: 'finance.view', label: 'عرض القيود وربط الحسابات' },
@@ -501,6 +522,7 @@ export function SettingsPage({ value, busy, onSave }: {
             </div>
             <div className="settings-policy-body payroll-policy-body">
               <label className="field"><span>العملة الأساسية (ISO 4217)</span><input value={settings.payrollRules.baseCurrency} maxLength={3} dir="ltr" onChange={(event) => updatePayrollRules({ baseCurrency: event.target.value.toUpperCase() })} /></label>
+              <label className="settings-check"><input type="checkbox" checked={settings.payrollRules.approvalChain === true} onChange={(event) => updatePayrollRules({ approvalChain: event.target.checked })} />سلسلة اعتماد المسير بالتوقيع الإلكتروني: الموارد البشرية ← التدقيق ← المدير التنفيذي ← المالية للصرف</label>
               <label className="field"><span>أيام الشهر لأغراض احتساب الأجر اليومي</span><input type="number" min="1" max="31" step="0.5" value={settings.payrollRules.monthlyDivisor} onChange={(event) => updatePayrollRules({ monthlyDivisor: Number(event.target.value) })} /></label>
               <label className="field"><span>الخانات العشرية للتقريب</span><input type="number" min="0" max="4" step="1" value={settings.payrollRules.roundingDigits} onChange={(event) => updatePayrollRules({ roundingDigits: Number(event.target.value) })} /></label>
             </div>

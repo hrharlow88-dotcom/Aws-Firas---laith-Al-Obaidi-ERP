@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, Fragment, useState } from 'react';
 import {
   AlertTriangle, ArrowRight, Calculator, Check, ChevronDown, ChevronLeft, Download, FileSpreadsheet, Landmark, Plus,
   Printer, RotateCcw, Trash2, Upload, Wallet, X,
@@ -15,6 +15,7 @@ import { useCrumb } from '../lib/breadcrumbs';
 import { useLoad, useSession } from '../lib/session';
 
 interface RunSummary {
+  signedSteps?: string[]; paidAt?: string | null;
   id: string; period: string; status: string; currency: string; branchId: string | null; branchName: string | null;
   employeeCount: number; totalEarnings: number; totalDeductions: number; totalNet: number; warningCount: number;
   calculatedAt: string | null; approvedAt: string | null; postedAt: string | null; createdByName: string;
@@ -32,7 +33,16 @@ interface Line {
 interface RunDetail extends RunSummary {
   startsOn: string; endsOn: string; notes: string | null; cancelledReason: string | null; createdBy: string;
   calculatedBy: string | null; lines: Line[]; journalId: string | null;
+  approvalChain: boolean; signoffs: Signoff[]; paidAt: string | null; paidByName: string | null;
 }
+interface Signoff { id: string; step: Step; userId: string; userName: string; signature: string; note: string | null; signedAt: string }
+type Step = 'hr' | 'audit' | 'ceo' | 'finance';
+const CHAIN: Array<{ step: Step; ar: string; en: string; permission: Parameters<ReturnType<typeof useSession>['can']>[0] }> = [
+  { step: 'hr', ar: 'الموارد البشرية', en: 'HR', permission: 'payroll.prepare' },
+  { step: 'audit', ar: 'التدقيق', en: 'Audit', permission: 'payroll.audit' },
+  { step: 'ceo', ar: 'المدير التنفيذي', en: 'CEO', permission: 'payroll.approve' },
+  { step: 'finance', ar: 'المالية — الصرف', en: 'Finance — Payout', permission: 'payroll.disburse' },
+];
 
 type Tab = 'runs' | 'inputs';
 
@@ -70,20 +80,23 @@ function RunsList({ branches }: { branches: Array<{ id: string; name: string }> 
 
   return (
     <section className="panel">
-      <div className="panel-head"><div><h3>مسيرات الرواتب</h3><p>{runs.data.length} مسير</p></div>
+      <div className="panel-head"><div><h3>أرشيف المسيرات · Payroll archive</h3><p>{runs.data.length} مسير، كل شهر بسجله وتواقيعه</p></div>
         {session.can('payroll.prepare') && <button className="button button-primary" onClick={() => setCreating(true)}><Plus size={16} />مسير جديد</button>}</div>
       {runs.loading ? <Loading /> : runs.data.length ? <div className="table-scroll"><table>
-        <thead><tr><th>الشهر</th><th>النطاق</th><th>الحالة</th><th>الموظفون</th><th>الإجمالي</th><th>الصافي</th><th>المالية</th><th /></tr></thead>
-        <tbody>{runs.data.map((run) => <tr key={run.id} className={run.status === 'cancelled' ? 'row-muted' : ''}>
+        <thead><tr><th>الشهر</th><th>النطاق</th><th>الحالة</th><th>الاعتماد</th><th>الموظفون</th><th>الإجمالي</th><th>الصافي</th><th>المالية</th><th /></tr></thead>
+        <tbody>{runs.data.map((run, index) => <Fragment key={run.id}>{(index === 0 || runs.data[index - 1].period.slice(0, 4) !== run.period.slice(0, 4)) &&
+          <tr key={`y-${run.period.slice(0, 4)}`} className="year-row"><td colSpan={9}>{run.period.slice(0, 4)}</td></tr>}
+          <tr key={run.id} className={run.status === 'cancelled' ? 'row-muted' : ''}>
           <td><strong>{monthLabel(run.period)}</strong><small className="table-sub">{run.currency}</small></td>
           <td>{run.branchName ?? 'كل الفروع'}</td>
           <td><StatusTag map={RUN_STATUS} value={run.status} />{run.warningCount > 0 && run.status === 'calculated' && <small className="table-sub warn-text">{run.warningCount} تنبيه</small>}</td>
+          <td><span className="chain-mini" title="الموارد البشرية · التدقيق · المدير التنفيذي · المالية">{CHAIN.map((item) => <i key={item.step} className={run.signedSteps?.includes(item.step) ? 'is-done' : ''} title={item.ar} />)}</span>{run.paidAt && <small className="table-sub">صُرف</small>}</td>
           <td>{formatNumber(run.employeeCount)}</td>
           <td>{formatMoney(run.totalEarnings, run.currency)}</td>
           <td><strong>{formatMoney(run.totalNet, run.currency)}</strong></td>
           <td>{run.journalStatus ? <StatusTag map={JOURNAL_STATUS} value={run.journalStatus} /> : '—'}</td>
           <td><button className="text-button" onClick={() => navigate('payroll', run.id)}>فتح<ChevronLeft size={14} /></button></td>
-        </tr>)}</tbody>
+        </tr></Fragment>)}</tbody>
       </table></div> : <Empty icon={<Wallet size={22} />} title="لا توجد مسيرات بعد" text="سجّل رواتب الموظفين من ملفاتهم، ثم أنشئ مسير الشهر." action={session.can('payroll.prepare') ? 'مسير جديد' : undefined} onAction={() => setCreating(true)} />}
       <Dialog open={creating} title="مسير رواتب جديد" subtitle="يشمل الموظفين الذين لهم راتب بالعملة المختارة ولم يدخلوا مسيراً آخر لنفس الشهر." onClose={() => setCreating(false)}>
         <form onSubmit={create}>
@@ -158,7 +171,7 @@ function RunView({ runId }: { runId: string }) {
           <p><StatusTag map={RUN_STATUS} value={data.status} /> · {data.currency} · أعده {data.createdByName}{data.calculatedByName ? ` · احتسبه ${data.calculatedByName} ${formatDateTime(data.calculatedAt)}` : ''}{data.approvedByName ? ` · اعتمده ${data.approvedByName}` : ''}</p></div>
         <div className="heading-actions">
           {['draft', 'calculated'].includes(data.status) && session.can('payroll.prepare') && <button className="button button-quiet" disabled={Boolean(busy)} onClick={() => void act('calculate', 'تم احتساب المسير.')}><Calculator size={16} />{busy === 'calculate' ? 'جارٍ الاحتساب…' : data.status === 'draft' ? 'احتساب' : 'إعادة احتساب'}</button>}
-          {data.status === 'calculated' && session.can('payroll.approve') && <button className="button button-primary" disabled={Boolean(busy) || isPreparer || blocking.length > 0} title={isPreparer ? 'يعتمد المسير شخص غير الذي أعده' : undefined} onClick={() => void act('approve', 'تم اعتماد المسير وقفل حضور الشهر.')}><Check size={16} />{busy === 'approve' ? 'جارٍ التحقق…' : 'اعتماد'}</button>}
+          {data.status === 'calculated' && !data.approvalChain && session.can('payroll.approve') && <button className="button button-primary" disabled={Boolean(busy) || isPreparer || blocking.length > 0} title={isPreparer ? 'يعتمد المسير شخص غير الذي أعده' : undefined} onClick={() => void act('approve', 'تم اعتماد المسير وقفل حضور الشهر.')}><Check size={16} />{busy === 'approve' ? 'جارٍ التحقق…' : 'اعتماد'}</button>}
           {data.status === 'approved' && session.can('finance.post') && !data.journalId && <button className="button button-primary" disabled={Boolean(busy)} onClick={() => void createJournal()}><Landmark size={16} />إنشاء قيد SAP</button>}
           {data.journalId && session.can('finance.view') && <button className="button button-quiet" onClick={() => navigate('finance', 'journal', data.journalId!)}><Landmark size={16} />القيد · {JOURNAL_STATUS[data.journalStatus ?? '']?.label ?? ''}</button>}
           {data.status !== 'draft' && data.status !== 'cancelled' && <button className="button button-quiet" onClick={() => void downloadFile(`/payroll/runs/${runId}/register.xlsx`, session.token, `payroll-${data.period}.xlsx`).catch((error) => session.fail(error, 'تعذر التصدير.'))}><FileSpreadsheet size={16} />كشف Excel</button>}
@@ -168,7 +181,8 @@ function RunView({ runId }: { runId: string }) {
         </div>
       </div>
 
-      {data.status === 'calculated' && isPreparer && session.can('payroll.approve') && <Warning title="فصل المهام">لا يمكنك اعتماد مسير أعددته أو احتسبته. يعتمده مستخدم آخر بصلاحية الاعتماد (مثلاً المالية).</Warning>}
+      {data.approvalChain && data.status !== 'draft' && data.status !== 'cancelled' && <ApprovalChain run={data} onDone={run.reload} />}
+      {data.status === 'calculated' && !data.approvalChain && isPreparer && session.can('payroll.approve') && <Warning title="فصل المهام">لا يمكنك اعتماد مسير أعددته أو احتسبته. يعتمده مستخدم آخر بصلاحية الاعتماد (مثلاً المالية).</Warning>}
       {blocking.length > 0 && <Warning title={`${blocking.length} موظف يمنعون الاعتماد`}>صافي سالب أو أجر يومي بلا حضور. صحح المبالغ المتغيرة أو بيانات الموظف ثم أعد الاحتساب.</Warning>}
       {data.status === 'cancelled' && <Warning title="مسير ملغى">{data.cancelledReason}</Warning>}
 
@@ -191,6 +205,70 @@ function RunView({ runId }: { runId: string }) {
           </table></div>
         </>}
       </section>
+      {reason.element}
+    </section>
+  );
+}
+
+/** HR → audit → CEO → finance, each with the signer's e-signature and time. */
+function ApprovalChain({ run, onDone }: { run: RunDetail; onDone: () => void }) {
+  const session = useSession();
+  const reason = useReasonPrompt();
+  const [busy, setBusy] = useState(false);
+  const signed = new Map(run.signoffs.map((item) => [item.step, item]));
+  const next = CHAIN.find((item) => !signed.has(item.step));
+  const mine = run.signoffs.some((item) => item.userId === session.user.id);
+  const nextOpen = next && (next.step === 'finance' ? ['approved', 'posted'].includes(run.status) : run.status === 'calculated');
+
+  async function sign(step: Step) {
+    const note = window.prompt('ملاحظة مع التوقيع (اختياري) · Note (optional)') ?? '';
+    setBusy(true);
+    try {
+      await session.call(`/payroll/runs/${run.id}/sign`, { method: 'POST', body: { step, note: note.trim() || undefined } });
+      session.notify(step === 'ceo' ? 'اعتُمد المسير وقُفل حضور الشهر.' : step === 'finance' ? 'سُجّل صرف الرواتب.' : 'تم التوقيع وأُحيل للخطوة التالية.');
+      onDone();
+    } catch (error) {
+      session.fail(error, 'تعذر التوقيع.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function sendBack() {
+    const why = await reason.ask('سبب إرجاع المسير للموارد البشرية');
+    if (!why) return;
+    try {
+      await session.call(`/payroll/runs/${run.id}/return`, { method: 'POST', body: { reason: why } });
+      session.notify('أُرجع المسير؛ التواقيع السابقة لم تعد سارية.');
+      onDone();
+    } catch (error) {
+      session.fail(error, 'تعذر الإرجاع.');
+    }
+  }
+
+  return (
+    <section className="panel approval-chain">
+      <div className="panel-head"><div><h3>سلسلة الاعتماد · Approval chain</h3><p>كل خطوة يوقّعها شخص مختلف بتوقيعه الإلكتروني. إعادة الاحتساب تلغي التواقيع.</p></div>
+        {run.status === 'calculated' && run.signoffs.length > 0 && (session.can('payroll.audit') || session.can('payroll.approve')) &&
+          <button className="button button-quiet" onClick={() => void sendBack()}><RotateCcw size={15} />إرجاع</button>}</div>
+      <ol className="chain-steps">
+        {CHAIN.map((item, index) => {
+          const done = signed.get(item.step);
+          const current = next?.step === item.step;
+          return <li key={item.step} className={done ? 'is-done' : current ? 'is-current' : ''}>
+            <span className="chain-dot">{done ? <Check size={14} /> : index + 1}</span>
+            <div className="chain-body">
+              <strong>{item.ar}</strong><small dir="ltr">{item.en}</small>
+              {done ? <>
+                <img className="chain-signature" src={done.signature} alt={`توقيع ${done.userName}`} />
+                <small>{done.userName} · {formatDateTime(done.signedAt)}</small>
+                {done.note && <small className="chain-note">«{done.note}»</small>}
+              </> : current && nextOpen && session.can(item.permission) ? <button className="button button-primary" disabled={busy || mine} title={mine ? 'وقّعت خطوة سابقة من هذا المسير' : undefined}
+                onClick={() => void sign(item.step)}><Check size={15} />{item.step === 'finance' ? 'توقيع الصرف' : 'توقيع واعتماد'}</button>
+                : <small className="muted">{current ? (nextOpen ? 'بانتظار التوقيع' : 'بعد الاعتماد') : 'لاحقاً'}</small>}
+            </div>
+          </li>;
+        })}
+      </ol>
       {reason.element}
     </section>
   );
