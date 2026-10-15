@@ -43,6 +43,9 @@ services:
       # caddy → nginx → api
       TRUST_PROXY_HOPS: "2"
       PUBLIC_URL: https://${ERP_DOMAIN}
+      # Link to the separate demo copy (set by ./new-company.sh ... --demo)
+      DEMO_BRIDGE_URL: ${DEMO_BRIDGE_URL:-}
+      DEMO_BRIDGE_KEY: ${DEMO_BRIDGE_KEY:-}
       UPLOAD_DIR: /data/uploads
       SAP_B1_URL: ${SAP_B1_URL:-}
       SAP_B1_COMPANY_DB: ${SAP_B1_COMPANY_DB:-}

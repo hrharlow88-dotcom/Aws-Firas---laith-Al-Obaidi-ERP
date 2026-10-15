@@ -30,8 +30,18 @@ DEMO_MODE=${demo}
 ENV
   chmod 600 "$envfile"
 fi
+if [ "$demo" = "true" ] && ! grep -q '^DEMO_BRIDGE_KEY=' "$envfile"; then
+  # The real system manages demo guests through this private key; nobody else can.
+  key=$(rand 48)
+  echo "DEMO_BRIDGE_KEY=${key}" >> "$envfile"
+  sed -i '/^DEMO_BRIDGE_URL=/d;/^DEMO_BRIDGE_KEY=/d' .env
+  printf 'DEMO_BRIDGE_URL=http://web-%s\nDEMO_BRIDGE_KEY=%s\n' "$name" "$key" >> .env
+  relink_main=1
+fi
 docker compose --env-file "$envfile" -f docker-compose.company.yml up -d --build
-printf '%s {\n\tencode gzip\n\treverse_proxy web-%s:80\n}\n' "$domain" "$name" > "companies/${name}.caddy"
+[ "${relink_main:-}" = 1 ] && docker compose -f docker-compose.prod.yml up -d api
+# The demo link is reached inside the server only, never from the internet.
+printf '%s {\n\tencode gzip\n\trespond /api/demo-bridge/* 404\n\treverse_proxy web-%s:80\n}\n' "$domain" "$name" > "companies/${name}.caddy"
 docker compose -f docker-compose.prod.yml exec -T caddy caddy reload --config /etc/caddy/Caddyfile
 sleep 8
 if grep -q '^DEMO_MODE=true' "$envfile"; then

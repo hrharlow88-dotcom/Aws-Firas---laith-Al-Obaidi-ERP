@@ -1,4 +1,4 @@
-import express, { NextFunction, Request, Response } from 'express';
+import express, { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import AuthController from '../controllers/AuthController';
 import BranchController from '../controllers/BranchController';
@@ -143,6 +143,14 @@ router.get('/owner/demo', requireAuth, allowRoles('super_admin'), asyncRoute(Dem
 router.post('/owner/demo', requireAuth, allowRoles('super_admin'), asyncRoute(DemoController.create));
 router.patch('/owner/demo/:id', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(DemoController.update));
 router.post('/owner/demo-toggle', requireAuth, allowRoles('super_admin'), asyncRoute(DemoController.toggleAll));
+router.post('/owner/demo/:id/invite', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(DemoController.invite));
+// The demo copy's private door for the real system (shared key; answers 404 otherwise).
+const bridgeGate: RequestHandler = (req, res, next) => { void DemoController.bridgeAuth(req, res, next).catch(next); };
+router.get('/demo-bridge/accounts', bridgeGate, asyncRoute(DemoController.bridgeList));
+router.post('/demo-bridge/accounts', bridgeGate, asyncRoute(DemoController.bridgeCreate));
+router.post('/demo-bridge/accounts/:id/invite', bridgeGate, validateUuidParam, asyncRoute(DemoController.bridgeInvite));
+router.patch('/demo-bridge/accounts/:id', bridgeGate, validateUuidParam, asyncRoute(DemoController.bridgeUpdate));
+router.post('/demo-bridge/toggle', bridgeGate, asyncRoute(DemoController.bridgeToggle));
 
 // Radar, scanner and firewall (owner).
 router.get('/security/radar', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.radar));

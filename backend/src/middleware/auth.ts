@@ -9,6 +9,8 @@ import { execute } from '../db/query';
 
 /** last_seen_at is written at most this often per account. */
 const SEEN_WRITE_MS = 30000;
+/** What a demo guest may never change. */
+const DEMO_LOCKED = /^\/(users|settings|owner|security|invites|portal\/accounts|messages\/(channels|templates)|integrations|companies|org\/import|auth\/change-password)(\/|\?|$)/;
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const jwtSecret = process.env.JWT_SECRET;
@@ -43,6 +45,11 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
       const lastSeen = user.lastSeenAt?.getTime() ?? 0;
       if (lastSeen && now - lastSeen > idleMs) {
         res.status(401).json({ message: `انتهت الجلسة بعد ${settings.security.idleMinutes} دقيقة بلا نشاط. سجّل الدخول مجدداً.`, reason: 'idle' });
+        return;
+      }
+      // Only the owner grants access: a demo guest, whatever its role, changes no accounts, permissions or settings.
+      if (user.isDemo && req.method !== 'GET' && DEMO_LOCKED.test(req.originalUrl.replace(/^\/api/, ''))) {
+        res.status(403).json({ message: 'الحساب التجريبي للاطلاع والتجربة؛ منح الحسابات والصلاحيات والإعدادات لمالك النظام فقط.' });
         return;
       }
       if (req.header('x-background') !== '1' && now - lastSeen > SEEN_WRITE_MS) {

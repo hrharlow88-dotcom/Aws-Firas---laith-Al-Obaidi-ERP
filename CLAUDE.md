@@ -39,12 +39,13 @@
 29. **النصوص القابلة للتعديل** (`ui.texts`، `frontend/src/lib/texts.ts`): المالك يعدّل اسم النظام ونصوص شاشة الدخول وأسماء كل التطبيقات والقوائم عربي/إنكليزي من «لوحة المالك ← النصوص والتسميات».
 30. **الدعوة بالهاتف** (`/invites/deliver`، `/users/:id/invite`، `components/InviteDialog.tsx`): رابط تعيين كلمة مرور + نص الدعوة باللغتين، يُرسل عبر القنوات المفعّلة أو يدوياً بأزرار واتساب/SMS/بريد.
 31. **الرادار والجدار الناري** (`services/firewall.ts`، `services/scanner.ts`، `pages/SecurityRadar.tsx`): رادار بمن يستخدم النظام الآن، فحص ثغرات بدرجة من 100 وإصلاح بنقرة (تشفير الملفات القديمة، تعطيل حسابات المنفكّين والخاملة، تفعيل WAF والحظر التلقائي...)، جدار ناري على `/api`: حظر عناوين (`ip_blocks`)، WAF (SQLi/XSS/traversal/JNDI)، حد طلبات لكل عنوان (`security.requestsPerMinute`). الملفات المرفوعة تُخزن مشفّرة AES-256-GCM (بادئة `LOENC1`).
-32. **النسخة التجريبية** (`DEMO_MODE=true`، `DemoController`، `users.is_demo/demo_expires_at`): حسابات ديمو أدمن/موظف ينشئها المالك ببريد وكلمة مرور، توقف وتفعّل وتنتهي بتاريخ، ولا تغيّر كلمة المرور. تعمل فقط على نسخة منفصلة ببيانات وهمية: `deploy/new-company.sh demo <domain> <email> --demo` ثم `node dist/db/seedDemo.js` (يعمل تلقائياً، ويرفض إن لم تكن نسخة ديمو أو فيها موظفون). الفاحص ينبّه إن وُجدت حسابات ديمو في النسخة الحقيقية.
+32. **دعوات تجربة النظام** (`DemoController`، `users.is_demo/demo_expires_at`): المالك وحده (super_admin) يدعو ضيفاً «ديمو أدمن/موظف» من «لوحة المالك ← الحسابات التجريبية» في النظام الحقيقي، والدعوة تُرسل بواتساب/SMS/بريد (قالب `demo_invite`) والضيف يختار كلمة مروره من الرابط. الحساب نفسه يُنشأ على نسخة العرض المنفصلة ذات البيانات الوهمية (`DEMO_MODE=true`) عبر باب خاص `/api/demo-bridge/*` بمفتاح مشترك `DEMO_BRIDGE_KEY` (والنظام الحقيقي يصلها بـ `DEMO_BRIDGE_URL=http://web-demo`؛ Caddy يغلق الباب من الإنترنت). الضيف لا يغيّر كلمة المرور ولا يمس الحسابات والصلاحيات والإعدادات (`DEMO_LOCKED` في `middleware/auth.ts`). إنشاء النسخة: `deploy/new-company.sh demo <domain> <email> --demo` (يربط المفتاح ويعبّئ البيانات بـ `seedDemo.js`).
+33. **منح الصلاحيات للمالك فقط** (`assertMayGrant` في `UserController`): أي دور غير «موظف» أو تغيير دور أو إعادة تفعيل حساب بصلاحيات يمنحه super_admin فقط؛ غيره يضيف حسابات بوابة الموظف فقط.
 
 ## التشغيل والاختبار
 ```bash
 # قاعدة اختبار باسم يحتوي "test" (الاختبارات تمسحها وتعيد بناءها)
-cd backend && npm install && npm test        # 124 اختبار
+cd backend && npm install && npm test        # 125 اختبار
 cd backend && npm run build && npm start     # يتطلب backend/.env (انظر .env.example)
 cd frontend && npm install && npm run build  # الخادم يقدّم frontend/dist
 ```

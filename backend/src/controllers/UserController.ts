@@ -1,9 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { Op } from 'sequelize';
-import { permissionsFor } from '../config/systemSettings';
 import { Branch, Employee, User } from '../models';
-import { getSettings } from '../services/settings';
 import { ROLES, UserRole } from '../types';
 import { audited } from '../utils/audit';
 import { isUuid } from '../utils/validation';
@@ -33,14 +31,11 @@ function toSafeUser(user: User) {
  * cannot create an HR or payroll account and use it to read salaries.
  */
 async function assertMayGrant(req: Request, role: UserRole): Promise<string | null> {
-  if (req.user?.role === 'super_admin') return null;
-  if (role === 'super_admin') return 'لا يمنح دور مدير النظام إلا مدير النظام.';
-  // A plain employee account only ever sees its own record, so any account manager may create one.
-  if (role === 'employee') return null;
-  const settings = await getSettings();
-  const mine = new Set(permissionsFor(req.user!.role, settings));
-  const missing = permissionsFor(role, settings).filter((permission) => !mine.has(permission));
-  return missing.length ? 'لا يمكنك منح دور يملك صلاحيات أوسع من صلاحياتك.' : null;
+  if (req.user?.role === 'super_admin' && !req.user.isDemo) return null;
+  // A plain employee account only ever sees its own record, so any account manager may invite one to the portal.
+  if (role === 'employee' && !req.user?.isDemo) return null;
+  // Every other role and permission is granted by the system owner alone.
+  return 'منح الأدوار والصلاحيات لمالك النظام فقط.';
 }
 
 async function validateEmployeeLink(employeeId: unknown, userId?: string): Promise<{ error?: string; id?: string | null }> {
@@ -164,7 +159,9 @@ export class UserController {
         res.status(403).json({ message: 'لا يمكنك تغيير دور حسابك.' });
         return;
       }
-      const refused = await assertMayGrant(req, (role ?? user.role) as UserRole);
+      // Changing a role, or switching a privileged account back on, is granting access: the owner's alone.
+      const granting = (role !== undefined && role !== user.role) || (isActive === true && !user.isActive);
+      const refused = granting ? await assertMayGrant(req, (role ?? user.role) as UserRole) : null;
       if (refused) {
         res.status(403).json({ message: refused });
         return;

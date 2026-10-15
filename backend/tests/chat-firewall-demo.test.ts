@@ -96,27 +96,62 @@ describe('companies and demo accounts', () => {
     await api().post('/api/companies').set(hr.auth).send({ code: 'X', nameAr: 'x' }).expect(403);
   });
 
-  it('creates demo accounts only on the demo copy, and the owner switches them off', async () => {
+  it('lets only the owner invite demo guests, who choose their own password and grant nothing', async () => {
     const owner = await makeUser('super_admin');
+    const hr = await makeUser('hr_manager');
     const branch = await makeBranch('فرع العرض');
     const employee = await makeEmployee(branch.id);
-    await api().post('/api/owner/demo').set(owner.auth).send({ name: 'ديمو', email: 'demo1@demo.local', password: 'Demo-Password-2026', role: 'hr_manager' }).expect(409);
+    // Real system, no demo copy linked: nothing is created here.
+    await api().post('/api/owner/demo').set(owner.auth).send({ name: 'ديمو', email: 'demo1@demo.local', role: 'hr_manager' }).expect(409);
+    await api().post('/api/owner/demo').set(hr.auth).send({ name: 'ديمو', email: 'demo1@demo.local', role: 'hr_manager' }).expect(403);
+    // Linked to a demo copy that is down: a clear error, nothing created.
+    process.env.DEMO_BRIDGE_URL = 'http://127.0.0.1:9';
+    process.env.DEMO_BRIDGE_KEY = 'k'.repeat(40);
+    try {
+      const listed = await api().get('/api/owner/demo').set(owner.auth).expect(200);
+      expect(listed.body.data).toMatchObject({ mode: 'bridge', accounts: [] });
+      await api().post('/api/owner/demo').set(owner.auth).send({ name: 'ديمو', email: 'demo1@demo.local', role: 'hr_manager' }).expect(502);
+    } finally {
+      delete process.env.DEMO_BRIDGE_URL;
+    }
+
     process.env.DEMO_MODE = 'true';
     try {
-      await api().post('/api/owner/demo').set(owner.auth).send({ name: 'مدير تجريبي', email: `admin.${Date.now()}@demo.local`, password: 'Demo-Password-2026', role: 'hr_manager' }).expect(201);
-      const staff = await api().post('/api/owner/demo').set(owner.auth).send({ name: 'موظف تجريبي', email: `emp.${Date.now()}@demo.local`, password: 'Demo-Password-2026', role: 'employee', employeeId: employee.id }).expect(201);
-      const list = await api().get('/api/owner/demo').set(owner.auth).expect(200);
-      const account = list.body.data.accounts.find((row: { id: string }) => row.id === staff.body.data.id);
-      const login = await api().post('/api/auth/login').send({ email: account.email, password: 'Demo-Password-2026' }).expect(200);
+      // The private door refuses anyone without the shared key.
+      await api().get('/api/demo-bridge/accounts').expect(404);
+      await api().get('/api/demo-bridge/accounts').set('X-Demo-Bridge-Key', 'x'.repeat(40)).expect(404);
+      const admin = await api().post('/api/demo-bridge/accounts').set('X-Demo-Bridge-Key', 'k'.repeat(40))
+        .send({ name: 'مدير تجريبي', email: `admin.${Date.now()}@demo.local`, role: 'hr_manager' }).expect(201);
+      expect(admin.body.data.path).toMatch(/^\/#\/set-password\//);
+      const staff = await api().post('/api/owner/demo').set(owner.auth).send({ name: 'موظف تجريبي', email: `emp.${Date.now()}@demo.local`, role: 'employee', employeeId: employee.id }).expect(201);
+      const token = staff.body.data.path.split('/').pop();
+      await api().post('/api/auth/set-password').send({ token, password: 'Demo-Password-2026' }).expect(200);
+      const login = await api().post('/api/auth/login').send({ email: staff.body.data.login, password: 'Demo-Password-2026' }).expect(200);
       expect(login.body.demo).toBe(true);
       const auth = { Authorization: `Bearer ${login.body.token}` };
       await api().post('/api/auth/change-password').set(auth).send({ currentPassword: 'Demo-Password-2026', newPassword: 'Another-Password-1' }).expect(403);
-      await api().patch(`/api/owner/demo/${staff.body.data.id}`).set(owner.auth).send({ isActive: false }).expect(200);
+      // A demo admin may look around but grants nothing.
+      const adminToken = admin.body.data.path.split('/').pop();
+      await api().post('/api/auth/set-password').send({ token: adminToken, password: 'Demo-Admin-Pass-2026' }).expect(200);
+      const adminLogin = await api().post('/api/auth/login').send({ email: admin.body.data.login, password: 'Demo-Admin-Pass-2026' }).expect(200);
+      const adminAuth = { Authorization: `Bearer ${adminLogin.body.token}` };
+      await api().get('/api/employees').set(adminAuth).expect(200);
+      await api().post('/api/users').set(adminAuth).send({ name: 'x', email: 'x@demo.local', password: 'LongEnoughPass#1', role: 'finance' }).expect(403);
+      await api().put('/api/settings').set(adminAuth).send({}).expect(403);
+      await api().patch(`/api/demo-bridge/accounts/${staff.body.data.id}`).set('X-Demo-Bridge-Key', 'k'.repeat(40)).send({ isActive: false }).expect(200);
       await api().get('/api/auth/me').set(auth).expect(401);
       await api().post('/api/owner/demo-toggle').set(owner.auth).send({ enabled: false }).expect(200);
     } finally {
       delete process.env.DEMO_MODE;
+      delete process.env.DEMO_BRIDGE_KEY;
     }
     await execute('UPDATE users SET is_active = false WHERE is_demo');
+  });
+
+  it('keeps granting roles to the owner alone', async () => {
+    const hr = await makeUser('hr_manager');
+    await api().post('/api/users').set(hr.auth).send({ name: 'مالية', email: `fin.${Date.now()}@test.local`, password: 'LongEnoughPass#1', role: 'finance' }).expect(403);
+    const owner = await makeUser('super_admin');
+    await api().post('/api/users').set(owner.auth).send({ name: 'مالية', email: `fin2.${Date.now()}@test.local`, password: 'LongEnoughPass#1', role: 'finance' }).expect(201);
   });
 });

@@ -3,7 +3,7 @@ import { Copy, Mail, MessageCircle, Send, Smartphone } from 'lucide-react';
 import { Dialog } from './ui';
 import { useSession } from '../lib/session';
 
-export interface InviteTarget { name: string; login: string; url: string; kind: 'portal' | 'staff'; phone?: string | null; email?: string | null }
+export interface InviteTarget { name: string; login: string; url: string; kind: 'portal' | 'staff' | 'demo'; phone?: string | null; email?: string | null }
 
 /**
  * Sends an account invitation by WhatsApp, SMS or e-mail. The bilingual text
@@ -39,7 +39,7 @@ export function InviteDialog({ target, onClose }: { target: InviteTarget | null;
   }
 
   return (
-    <Dialog open={Boolean(target)} title={target?.kind === 'staff' ? 'دعوة مستخدم · Invite user' : 'دعوة لبوابة الموظف · Portal invitation'}
+    <Dialog open={Boolean(target)} title={target?.kind === 'staff' ? 'دعوة مستخدم · Invite user' : target?.kind === 'demo' ? 'دعوة لتجربة النظام · Demo invitation' : 'دعوة لبوابة الموظف · Portal invitation'}
       subtitle={target ? `${target.name} · يدخل بـ ${target.login} · الرابط صالح 7 أيام ولمرة واحدة` : ''} onClose={onClose}>
       {target && <div className="invite-link">
         <div className="form-grid">

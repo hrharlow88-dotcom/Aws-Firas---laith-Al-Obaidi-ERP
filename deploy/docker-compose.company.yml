@@ -40,6 +40,7 @@ services:
       PUBLIC_URL: https://${ERP_DOMAIN}
       UPLOAD_DIR: /data/uploads
       DEMO_MODE: ${DEMO_MODE:-false}
+      DEMO_BRIDGE_KEY: ${DEMO_BRIDGE_KEY:-}
     volumes:
       - uploads:/data/uploads
     depends_on:

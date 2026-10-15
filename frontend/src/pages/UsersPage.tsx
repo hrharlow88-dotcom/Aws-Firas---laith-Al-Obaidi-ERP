@@ -39,7 +39,8 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
   }
   const current = editing && editing !== 'new' ? editing : null;
   const isAdmin = session.user.role === 'super_admin';
-  const grantable = (Object.keys(roleNames) as UserRole[]).filter((item) => isAdmin || item !== 'super_admin');
+  // Roles and permissions are granted by the system owner alone; others may only add employee (portal) accounts.
+  const grantable = (Object.keys(roleNames) as UserRole[]).filter((item) => isAdmin || item === 'employee');
 
   function open(target: Account | 'new') {
     setEditing(target);
@@ -126,7 +127,7 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
           <div className="form-grid form-grid-2">
             <label className="field"><span>الاسم *</span><input name="name" required maxLength={120} defaultValue={current?.name ?? employee?.fullName ?? ''} /></label>
             {!current && <label className="field"><span>البريد الإلكتروني *</span><input name="email" type="email" required maxLength={254} dir="ltr" /></label>}
-            <label className="field"><span>الدور *</span><select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>{grantable.map((item) => <option key={item} value={item}>{roleNames[item]}</option>)}</select></label>
+            <label className="field"><span>الدور *</span><select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>{[...new Set([...grantable, role])].map((item) => <option key={item} value={item} disabled={!grantable.includes(item)}>{roleNames[item]}</option>)}</select>{!isAdmin && <small className="muted">منح الأدوار والصلاحيات لمالك النظام فقط.</small>}</label>
             {role === 'branch_manager' && <label className="field"><span>الفرع *</span><select name="branchId" required defaultValue={current?.branchId ?? ''}><option value="">اختر</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>}
             <div className="field settings-wide"><EmployeePicker label={needsEmployee ? 'ملف الموظف *' : 'ملف الموظف (اختياري: لخدمته الذاتية)'} value={employee} onChange={setEmployee} /></div>
             {!current && <label className="field"><span>كلمة المرور المؤقتة *</span><input name="password" type="password" minLength={12} required autoComplete="new-password" dir="ltr" /><small>12 محرفاً على الأقل.</small></label>}

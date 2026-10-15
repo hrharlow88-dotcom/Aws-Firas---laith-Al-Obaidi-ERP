@@ -71,6 +71,28 @@ Sign-in: {login}
 ${SIGNATURE}`,
   },
   {
+    id: 'demo_invite',
+    label: 'دعوة لتجربة النظام · Demo invitation',
+    subject: 'دعوة لتجربة نظام ERP مجموعة الليث العبيدي | Invitation to try the Group ERP',
+    fields: ['link'],
+    body: `السيد/السيدة {name} المحترم/ة،
+تحية طيبة وبعد،
+
+يسعدنا دعوتكم لتجربة نظام ERP مجموعة الليث العبيدي للسيارات على نسخة العرض التجريبية (البيانات فيها وهمية بالكامل). لتفعيل حسابكم التجريبي واختيار كلمة المرور يُرجى فتح الرابط التالي (صالح لمدة سبعة أيام ولمرة واحدة):
+{link}
+
+اسم الدخول: {login}
+
+Dear {name},
+
+You are invited to try the Al-Laith Al-Obaidi Automotive Group ERP on its demo copy (all data there is made up). To activate your demo account and choose your password, please open the link below (valid once, for seven days):
+{link}
+
+Sign-in: {login}
+
+${SIGNATURE}`,
+  },
+  {
     id: 'meeting_invite',
     label: 'دعوة اجتماع · Meeting invitation',
     subject: 'دعوة لحضور اجتماع: {title} | Meeting invitation: {title}',

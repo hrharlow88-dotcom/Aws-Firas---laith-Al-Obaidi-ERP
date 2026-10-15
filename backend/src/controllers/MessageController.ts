@@ -132,7 +132,7 @@ export class MessageController {
     const login = typeof input.login === 'string' ? input.login.slice(0, 254) : '';
     const phone = normalizePhone(typeof input.phone === 'string' ? input.phone : null);
     const email = typeof input.email === 'string' && EMAIL.test(input.email) ? input.email : null;
-    const template = MESSAGE_TEMPLATES.find((item) => item.id === (input.kind === 'staff' ? 'staff_invite' : 'portal_invite'))!;
+    const template = MESSAGE_TEMPLATES.find((item) => item.id === (input.kind === 'staff' ? 'staff_invite' : input.kind === 'demo' ? 'demo_invite' : 'portal_invite'))!;
     const values = { name, link, employeeNo: login, login };
     const subject = fillTemplate(template.subject, values);
     const text = fillTemplate(template.body, values);
