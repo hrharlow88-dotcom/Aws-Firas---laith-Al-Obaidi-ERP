@@ -94,3 +94,9 @@ docker compose -f docker-compose.prod.yml run --rm -v "$PWD/backups:/b" --entryp
 
 ## الربط مع SAP Business One
 املأ متغيرات `SAP_B1_*` في `deploy/.env` ثم أعد التشغيل. جرّب أولاً على شركة اختبار في SAP قبل الشركة الفعلية.
+
+## تحميل بيانات الشركة على السيرفر
+- من السيرفر نفسه: ضع ملفات الإكسل في `deploy/company-data/` ثم:
+  `docker compose -f docker-compose.prod.yml exec api node dist/db/importCompany.js /import`
+- أو عبر الشبكة (مدير النظام فقط): `POST /api/admin/company-import` بحقل `files` متعدد. الملفات تُقرأ في الذاكرة ولا تُحفظ.
+إعادة الاستيراد تحدّث ولا تكرر، ولا تكتب فوق السلف الموجودة.

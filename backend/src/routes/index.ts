@@ -19,6 +19,7 @@ import FinanceController from '../controllers/FinanceController';
 import IntegrationController, { requireApiKey } from '../controllers/IntegrationController';
 import AuditController from '../controllers/AuditController';
 import { uploadSingle } from '../services/storage';
+import CompanyImportController, { uploadWorkbooks } from '../controllers/CompanyImportController';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
@@ -143,6 +144,7 @@ router.get('/org/job-profiles', requireAuth, asyncRoute(JobProfileController.lis
 router.post('/org/job-profiles/import', requireAuth, allowPermission('org.manage'), asyncRoute(JobProfileController.import));
 router.get('/org/job-titles/:id/profile', requireAuth, validateUuidParam, asyncRoute(JobProfileController.get));
 router.get('/org/import/template.xlsx', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.importTemplate));
+router.post('/admin/company-import', requireAuth, allowRoles('super_admin'), uploadWorkbooks, asyncRoute(CompanyImportController.upload));
 router.post('/org/import/preview', requireAuth, allowPermission('org.manage'), uploadSingle('file'), asyncRoute(OrgController.importPreview));
 router.post('/org/import/apply', requireAuth, allowPermission('org.manage'), uploadSingle('file'), asyncRoute(OrgController.importApply));
 

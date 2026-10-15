@@ -25,6 +25,9 @@ import { runMigrations } from './migrator';
  *   npm run import:company -- /path/to/folder
  */
 
+/** One workbook: its file name (for messages) and its bytes. */
+export interface WorkbookSource { name: string; data: Buffer }
+
 type Cell = string | number | Date | boolean | null;
 type Row = Cell[];
 
@@ -187,17 +190,17 @@ interface BranchWorkbook {
   expectedNet: Map<string, { net: number; totalEarnings: number; netIqd: number }>;
 }
 
-async function readBranchWorkbook(path: string): Promise<BranchWorkbook> {
-  const workbook = await loadWorkbook(readFileSync(path));
+async function readBranchWorkbook(source: WorkbookSource): Promise<BranchWorkbook> {
+  const workbook = await loadWorkbook(source.data);
   const sheet = (name: string) => {
     const found = workbook.getWorksheet(name);
-    if (!found) throw new Error(`${path}: sheet "${name}" missing`);
+    if (!found) throw new Error(`${source.name}: sheet "${name}" missing`);
     return rows(found);
   };
   const dashboard = sheet('00 Dashboard');
   const setting = (label: RegExp): Cell => dashboard.find((row) => row.some((cell) => label.test(text(cell))))?.[1] ?? null;
   const period = text(setting(/Payroll Month/i));
-  if (!/^\d{4}-\d{2}$/.test(period)) throw new Error(`${path}: payroll month not found on the dashboard`);
+  if (!/^\d{4}-\d{2}$/.test(period)) throw new Error(`${source.name}: payroll month not found on the dashboard`);
   const fxRate = num(setting(/USD Rate/i)) || 1500;
 
   const data = sheet('01 Employee Data');
@@ -248,7 +251,7 @@ async function readBranchWorkbook(path: string): Promise<BranchWorkbook> {
       monthly: {},
       annualBalance: att && text(att[a.balance]) !== '' ? num(att[a.balance]) : null,
       sickBalance: att && text(att[a.sick]) !== '' ? num(att[a.sick]) : null,
-      file: path,
+      file: source.name,
     });
   }
 
@@ -300,7 +303,7 @@ async function readBranchWorkbook(path: string): Promise<BranchWorkbook> {
       [COMPONENT.bonus]: num(row[p.bonus]), [COMPONENT.carPenalties]: num(row[p.car]),
     };
   }
-  return { file: path, period, fxRate, employees, loans, commissions, expectedNet };
+  return { file: source.name, period, fxRate, employees, loans, commissions, expectedNet };
 }
 
 interface RegisterRow {
@@ -308,8 +311,8 @@ interface RegisterRow {
   nationality: string | null; startDate: string | null; status: string;
 }
 
-async function readRegister(path: string): Promise<Map<string, RegisterRow>> {
-  const workbook = await loadWorkbook(readFileSync(path));
+async function readRegister(source: WorkbookSource): Promise<Map<string, RegisterRow>> {
+  const workbook = await loadWorkbook(source.data);
   const sheetRows = rows(workbook.getWorksheet('Employees')!);
   const headerRow = sheetRows.findIndex((row) => row.some((cell) => /Emp Code/i.test(text(cell)))) + 1;
   const c = {
@@ -332,8 +335,8 @@ async function readRegister(path: string): Promise<Map<string, RegisterRow>> {
   return out;
 }
 
-async function readLeaveSystem(path: string): Promise<Map<string, { nameAr: string | null; managerCode: string | null }>> {
-  const workbook = await loadWorkbook(readFileSync(path));
+async function readLeaveSystem(source: WorkbookSource): Promise<Map<string, { nameAr: string | null; managerCode: string | null }>> {
+  const workbook = await loadWorkbook(source.data);
   const sheetRows = rows(workbook.getWorksheet('الموظفون')!);
   const headerRow = sheetRows.findIndex((row) => row.some((cell) => text(cell) === 'كود الموظف')) + 1;
   const c = {
@@ -348,8 +351,8 @@ async function readLeaveSystem(path: string): Promise<Map<string, { nameAr: stri
   return out;
 }
 
-async function sheetNames(path: string): Promise<string[]> {
-  const workbook = await loadWorkbook(readFileSync(path));
+async function sheetNames(source: WorkbookSource): Promise<string[]> {
+  const workbook = await loadWorkbook(source.data);
   return workbook.worksheets.map((sheet) => sheet.name);
 }
 
@@ -385,11 +388,11 @@ async function upsertDepartment(codeValue: string, name: string, parentId: strin
   return id;
 }
 
-async function main(): Promise<void> {
-  const folder = process.argv[2];
-  if (!folder) throw new Error('Usage: npm run import:company -- /path/to/folder-with-xlsx');
-  await runMigrations();
-  const files = readdirSync(folder).filter((name) => name.toLowerCase().endsWith('.xlsx')).map((name) => join(folder, name));
+/**
+ * Loads the company's workbooks. Used by the CLI below and by the
+ * administrator's upload screen; returns the summary lines instead of printing.
+ */
+export async function importCompany(files: WorkbookSource[], importedBy?: string): Promise<string[]> {
   const branchBooks: BranchWorkbook[] = [];
   let register = new Map<string, RegisterRow>();
   let leaveSystem = new Map<string, { nameAr: string | null; managerCode: string | null }>();
@@ -399,12 +402,13 @@ async function main(): Promise<void> {
     else if (names.includes('Employees')) register = await readRegister(file);
     else if (names.includes('الموظفون')) leaveSystem = await readLeaveSystem(file);
   }
-  if (!branchBooks.length) throw new Error('No branch payroll workbook found in the folder.');
+  if (!branchBooks.length) throw new Error('لم يُعثر على ملف رواتب فرع (ورقتا 01 Employee Data و04 Payroll).');
   const periods = [...new Set(branchBooks.map((book) => book.period))];
   if (periods.length > 1) throw new Error(`Workbooks are for different months: ${periods.join(', ')}`);
   const period = periods[0];
 
-  const admin = await selectOne<{ id: string }>("SELECT id FROM users WHERE role = 'super_admin' AND is_active ORDER BY created_at LIMIT 1");
+  const admin = importedBy ? { id: importedBy }
+    : await selectOne<{ id: string }>("SELECT id FROM users WHERE role = 'super_admin' AND is_active ORDER BY created_at LIMIT 1");
   if (!admin) throw new Error('Start the API once so the administrator account exists, then run the import.');
   const userId = admin.id;
   const report: string[] = [];
@@ -679,17 +683,29 @@ async function main(): Promise<void> {
   });
 
   const all = branchBooks.flatMap((book) => book.employees);
-  console.log(`Imported ${all.length} employees for ${period} from ${branchBooks.length} payroll workbooks.`);
-  console.log(`  register rows: ${register.size}, leave system rows: ${leaveSystem.size}`);
-  for (const book of branchBooks) {
-    console.log(`  ${book.file.split('/').pop()}: ${book.employees.length} employees, ${book.loans.length} loans, ${book.commissions.length} commissions, FX ${book.fxRate}`);
-  }
-  if (report.length) console.log(`Notes:\n  ${report.join('\n  ')}`);
+  const lines = [
+    `Imported ${all.length} employees for ${period} from ${branchBooks.length} payroll workbooks.`,
+    `  register rows: ${register.size}, leave system rows: ${leaveSystem.size}`,
+    ...branchBooks.map((book) => `  ${book.file.split('/').pop()}: ${book.employees.length} employees, ${book.loans.length} loans, ${book.commissions.length} commissions, FX ${book.fxRate}`),
+  ];
+  if (report.length) lines.push('Notes:', ...report.map((line) => `  ${line}`));
+  return lines;
+}
+
+async function main(): Promise<void> {
+  const folder = process.argv[2];
+  if (!folder) throw new Error('Usage: npm run import:company -- /path/to/folder-with-xlsx');
+  await runMigrations();
+  const files = readdirSync(folder).filter((name) => name.toLowerCase().endsWith('.xlsx'))
+    .map((name) => ({ name, data: readFileSync(join(folder, name)) }));
+  for (const line of await importCompany(files)) console.log(line);
   await sequelize.close();
 }
 
-void main().catch(async (error: unknown) => {
-  console.error('Import failed:', error instanceof Error ? error.stack : error);
-  await sequelize.close().catch(() => undefined);
-  process.exit(1);
-});
+if (require.main === module) {
+  void main().catch(async (error: unknown) => {
+    console.error('Import failed:', error instanceof Error ? error.stack : error);
+    await sequelize.close().catch(() => undefined);
+    process.exit(1);
+  });
+}
