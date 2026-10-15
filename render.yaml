@@ -1,10 +1,13 @@
+# Demo only: the free plan's disk is wiped on every deploy and its database expires.
+# Never load real salaries or ID numbers here; use deploy/ on the company server.
 services:
   - type: web
     name: laith-erp-demo
     runtime: node
     plan: free
     region: frankfurt
-    buildCommand: cd backend && npm install && npm run build && cd ../frontend && npm install && npm run build
+    # Dev dependencies (TypeScript, Vite) are needed to build even though NODE_ENV is production.
+    buildCommand: cd backend && npm ci --include=dev && npm run build && cd ../frontend && npm ci --include=dev && npm run build
     startCommand: cd backend && npm start
     healthCheckPath: /api/health
     envVars:
@@ -34,6 +37,13 @@ services:
         value: "false"
       - key: JWT_SECRET
         generateValue: true
+      # Render generates a base64 256-bit value, the format the field encryption expects.
+      - key: DATA_ENCRYPTION_KEY
+        generateValue: true
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: UPLOAD_DIR
+        value: /tmp/laith-erp-uploads
       - key: ADMIN_NAME
         value: مسؤول النظام
       - key: ADMIN_EMAIL
