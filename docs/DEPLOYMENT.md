@@ -100,3 +100,9 @@ docker compose -f docker-compose.prod.yml run --rm -v "$PWD/backups:/b" --entryp
   `docker compose -f docker-compose.prod.yml exec api node dist/db/importCompany.js /import`
 - أو عبر الشبكة (مدير النظام فقط): `POST /api/admin/company-import` بحقل `files` متعدد. الملفات تُقرأ في الذاكرة ولا تُحفظ.
 إعادة الاستيراد تحدّث ولا تكرر، ولا تكتب فوق السلف الموجودة.
+
+## تغيير كلمة مرور حساب من السيرفر
+```bash
+cd /opt/laith-erp/deploy && docker compose -f docker-compose.prod.yml exec api node dist/db/resetPassword.js you@company.com
+```
+تُكتب كلمة المرور مخفية مرتين (12 حرفاً على الأقل). يفك القفل ويُخرج الجلسات المفتوحة ويُسجَّل في سجل التدقيق.
