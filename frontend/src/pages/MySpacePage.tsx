@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import {
-  CalendarClock, CalendarDays, Clock3, FileText, Fingerprint, HandCoins, IdCard, Paperclip, Receipt, Send, Wallet, X,
+  CalendarClock, CalendarDays, Clock3, FileText, Fingerprint, HandCoins, IdCard, MessageSquare, Paperclip, Receipt, Send, Wallet, X,
 } from 'lucide-react';
 import { Bi } from '../components/Brand';
 import { EmployeePhoto } from '../components/EmployeePhoto';
@@ -8,6 +8,7 @@ import { Dialog, Empty, Loading, Stat, StatusTag, Tabs, Tone } from '../componen
 import { DAY_STATUS, EMPLOYMENT_TYPES, currentPeriod, formatDate, formatDateTime, formatMinutes, formatMoney, formatNumber, monthLabel } from '../lib/format';
 import { navigate } from '../lib/router';
 import { useLoad, useSession } from '../lib/session';
+import { ACTION, DisciplineRecord, RECORD_STATUS, RecordView } from './DisciplinePage';
 
 interface MyProfile {
   id: string; employeeNo: string; fullName: string; nameEn: string | null; branchName: string; department: string;
@@ -42,7 +43,7 @@ const LEAVE_STATUS: Record<string, { label: string; tone: string }> = {
   rejected: { label: 'مرفوضة', tone: 'bad' }, cancelled: { label: 'ملغاة', tone: 'muted' },
 };
 
-type Tab = 'attendance' | 'requests' | 'leaves' | 'payslips';
+type Tab = 'attendance' | 'requests' | 'leaves' | 'payslips' | 'notices';
 type Form = null | 'leave' | 'hourly' | 'loan' | 'expense';
 
 /** The employee portal: my card, my attendance, and every request I can make. */
@@ -57,6 +58,8 @@ export function MySpacePage() {
   const employeeId = profile.data?.id;
   const balances = useLoad<{ balances: Balance[] } | null>(employeeId && session.can('leaves.view') ? `/leaves/balances?employeeId=${employeeId}` : null, null);
   const [tab, setTab] = useState<Tab>('attendance');
+  const notices = useLoad<DisciplineRecord[]>('/me/discipline', []);
+  const [notice, setNotice] = useState<DisciplineRecord | null>(null);
   const [form, setForm] = useState<Form>(null);
 
   if (profile.loading && !profile.data) return <section className="screen"><Loading /></section>;
@@ -96,6 +99,7 @@ export function MySpacePage() {
         {session.can('leaves.request') && <button onClick={() => setForm('hourly')}><Clock3 size={22} /><Bi ar="إجازة زمنية" en="Hourly leave" block /></button>}
         <button onClick={() => setForm('loan')}><HandCoins size={22} /><Bi ar="طلب سلفة" en="Loan request" block /></button>
         <button onClick={() => setForm('expense')}><Receipt size={22} /><Bi ar="تكاليف عمل" en="Work expenses" block /></button>
+        <button onClick={() => navigate('my-tickets')}><MessageSquare size={22} /><Bi ar="تذكرة (تقنية، صيانة، سيارة)" en="Helpdesk ticket" block /></button>
       </div>
 
       <div className="stat-row">
@@ -111,6 +115,7 @@ export function MySpacePage() {
           { id: 'requests', label: 'طلباتي · Requests', badge: requests.data.length },
           { id: 'leaves', label: 'إجازاتي · Leave', badge: leaves.data.length },
           { id: 'payslips', label: 'قسائمي · Payslips', badge: payslips.data.length },
+          { id: 'notices', label: 'إشعاراتي · Notices', badge: notices.data.filter((item) => item.status === 'issued').length || undefined },
         ]} />
           {tab === 'attendance' && <input className="inline-month" type="month" value={period} max={currentPeriod()} onChange={(event) => setPeriod(event.target.value)} aria-label="الشهر" />}</div>
 
@@ -155,6 +160,18 @@ export function MySpacePage() {
           </tr>)}</tbody>
         </table></div> : <Empty icon={<Wallet size={22} />} title="لا توجد قسائم بعد" text="ستظهر قسيمتك هنا بعد اعتماد رواتب الشهر." />)}
       </section>
+
+      {tab === 'notices' && <section className="panel">
+        {notices.data.length ? <div className="table-scroll"><table className="dense">
+          <thead><tr><th>المرجع</th><th>الإجراء</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th></tr></thead>
+          <tbody>{notices.data.map((item) => <tr key={item.id} className="row-link" onClick={() => setNotice(item)}>
+            <td dir="ltr">{item.refNo}</td><td>{ACTION[item.action].label}</td><td>{item.title}</td><td>{formatDate(item.incidentDate)}</td><td><StatusTag map={RECORD_STATUS} value={item.status} /></td>
+          </tr>)}</tbody>
+        </table></div> : <Empty icon={<FileText size={22} />} title="لا توجد إشعارات" text="لا توجد إنذارات أو ملاحظات مسجلة عليك." />}
+      </section>}
+      <Dialog open={Boolean(notice)} title={notice ? `${ACTION[notice.action].label} — ${notice.refNo}` : ''} onClose={() => setNotice(null)} wide>
+        {notice && <RecordView record={notice} own onChanged={() => { setNotice(null); notices.reload(); }} />}
+      </Dialog>
 
       {balances.data?.balances.length ? <section className="panel">
         <div className="panel-head"><div><h3>أرصدة إجازاتي · Leave balances</h3><p>الرصيد المتاح بعد خصم الطلبات المعلقة.</p></div></div>

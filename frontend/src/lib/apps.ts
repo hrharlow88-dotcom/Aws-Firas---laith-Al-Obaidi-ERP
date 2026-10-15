@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  ClipboardList, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
 
@@ -58,6 +58,23 @@ export const APPS: AppDefinition[] = [
     id: 'requests', label: 'الطلبات', description: 'طلبات الموظفين', icon: ClipboardList,
     colors: ['#e0864a', '#b85a1e'], menus: [{ page: 'requests', label: 'طلبات الموظفين', permission: 'requests.manage' }],
     staffOnly: true,
+  },
+  {
+    id: 'register', label: 'سجل الموارد البشرية', description: 'الإنذارات والعقوبات والمخالفات', icon: ShieldAlert,
+    colors: ['#c0504d', '#8e2a28'], menus: [{ page: 'discipline', label: 'السجل', permission: 'discipline.view' }],
+    staffOnly: true,
+  },
+  {
+    id: 'recruitment', label: 'التوظيف', description: 'الشواغر والمتقدمون', icon: Briefcase,
+    colors: ['#4f7cc9', '#2b5299'], menus: [{ page: 'recruitment', label: 'الشواغر', permission: 'recruitment.view' }],
+    staffOnly: true,
+  },
+  {
+    id: 'helpdesk', label: 'التذاكر', description: 'تقنية المعلومات والصيانة والنقل', icon: LifeBuoy,
+    colors: ['#16a3a3', '#0d7272'], menus: [
+      { page: 'tickets', label: 'كل التذاكر', permission: 'tickets.manage' },
+      { page: 'my-tickets', label: 'تذاكري' },
+    ],
   },
   {
     id: 'attendance', label: 'الحضور', description: 'البصمة والدوامات', icon: Fingerprint,

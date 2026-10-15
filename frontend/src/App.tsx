@@ -29,6 +29,9 @@ import { AppearanceControls, Bi, BrandStrip, DeveloperCredit, SYSTEM_NAME } from
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
 import { MySignature } from './components/Signature';
 import { PortalAccountsPage, RequestsPage } from './pages/RequestsPage';
+import { DisciplinePage } from './pages/DisciplinePage';
+import { TicketsPage } from './pages/TicketsPage';
+import { RecruitmentPage } from './pages/RecruitmentPage';
 import { DOCUMENT_TYPES, EMPLOYMENT_TYPES, formatMoney, monthLabel } from './lib/format';
 import { OrgPage } from './pages/OrgPage';
 import type { Department, JobTitle } from './pages/OrgPage';
@@ -52,7 +55,7 @@ import { StatusTag } from './components/ui';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
-  | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
+  | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
 
 interface User {
@@ -517,6 +520,10 @@ function Workspace() {
           {page === 'company-import' && canManageSettings && <CompanyImportPage />}
           {page === 'requests' && (can('requests.manage') || can('payroll.disburse')) && <RequestsPage />}
           {page === 'portal-accounts' && canManageAccess && <PortalAccountsPage />}
+          {page === 'discipline' && can('discipline.view') && <DisciplinePage />}
+          {page === 'tickets' && can('tickets.manage') && <TicketsPage />}
+          {page === 'my-tickets' && <TicketsPage mine />}
+          {page === 'recruitment' && can('recruitment.view') && <RecruitmentPage key={route.params[0] ?? 'list'} positionId={route.params[0]} />}
           {page === 'contract-templates' && can('employees.manage_profile') && <ContractTemplatesPage />}
           {page === 'payslip' && route.params[1] && <PayslipPage runId={route.params[0]} employeeId={route.params[1]} />}
           {page === 'card' && route.params[0] && <EmployeeCardPage employeeId={route.params[0]} />}
@@ -535,7 +542,7 @@ function Workspace() {
 }
 
 const KNOWN_PAGES: string[] = [
-  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts',
+  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts', 'discipline', 'tickets', 'my-tickets', 'recruitment',
   'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
 ];
 

@@ -14,6 +14,7 @@ import * as m0010 from './migrations/0010-leave-accrual';
 import * as m0011 from './migrations/0011-password-setup-links';
 import * as m0012 from './migrations/0012-approval-chain';
 import * as m0013 from './migrations/0013-employee-portal';
+import * as m0014 from './migrations/0014-register-tickets-recruitment';
 
 export interface MigrationContext {
   queryInterface: QueryInterface;
@@ -42,6 +43,7 @@ const MIGRATIONS: Array<[string, MigrationModule]> = [
   ['0011-password-setup-links', m0011],
   ['0012-approval-chain', m0012],
   ['0013-employee-portal', m0013],
+  ['0014-register-tickets-recruitment', m0014],
 ];
 
 export function createMigrator(sequelize: Sequelize) {
