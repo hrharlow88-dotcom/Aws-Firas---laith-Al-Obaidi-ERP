@@ -8,7 +8,8 @@ export interface ApiResult<T> {
   data: T;
 }
 
-type Options = { method?: string; body?: unknown; form?: FormData };
+/** background: polling that must not count as activity for the idle sign-out. */
+type Options = { method?: string; body?: unknown; form?: FormData; background?: boolean };
 
 export async function api<T>(path: string, token?: string, options: Options = {}): Promise<T> {
   const response = await fetch(`/api${path}`, {
@@ -16,6 +17,7 @@ export async function api<T>(path: string, token?: string, options: Options = {}
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.background ? { 'X-Background': '1' } : {}),
     },
     ...(options.form ? { body: options.form } : options.body ? { body: JSON.stringify(options.body) } : {}),
   });

@@ -1,4 +1,6 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useRef, useState } from 'react';
+import { exportWord } from '../components/DocumentFrame';
+import { DEVELOPER } from '../components/Brand';
 import { Gavel, Plus, Printer, Search, ShieldAlert, X } from 'lucide-react';
 import { Bi } from '../components/Brand';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
@@ -142,6 +144,7 @@ function NewRecord({ open, onClose, onDone }: { open: boolean; onClose: () => vo
 export function RecordView({ record, onChanged, own = false }: { record: DisciplineRecord; onChanged: () => void; own?: boolean }) {
   const session = useSession();
   const reason = useReasonPrompt();
+  const sheet = useRef<HTMLDivElement>(null);
   async function cancel() {
     const why = await reason.ask('سبب إلغاء السجل');
     if (!why) return;
@@ -163,7 +166,7 @@ export function RecordView({ record, onChanged, own = false }: { record: Discipl
       session.fail(error, 'تعذر التسجيل.');
     }
   }
-  return <div className="notice-doc">
+  return <div className="notice-doc" ref={sheet}>
     <div className="notice-doc-head">
       <div><strong>مجموعة الليث العبيدي للسيارات — الموارد البشرية</strong><small dir="ltr">Al-Laith Al-Obaidi Automotive Group — Human Resources</small></div>
       <span dir="ltr">{record.refNo}</span>
@@ -183,8 +186,10 @@ export function RecordView({ record, onChanged, own = false }: { record: Discipl
       <div><small>اطلاع الموظف · Employee acknowledgement</small>{record.acknowledgedAt ? <><strong>{record.employeeName}</strong><small>{formatDateTime(record.acknowledgedAt)}</small>{record.employeeComment && <small>«{record.employeeComment}»</small>}</> : <span className="muted">لم يؤكد بعد</span>}</div>
     </div>
     {record.status === 'cancelled' && <p className="muted">ملغى: {record.cancelReason}</p>}
+    <footer className="doc-foot"><span>أعدّه {record.issuedByName} · طُبع بواسطة {session.user.name}</span><span>{DEVELOPER.ar}</span></footer>
     <div className="dialog-actions no-print">
-      <button className="button button-quiet" onClick={() => window.print()}><Printer size={15} />طباعة</button>
+      <button className="button button-quiet" onClick={() => window.print()}><Printer size={15} />طباعة / PDF</button>
+      <button className="button button-quiet" onClick={() => sheet.current && void exportWord(sheet.current, record.refNo)}>Word</button>
       {!own && record.status !== 'cancelled' && session.can('discipline.manage') && <button className="button button-quiet danger" onClick={() => void cancel()}><X size={15} />إلغاء السجل</button>}
       {!own && <button className="button button-quiet" onClick={() => navigate('employees', record.employeeId)}>ملف الموظف</button>}
       {own && record.status === 'issued' && <button className="button button-primary" onClick={() => void acknowledge()}>أؤكد اطلاعي</button>}

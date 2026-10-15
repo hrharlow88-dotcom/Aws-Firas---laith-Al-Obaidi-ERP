@@ -5,7 +5,7 @@ import { EmploymentType } from '../models';
 import { badRequest } from '../utils/http';
 import { computeAttendance, EFFECTIVE_DAY_COLUMNS, loadShifts } from './attendance';
 import { eachDate, scheduledMinutes, weekday } from './attendanceRules';
-import { AttendanceTotals, calculatePayslip, DayAdjustment, OpenLoan, Payslip } from './payrollCalc';
+import { AttendanceTotals, calculatePayslip, lateTierDays, DayAdjustment, OpenLoan, Payslip } from './payrollCalc';
 import { getSettings } from './settings';
 
 export function periodBounds(period: string): { start: string; end: string } {
@@ -220,6 +220,7 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
       earlyLeaveMinutes: sum('earlyLeaveMinutes'),
       overtimeMinutes: sum('overtimeMinutes'),
       standardDailyMinutes: shift ? scheduledMinutes(shift) : 480,
+      lateTierDays: lateTierDays(own.filter((day) => day.status === 'present').map((day) => day.lateMinutes), settings.attendanceRules.lateDayTiers),
     };
     const payslip = calculatePayslip({
       periodStart: run.startsOn,

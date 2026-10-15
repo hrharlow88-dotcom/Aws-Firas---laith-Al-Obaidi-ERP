@@ -88,3 +88,22 @@ export function contentDisposition(name: string, inline: boolean): string {
   const fallback = name.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
   return `${inline ? 'inline' : 'attachment'}; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
+
+export const MAX_ARCHIVE_BYTES = 50 * 1024 * 1024;
+
+/** Archive uploads accept any file type, up to 50 MB. */
+export const uploadArchive = (field: string) => multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_ARCHIVE_BYTES, files: 1, fields: 20 },
+}).single(field);
+
+/** Types the browser may show in place; anything else is only ever downloaded. */
+export function inlineSafeType(buffer: Buffer): { mime: string; ext: string } | null {
+  return SIGNATURES.find((item) => item.test(buffer)) ?? null;
+}
+
+/** A short, safe extension from the uploaded name, used only for the stored file name. */
+export function safeExtension(name: string): string {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return /^[a-z0-9]{1,10}$/.test(ext) && ext !== name.toLowerCase() ? ext : 'bin';
+}

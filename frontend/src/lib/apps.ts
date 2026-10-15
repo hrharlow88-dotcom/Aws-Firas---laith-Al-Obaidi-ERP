@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  Archive, CalendarRange, ClipboardCheck, Crown, Megaphone, ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
 
@@ -37,6 +37,22 @@ export const APPS: AppDefinition[] = [
     id: 'me', label: 'خدمتي', description: 'ملفي وقسائمي وإجازاتي', icon: CircleUserRound,
     colors: ['#e7745a', '#b43c1d'], menus: [{ page: 'my', label: 'ملفي', permission: 'self.service' }],
     extraPages: ['my-payslip'],
+  },
+  {
+    id: 'approvals', label: 'اعتماداتي', description: 'كل ما ينتظر قرارك', icon: ClipboardCheck,
+    colors: ['#f0a03c', '#c46f12'], menus: [{ page: 'approvals', label: 'اعتماداتي ومهامي' }],
+  },
+  {
+    id: 'calendar', label: 'التقويم', description: 'المواعيد والإجازات والعطل', icon: CalendarRange,
+    colors: ['#e2574c', '#a8322a'], menus: [{ page: 'calendar', label: 'التقويم' }],
+  },
+  {
+    id: 'communication', label: 'الإعلانات والرسائل', description: 'التعاميم والدعوات', icon: Megaphone,
+    colors: ['#3e8ed0', '#1f5f99'], menus: [
+      { page: 'notices', label: 'لوحة الإعلانات' },
+      { page: 'announcements', label: 'إدارة الإعلانات', permission: 'announcements.manage' },
+      { page: 'messages', label: 'الدعوات والرسائل', permission: 'messages.send' },
+    ],
   },
   {
     id: 'dashboard', label: 'لوحة المعلومات', description: 'ملخص اليوم', icon: LayoutDashboard,
@@ -94,6 +110,7 @@ export const APPS: AppDefinition[] = [
       { page: 'payroll', label: 'المسيرات', permission: 'payroll.view' },
       { page: 'payroll-days', label: 'أيام الاستحقاق', permission: 'payroll.view' },
       { page: 'loans', label: 'السلف', permission: 'payroll.view' },
+      { page: 'payroll-archive', label: 'أرشيف المسيرات', permission: 'payroll.view' },
     ],
     extraPages: ['payslip'],
   },
@@ -104,12 +121,22 @@ export const APPS: AppDefinition[] = [
     staffOnly: true,
   },
   {
+    id: 'archive', label: 'الأرشيف', description: 'الوثائق والموظفون المنفكّون', icon: Archive,
+    colors: ['#8c6d4f', '#5e452e'], menus: [
+      { page: 'archive', label: 'أرشيف الوثائق', permission: 'archive.view' },
+      { page: 'former-employees', label: 'الموظفون المنفكّون', permission: 'archive.view' },
+    ], staffOnly: true,
+  },
+  {
     id: 'finance', label: 'المالية و SAP', description: 'القيود والترحيل', icon: Landmark,
     colors: ['#e3a83b', '#b97c12'], menus: [{ page: 'finance', label: 'القيود والربط', permission: 'finance.view' }],
   },
   {
     id: 'audit', label: 'التدقيق', description: 'سجل كل العمليات', icon: History,
-    colors: ['#7d8794', '#4f5864'], menus: [{ page: 'audit', label: 'سجل التدقيق', permission: 'audit.view' }],
+    colors: ['#7d8794', '#4f5864'], menus: [
+      { page: 'audit', label: 'سجل التدقيق', permission: 'audit.view' },
+      { page: 'activity', label: 'حركات النظام', permission: 'audit.view' },
+    ],
   },
   {
     id: 'integrations', label: 'الربط', description: 'مفاتيح الأنظمة الأخرى', icon: PlugZap,
@@ -118,6 +145,15 @@ export const APPS: AppDefinition[] = [
   {
     id: 'jd', label: 'بوابة التقييم', description: 'تقييم الأداء في نظام الأوصاف', icon: BookOpenCheck,
     colors: ['#c95b8f', '#9b2f63'], menus: [], href: 'https://alobaidi-hr.github.io/',
+  },
+  {
+    id: 'owner', label: 'لوحة المالك', description: 'الحارس الأمني والتحكم الكامل', icon: Crown,
+    colors: ['#2f2a33', '#0f0d11'], menus: [
+      { page: 'guard', label: 'الحارس الأمني', adminOnly: true },
+      { page: 'owner', label: 'تحكم المالك', adminOnly: true },
+      { page: 'recycle-bin', label: 'سلة المحذوفات', adminOnly: true },
+      { page: 'activity', label: 'حركات النظام', adminOnly: true },
+    ],
   },
   {
     id: 'settings', label: 'الإعدادات', description: 'المستخدمون والصلاحيات', icon: Settings,
@@ -134,6 +170,11 @@ export const APPS: AppDefinition[] = [
 
 export function appForPage(page: string): AppDefinition | undefined {
   return APPS.find((app) => app.menus.some((menu) => menu.page === page) || app.extraPages?.includes(page));
+}
+
+/** Apps the owner hid from everyone else. */
+export function hiddenFor(app: AppDefinition, hiddenApps: string[] | undefined, isOwner: boolean): boolean {
+  return !isOwner && Boolean(hiddenApps?.includes(app.id));
 }
 
 export function visibleMenus(app: AppDefinition, can: (permission: Permission) => boolean, isAdmin: boolean): AppMenu[] {
@@ -160,6 +201,14 @@ export const EN: Record<string, string> = {
   'سجل الموارد البشرية': 'HR Register', 'الإنذارات والعقوبات والمخالفات': 'Warnings, penalties and violations', 'السجل': 'Register',
   'التذاكر': 'Helpdesk', 'تقنية المعلومات والصيانة والنقل': 'IT, maintenance and transport', 'كل التذاكر': 'All Tickets', 'تذاكري': 'My Tickets',
   'التوظيف': 'Recruitment', 'الشواغر والمتقدمون': 'Job positions and applicants', 'المتقدمون': 'Applicants', 'الشواغر': 'Job Positions',
+  'اعتماداتي': 'My Approvals', 'كل ما ينتظر قرارك': 'Everything waiting for you', 'اعتماداتي ومهامي': 'Approvals & To-dos',
+  'التقويم': 'Calendar', 'المواعيد والإجازات والعطل': 'Events, leave and holidays',
+  'الإعلانات والرسائل': 'Announcements', 'التعاميم والدعوات': 'Circulars and invitations', 'لوحة الإعلانات': 'Notice Board',
+  'إدارة الإعلانات': 'Manage Announcements', 'الدعوات والرسائل': 'Invitations & Messages',
+  'الأرشيف': 'Archive', 'الوثائق والموظفون المنفكّون': 'Documents and former employees', 'أرشيف الوثائق': 'Document Archive',
+  'الموظفون المنفكّون': 'Former Employees', 'حركات النظام': 'System Activity',
+  'لوحة المالك': 'Owner Console', 'الحارس الأمني والتحكم الكامل': 'Security guard and full control', 'الحارس الأمني': 'Security Guard',
+  'تحكم المالك': 'Owner Controls', 'سلة المحذوفات': 'Recycle Bin',
   'الطلبات': 'Requests', 'طلبات الموظفين': 'Employee Requests', 'حسابات البوابة': 'Portal Accounts',
 };
 export const en = (label: string): string => EN[label] ?? '';

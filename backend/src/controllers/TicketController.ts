@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { notifyPermission, notifyUsers } from '../services/notify';
 import { Request, Response } from 'express';
 import { execute, select, selectOne, transaction } from '../db/query';
 import { can } from '../services/settings';
@@ -32,8 +33,8 @@ function parseTime(value: unknown): string | null {
 
 async function loadTicket(id: string) {
   if (!isUuid(id)) throw notFound('التذكرة غير موجودة.');
-  const row = await selectOne<{ id: string; status: string; requesterUserId: string; refNo: string }>(
-    'SELECT id, status, requester_user_id AS "requesterUserId", ref_no AS "refNo" FROM tickets WHERE id = :id', { id },
+  const row = await selectOne<{ id: string; status: string; requesterUserId: string; refNo: string; assigneeUserId: string | null }>(
+    'SELECT id, status, requester_user_id AS "requesterUserId", ref_no AS "refNo", assignee_user_id AS "assigneeUserId" FROM tickets WHERE id = :id', { id },
   );
   if (!row) throw notFound('التذكرة غير موجودة.');
   return row;
@@ -108,6 +109,7 @@ export class TicketController {
         }, tx,
       );
       await recordAudit(req, tx, 'ticket.created', 'ticket', id, { ref, category, priority });
+      await notifyPermission('tickets.manage', { kind: 'ticket', title: `تذكرة جديدة ${ref}`, body: title, link: '/tickets' }, tx, req.user!.id);
       return ref;
     });
     res.status(201).json({ data: { id, refNo } });
@@ -169,6 +171,8 @@ export class TicketController {
         { cid: randomUUID(), id: ticket.id, userId: req.user!.id, body: changes.join(' · ') }, tx,
       );
       await recordAudit(req, tx, 'ticket.updated', 'ticket', ticket.id, { changes });
+      await notifyUsers([ticket.requesterUserId !== req.user!.id ? ticket.requesterUserId : null, params.assignee as string | null | undefined],
+        { kind: 'ticket', title: `تحديث على تذكرتك ${ticket.refNo}`, body: changes.join(' · '), link: '/my-tickets' }, tx);
     });
     res.json({ data: { id: ticket.id } });
   }
@@ -182,6 +186,8 @@ export class TicketController {
       { cid: randomUUID(), id: ticket.id, userId: req.user!.id, body: text },
     );
     await execute('UPDATE tickets SET updated_at = now() WHERE id = :id', { id: ticket.id });
+    await notifyUsers([ticket.requesterUserId !== req.user!.id ? ticket.requesterUserId : ticket.assigneeUserId],
+      { kind: 'ticket', title: `تعليق جديد على ${ticket.refNo}`, body: text.slice(0, 200), link: ticket.requesterUserId !== req.user!.id ? '/my-tickets' : '/tickets' });
     res.status(201).json({ data: { id: ticket.id } });
   }
 }

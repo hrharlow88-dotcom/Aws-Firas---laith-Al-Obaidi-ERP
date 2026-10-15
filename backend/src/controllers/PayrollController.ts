@@ -8,6 +8,8 @@ import {
   buildRunLines, linesFingerprint, loadRun, periodBounds, recomputeRunAttendance, replaceRunLines, RunRow, storedLines,
 } from '../services/payroll';
 import { can, getSettings } from '../services/settings';
+import { moveToBin, snapshot } from '../services/recycleBin';
+import { notifyEmployees, notifyPermission } from '../services/notify';
 import { recordAudit } from '../utils/audit';
 import { STEPS, STEP_LABELS, SignStep, addSignoff, liveSignoffs, userSignature, voidSignoffs } from '../services/signatures';
 import { decryptField } from '../utils/crypto';
@@ -162,6 +164,10 @@ export class PayrollController {
     const period = requiredText(input, 'period', 7, 'الشهر');
     const { start, end } = periodBounds(period);
     const settings = await getSettings();
+    const launch = settings.payrollRules.launchPeriod;
+    if (launch && period <= launch) {
+      throw badRequest(`شهر ${period} قبل انطلاق النظام (${launch}) ورواتبه في أرشيف المسيرات.`);
+    }
     const currency = (optionalText(input, 'currency', 3) || settings.payrollRules.baseCurrency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw badRequest('رمز العملة غير صالح.');
     const branchId = input.branchId ? String(input.branchId) : null;
@@ -311,6 +317,21 @@ export class PayrollController {
         await addSignoff(run.id, step, req.user!.id, signature, note, ip, tx);
         await recordAudit(req, tx, `payroll.run_signed_${step}`, 'payroll_run', run.id, { period: run.period, note });
       });
+    }
+    // Tell whoever signs next, and the employees once the month is paid.
+    const next = STEPS[STEPS.indexOf(step) + 1];
+    const nextPermission = next ? ({ hr: 'payroll.prepare', audit: 'payroll.audit', ceo: 'payroll.approve', finance: 'payroll.disburse' } as const)[next] : null;
+    if (nextPermission) {
+      await notifyPermission(nextPermission, {
+        kind: 'approval', title: `مسير ${run.period} بانتظار توقيع «${STEP_LABELS[next]}»`,
+        body: `وقّع ${req.user!.name} خطوة «${STEP_LABELS[step]}».`, link: `/payroll/${run.id}`,
+      }, null, req.user!.id).catch(() => 0);
+    }
+    if (step === 'finance') {
+      const staff = await select<{ employeeId: string }>('SELECT employee_id AS "employeeId" FROM payroll_lines WHERE run_id = :id', { id: run.id });
+      await notifyEmployees(staff.map((line) => line.employeeId), {
+        kind: 'payslip', title: `صُرف راتب شهر ${run.period}`, body: 'قسيمة الراتب متاحة في بوابتك.', link: '/my',
+      }).catch(() => 0);
     }
     res.json({ data: { id: run.id, signoffs: await liveSignoffs(run.id) } });
   }
@@ -529,6 +550,12 @@ export class PayrollController {
     await employeeInScope(req, row.employeeId);
     await assertInputsOpen(row.period, row.employeeId);
     await transaction(async (tx) => {
+      const copy = await snapshot('payroll_inputs', row.id, tx);
+      const name = await selectOne<{ name: string }>('SELECT full_name AS name FROM employees WHERE id = :id', { id: row.employeeId }, tx);
+      await moveToBin(req, tx, {
+        entityType: 'payroll_input', entityId: row.id, module: 'payroll', payload: copy ?? {},
+        title: `مبلغ ${row.amount} لـ ${name?.name ?? ''} — ${row.period}`,
+      });
       await execute('DELETE FROM payroll_inputs WHERE id = :id', { id: row.id }, tx);
       await recordAudit(req, tx, 'payroll.input_removed', 'employee', row.employeeId, { inputId: row.id, period: row.period, amount: row.amount });
     });

@@ -112,9 +112,12 @@ function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules
 function validatePayrollRules(value: unknown): value is SystemSettings['payrollRules'] {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     'baseCurrency', 'monthlyDivisor', 'roundingDigits', 'terminatedPaidBySettlement', 'approvalChain', 'usdRate', 'branchUsdRates', 'components',
+    'launchPeriod',
   ])) {
     return false;
   }
+  if (value.launchPeriod !== undefined && value.launchPeriod !== null &&
+    !(typeof value.launchPeriod === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.launchPeriod))) return false;
   const validRate = (rate: unknown) => typeof rate === 'number' && Number.isFinite(rate) && rate > 0 && rate < 1e6;
   if (value.usdRate !== undefined && !validRate(value.usdRate)) return false;
   if (value.branchUsdRates !== undefined && (!isRecord(value.branchUsdRates) ||
@@ -169,13 +172,51 @@ function validatePayrollRules(value: unknown): value is SystemSettings['payrollR
 function validateAttendanceRules(value: unknown): boolean {
   if (value === undefined) return true;
   if (!isRecord(value) || !hasOnlyKeys(value, [
-    'lateMonthlyAllowanceMinutes', 'overtimeMinimumMinutes', 'duplicatePunchWindowMinutes', 'markAbsentWithoutPunch',
+    'lateMonthlyAllowanceMinutes', 'overtimeMinimumMinutes', 'duplicatePunchWindowMinutes', 'markAbsentWithoutPunch', 'lateDayTiers',
   ])) return false;
   const minutes = (item: unknown, max: number) => Number.isInteger(item) && Number(item) >= 0 && Number(item) <= max;
+  const tiers = value.lateDayTiers;
+  if (tiers !== undefined && !(Array.isArray(tiers) && tiers.length <= 10 && tiers.every((tier) => isRecord(tier) &&
+    hasOnlyKeys(tier, ['minutes', 'days']) && Number.isInteger(tier.minutes) && Number(tier.minutes) >= 1 && Number(tier.minutes) <= 1440 &&
+    typeof tier.days === 'number' && Number.isFinite(tier.days) && tier.days > 0 && tier.days <= 3) &&
+    new Set(tiers.map((tier) => (tier as Record<string, unknown>).minutes)).size === tiers.length)) return false;
   return minutes(value.lateMonthlyAllowanceMinutes, 6000) &&
     minutes(value.overtimeMinimumMinutes, 600) &&
     minutes(value.duplicatePunchWindowMinutes, 60) &&
     typeof value.markAbsentWithoutPunch === 'boolean';
+}
+
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function validateSecurity(value: unknown): boolean {
+  if (value === undefined) return true;
+  return isRecord(value) && hasOnlyKeys(value, [
+    'idleMinutes', 'askLocationOnLogin', 'workdayStart', 'workdayEnd', 'failedLoginAlertThreshold', 'exportAlertThreshold',
+  ]) &&
+    Number.isInteger(value.idleMinutes) && Number(value.idleMinutes) >= 5 && Number(value.idleMinutes) <= 480 &&
+    typeof value.askLocationOnLogin === 'boolean' &&
+    typeof value.workdayStart === 'string' && CLOCK.test(value.workdayStart) &&
+    typeof value.workdayEnd === 'string' && CLOCK.test(value.workdayEnd) &&
+    Number.isInteger(value.failedLoginAlertThreshold) && Number(value.failedLoginAlertThreshold) >= 3 && Number(value.failedLoginAlertThreshold) <= 100 &&
+    Number.isInteger(value.exportAlertThreshold) && Number(value.exportAlertThreshold) >= 3 && Number(value.exportAlertThreshold) <= 500;
+}
+
+function validateInterface(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, ['hiddenApps', 'brands', 'moduleManagers'])) return false;
+  const managers = value.moduleManagers;
+  if (managers !== undefined && !(isRecord(managers) && Object.keys(managers).length <= 50 &&
+    Object.entries(managers).every(([app, ids]) => /^[a-z-]{2,30}$/.test(app) && Array.isArray(ids) && ids.length <= 10 &&
+      ids.every((id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id))))) return false;
+  const apps = value.hiddenApps;
+  const brands = value.brands;
+  return Array.isArray(apps) && apps.length <= 50 && apps.every((app) => typeof app === 'string' && /^[a-z-]{2,30}$/.test(app)) &&
+    Array.isArray(brands) && brands.length >= 1 && brands.length <= 12 && brands.every((brand) => isRecord(brand) &&
+      hasOnlyKeys(brand, ['id', 'name', 'logoKey']) &&
+      typeof brand.id === 'string' && /^[a-z0-9-]{2,30}$/.test(brand.id) &&
+      isText(brand.name, 40) && brand.name.trim().length > 0 &&
+      (brand.logoKey === null || (typeof brand.logoKey === 'string' && /^brands\/[0-9a-f-]{36}\.(png|jpg|webp)$/.test(brand.logoKey)))) &&
+    new Set(brands.map((brand) => (brand as Record<string, unknown>).id)).size === brands.length;
 }
 
 function validateSettings(value: unknown): value is SystemSettings {
@@ -185,8 +226,10 @@ function validateSettings(value: unknown): value is SystemSettings {
     !isRecord(value.roles) ||
     !hasOnlyKeys(value, [
       'company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules',
-      'attendanceRules', 'knownPermissions',
+      'attendanceRules', 'knownPermissions', 'security', 'ui',
     ]) ||
+    !validateSecurity(value.security) ||
+    !validateInterface(value.ui) ||
     (value.knownPermissions !== undefined && (!Array.isArray(value.knownPermissions) ||
       !value.knownPermissions.every((permission) => typeof permission === 'string'))) ||
     !validateAttendanceRules(value.attendanceRules) ||

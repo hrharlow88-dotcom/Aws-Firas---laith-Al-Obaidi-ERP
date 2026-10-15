@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { notifyEmployees, notifyPermission } from '../services/notify';
 import bcrypt from 'bcryptjs';
 import { Request, Response } from 'express';
 import { execute, select, selectOne, transaction } from '../db/query';
@@ -87,6 +88,9 @@ export class RequestController {
         { id, employeeId, kind, amount, currency, months, startPeriod, expenseDate, description, userId: req.user!.id }, tx,
       );
       await recordAudit(req, tx, `request.${kind}_submitted`, 'employee', employeeId, { requestId: id, amount, currency, months });
+      await notifyPermission('requests.manage', {
+        kind: 'request', title: kind === 'loan' ? 'طلب سلفة جديد' : 'طلب تكاليف عمل جديد', body: `${amount} ${currency}`, link: '/requests',
+      }, tx, req.user!.id);
     });
     res.status(201).json({ data: { id } });
   }
@@ -206,6 +210,13 @@ export class RequestController {
       await recordAudit(req, tx, `request.${action === 'approve' ? 'approved' : 'rejected'}`, 'employee', request.employeeId, {
         requestId: request.id, kind: request.kind, amount: request.amount, loanId,
       });
+      await notifyEmployees([request.employeeId], {
+        kind: 'request', title: `${action === 'approve' ? 'تمت الموافقة على' : 'رُفض'} طلب ${request.kind === 'loan' ? 'السلفة' : 'تكاليف العمل'}`,
+        body: note ?? null, link: '/my',
+      }, tx);
+      if (action === 'approve' && request.kind === 'expense') {
+        await notifyPermission('payroll.disburse', { kind: 'request', title: 'مصروف معتمد بانتظار الصرف', link: '/requests' }, tx, req.user!.id);
+      }
     });
     res.json({ data: { id: request.id } });
   }
@@ -219,6 +230,7 @@ export class RequestController {
       await execute("UPDATE employee_requests SET status = 'paid', paid_by = :userId, paid_at = now(), updated_at = now() WHERE id = :id",
         { userId: req.user!.id, id: request.id }, tx);
       await recordAudit(req, tx, 'request.expense_paid', 'employee', request.employeeId, { requestId: request.id, amount: request.amount });
+      await notifyEmployees([request.employeeId], { kind: 'request', title: 'صُرف مبلغ تكاليف العمل', link: '/my' }, tx);
     });
     res.json({ data: { id: request.id } });
   }

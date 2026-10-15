@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { notifyEmployees } from '../services/notify';
 import { Request, Response } from 'express';
 import { execute, select, selectOne, transaction } from '../db/query';
 import { employeeInScope, employeeScopeSql } from '../services/access';
@@ -95,6 +96,7 @@ export class DisciplineController {
         { id, ref, employeeId: employee.id, category, action, title, description, incidentDate, amount, currency, period, suspensionDays, inputId, signature, userId: req.user!.id }, tx,
       );
       await recordAudit(req, tx, 'discipline.issued', 'employee', employee.id, { recordId: id, ref, action, amount, period });
+      await notifyEmployees([employee.id], { kind: 'discipline', title: `صدر بحقك إشعار ${ref}`, body: title, link: '/my' }, tx);
       return ref;
     });
     res.status(201).json({ data: { id, refNo } });

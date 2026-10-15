@@ -58,6 +58,15 @@ export interface AttendanceTotals {
   overtimeMinutes: number;
   /** Paid minutes in a standard working day, from the employee's shift. */
   standardDailyMinutes: number;
+  /** Days of pay charged by the company's per-day lateness tiers. */
+  lateTierDays?: number;
+}
+
+/** Highest tier each late day reaches, summed over the month. */
+export function lateTierDays(lateMinutesPerDay: number[], tiers: Array<{ minutes: number; days: number }> | undefined): number {
+  if (!tiers?.length) return 0;
+  const sorted = [...tiers].sort((a, b) => b.minutes - a.minutes);
+  return Math.round(lateMinutesPerDay.reduce((total, minutes) => total + (sorted.find((tier) => minutes >= tier.minutes)?.days ?? 0), 0) * 1000) / 1000;
 }
 
 export interface PayslipInput {
@@ -206,7 +215,8 @@ export function calculatePayslip(input: PayslipInput): Payslip {
         if (component.category === 'deduction') {
           if (isDaily) return null;
           // Unpaid leave comes from approved requests, so it applies with or without attendance tracking.
-          const days = (attendance.tracked ? attendance.absentDays : 0) + attendance.unpaidLeaveDays + (adjustment?.absenceDays ?? 0);
+          const days = (attendance.tracked ? attendance.absentDays + (attendance.lateTierDays ?? 0) : 0) +
+            attendance.unpaidLeaveDays + (adjustment?.absenceDays ?? 0);
           return days ? { amount: days * dailyRate * component.rate, basis: `${formatNumber(days)} يوم` } : null;
         }
         if (!attendance.tracked) return null;

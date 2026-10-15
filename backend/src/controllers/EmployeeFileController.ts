@@ -6,6 +6,7 @@ import { can, getSettings } from '../services/settings';
 import {
   contentDisposition, openStoredFile, sniffFile, storedFileExists, storeFile, uploadedName,
 } from '../services/storage';
+import { moveToBin, snapshot } from '../services/recycleBin';
 import { recordAudit, diffFields } from '../utils/audit';
 import { decryptField, encryptField, maskTail, randomToken, sha256 } from '../utils/crypto';
 import {
@@ -378,6 +379,11 @@ export class EmployeeFileController {
   static async deleteDocument(req: Request, res: Response): Promise<void> {
     const document = await loadDocument(req, req.params.documentId);
     await transaction(async (tx) => {
+      const copy = await snapshot('employee_documents', document.id, tx);
+      await moveToBin(req, tx, {
+        entityType: 'employee_document', entityId: document.id, module: 'employees', payload: copy ?? {},
+        title: `مستمسك: ${String(copy?.title ?? '')}`,
+      });
       await execute('UPDATE employee_documents SET deleted_at = now(), deleted_by = :userId WHERE id = :id',
         { id: document.id, userId: req.user!.id }, tx);
       await recordAudit(req, tx, 'employee.document_removed', 'employee', document.employeeId, { documentId: document.id });

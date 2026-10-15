@@ -2,7 +2,12 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { AuditLog, User, sequelize } from '../models';
+import { randomUUID } from 'node:crypto';
 import { useSetupToken } from '../services/passwordSetup';
+import { clientIp, recordSecurityEvent } from '../services/security';
+import { getSettings } from '../services/settings';
+import { execute } from '../db/query';
+import { isUuid } from '../utils/validation';
 
 /** Wrong passwords in a row before the account is locked, and for how long. */
 const MAX_FAILED_LOGINS = 5;
@@ -29,6 +34,7 @@ export class AuthController {
     const passwordOk = Buffer.byteLength(password, 'utf8') <= 72 &&
       await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH) && Boolean(user);
     if (!user || !passwordOk || !user.isActive) {
+      await recordSecurityEvent('login_failed', req, { known: Boolean(user) }, user?.id ?? null);
       if (user && !passwordOk) {
         // Count failures per account; the password itself is never logged.
         const failures = user.failedLogins + 1;
@@ -53,16 +59,29 @@ export class AuthController {
       res.status(500).json({ message: 'إعدادات تسجيل الدخول غير مكتملة.' });
       return;
     }
+    const loginEventId = randomUUID();
     await sequelize.transaction(async (transaction) => {
-      await user.update({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() }, { transaction });
+      await user.update({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date(), lastSeenAt: new Date() }, { transaction });
       await AuditLog.create({
         userId: user.id, action: 'auth.login', entityType: 'user', entityId: user.id, ip: (req.ip || '').slice(0, 64) || null,
       }, { transaction });
+      await execute(
+        `INSERT INTO login_events (id, user_id, channel, ip, user_agent) VALUES (:id, :userId, :channel, :ip, :agent)`,
+        {
+          id: loginEventId, userId: user.id, channel: user.role === 'employee' ? 'portal' : 'staff', ip: clientIp(req),
+          agent: (req.header('user-agent') || '').slice(0, 400) || null,
+        },
+        transaction,
+      );
     });
+    const settings = await getSettings();
 
     const token = jwt.sign({ sub: user.id, ver: user.tokenVersion }, secret, { expiresIn: '8h' });
     res.json({
       token,
+      loginEventId,
+      askLocation: settings.security.askLocationOnLogin,
+      idleMinutes: settings.security.idleMinutes,
       user: {
         id: user.id,
         name: user.name,
@@ -130,6 +149,39 @@ export class AuthController {
       return;
     }
     res.json({ email, message: 'عُيّنت كلمة المرور. سجّل الدخول بها الآن.' });
+  }
+
+  /**
+   * The browser reports where the person signed in from, after they allowed it.
+   * Only the person's own sign-in of the last ten minutes can be updated, once.
+   */
+  static async loginLocation(req: Request, res: Response): Promise<void> {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const eventId = body.eventId;
+    const status = body.status;
+    if (!isUuid(eventId) || !['shared', 'denied', 'unavailable'].includes(String(status))) {
+      res.status(400).json({ message: 'بيانات الموقع غير صالحة.' });
+      return;
+    }
+    const lat = Number(body.latitude);
+    const lng = Number(body.longitude);
+    const accuracy = Number(body.accuracy);
+    const shared = status === 'shared';
+    if (shared && !(Number.isFinite(lat) && lat >= -90 && lat <= 90 && Number.isFinite(lng) && lng >= -180 && lng <= 180)) {
+      res.status(400).json({ message: 'إحداثيات غير صالحة.' });
+      return;
+    }
+    const rows = await execute<{ id: string }>(
+      `UPDATE login_events SET location_status = :status, latitude = :lat, longitude = :lng, accuracy_m = :accuracy, location_at = now()
+       WHERE id = :eventId AND user_id = :userId AND location_status = 'pending' AND at > now() - interval '10 minutes'
+       RETURNING id`,
+      {
+        status, eventId, userId: req.user!.id,
+        lat: shared ? Math.round(lat * 1e6) / 1e6 : null, lng: shared ? Math.round(lng * 1e6) / 1e6 : null,
+        accuracy: shared && Number.isFinite(accuracy) && accuracy >= 0 ? Math.min(Math.round(accuracy), 2000000) : null,
+      },
+    );
+    res.json({ data: { saved: rows.length > 0 } });
   }
 
   static me(req: Request, res: Response): void {

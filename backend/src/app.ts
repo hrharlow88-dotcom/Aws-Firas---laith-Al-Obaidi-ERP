@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import routes from './routes';
 import { asyncRoute, HttpError } from './utils/http';
 import DevicePushController from './controllers/DevicePushController';
+import { trackActivity } from './services/activity';
 
 export function createApp() {
   const app = express();
@@ -15,6 +16,8 @@ export function createApp() {
         // Employee photos are served by the API as blobs and QR codes are drawn
         // into data URLs, so both need to be allowed as image sources.
         'img-src': ["'self'", 'data:', 'blob:'],
+        'frame-src': ["'self'", 'blob:', 'https://www.openstreetmap.org'],
+        'worker-src': ["'self'"],
       },
     },
   }));
@@ -27,6 +30,8 @@ export function createApp() {
 
   // The job description export from the performance portal is the largest body (~0.5 MB for 60 jobs).
   app.use(express.json({ limit: '5mb' }));
+  // Who did what and when, for every signed-in request.
+  app.use('/api', trackActivity);
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api', routes);
 

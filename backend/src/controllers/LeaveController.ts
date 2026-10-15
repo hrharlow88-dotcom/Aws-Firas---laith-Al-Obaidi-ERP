@@ -1,4 +1,5 @@
 import { employeeScopeWhere, inScope, isScoped } from '../services/access';
+import { managerUserOf, notifyEmployees, notifyPermission, notifyUsers } from '../services/notify';
 import { Request, Response } from 'express';
 import { Includeable, Op, Transaction } from 'sequelize';
 import {
@@ -341,6 +342,10 @@ export class LeaveController {
         note: null,
       }, { transaction });
       await AuditLog.create(audit(req, 'leave.requested', 'leave_request', leaveRequest.id), { transaction });
+      const manager = await managerUserOf(leaveRequest.employeeId, transaction);
+      const notice = { kind: 'leave', title: 'طلب إجازة جديد بانتظار الموافقة', body: `${leaveRequest.startsOn} → ${leaveRequest.endsOn}`, link: '/leaves' };
+      if (manager && manager !== req.user!.id) await notifyUsers([manager], notice, transaction);
+      else await notifyPermission('leaves.approve', notice, transaction, req.user!.id);
       return leaveRequest;
     }).catch((error: unknown) => {
       if (!(error instanceof Error)) throw error;
@@ -427,6 +432,12 @@ export class LeaveController {
         await request.update({ status: 'approved', decidedAt: new Date() }, { transaction });
       }
       await AuditLog.create(audit(req, `leave.${action}`, 'leave_request', request.id), { transaction });
+      if (request.status !== 'pending') {
+        await notifyEmployees([request.employeeId], {
+          kind: 'leave', title: request.status === 'approved' ? 'تمت الموافقة على إجازتك' : 'رُفض طلب إجازتك',
+          body: `${request.startsOn} → ${request.endsOn}`, link: '/my',
+        }, transaction);
+      }
       return { status: 200, data: request };
     });
     if ('message' in result) {

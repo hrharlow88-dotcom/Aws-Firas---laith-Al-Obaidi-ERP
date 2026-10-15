@@ -10,6 +10,9 @@
     "typecheck": "tsc --noEmit --pretty false"
   },
   "dependencies": {
+    "@fontsource/alex-brush": "^5.1.1",
+    "@fontsource/dancing-script": "^5.1.1",
+    "@fontsource/great-vibes": "^5.1.1",
     "@vitejs/plugin-react": "^4.3.4",
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",

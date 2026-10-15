@@ -29,6 +29,15 @@ export const PERMISSIONS = [
   'tickets.manage',
   'recruitment.view',
   'recruitment.manage',
+  // Company document archive (any file type) and the former-employees archive.
+  'archive.view',
+  'archive.manage',
+  // Company calendar: add, move and cancel events, and mark official holidays.
+  'calendar.manage',
+  // Full-screen announcements, alerts and circulars to employees.
+  'announcements.manage',
+  // E-mail / WhatsApp / SMS through the channels the owner set up.
+  'messages.send',
   'finance.view',
   'finance.manage',
   'finance.post',
@@ -137,6 +146,36 @@ export interface AttendanceRulesSetting {
   duplicatePunchWindowMinutes: number;
   /** A working day without any punch or approved leave counts as absence. */
   markAbsentWithoutPunch: boolean;
+  /**
+   * Company lateness policy per day: a day late by at least `minutes` is
+   * charged `days` of pay (the highest matching tier). Empty = no tiers.
+   */
+  lateDayTiers?: Array<{ minutes: number; days: number }>;
+}
+
+/** Owner-only controls for sign-in and the security guard. */
+export interface SecuritySettings {
+  /** Signed-in sessions end after this many minutes without activity. */
+  idleMinutes: number;
+  /** Ask portal users for their location at sign-in (the browser asks them to allow it). */
+  askLocationOnLogin: boolean;
+  /** Working hours; sensitive actions outside them raise an alert. */
+  workdayStart: string;
+  workdayEnd: string;
+  /** Failed sign-ins from one address within 15 minutes that raise an alert. */
+  failedLoginAlertThreshold: number;
+  /** Payroll or employee exports by one person within an hour that raise an alert. */
+  exportAlertThreshold: number;
+}
+
+/** Owner-only controls for what the interface shows. */
+export interface InterfaceSettings {
+  /** App ids hidden from everyone except the owner. */
+  hiddenApps: string[];
+  /** Group brands in display order. Logos are uploaded files. */
+  brands: Array<{ id: string; name: string; logoKey: string | null }>;
+  /** Accounts responsible for each app (app id → user ids); they are told about its activity. */
+  moduleManagers: Record<string, string[]>;
 }
 
 export interface PayrollRulesSetting {
@@ -154,6 +193,11 @@ export interface PayrollRulesSetting {
   usdRate?: number;
   /** Branch-specific dinar rate (branch id → rate), e.g. Erbil buys dollars at another rate. */
   branchUsdRates?: Record<string, number>;
+  /**
+   * The last month paid outside the system (YYYY-MM). That month and the ones
+   * before it live in the payroll archive; system runs start the month after.
+   */
+  launchPeriod?: string | null;
   components: PayrollComponentSetting[];
 }
 
@@ -170,6 +214,8 @@ export interface SystemSettings {
   employeeFields: EmployeeFieldSetting[];
   payrollRules: PayrollRulesSetting;
   attendanceRules: AttendanceRulesSetting;
+  security: SecuritySettings;
+  ui: InterfaceSettings;
   knownPermissions: Permission[];
   leaveRules: {
     workingDays: number[];
@@ -195,6 +241,7 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
       'attendance.view', 'attendance.manage',
       'payroll.view', 'payroll.prepare', 'audit.view', 'self.service',
       'requests.manage', 'discipline.view', 'discipline.manage', 'recruitment.view', 'recruitment.manage',
+      'archive.view', 'archive.manage', 'calendar.manage', 'announcements.manage', 'messages.send',
     ] as Permission[],
   },
   hr_staff: {
@@ -203,6 +250,7 @@ export const DEFAULT_ROLE_SETTINGS: Record<UserRole, RoleSetting> = {
       'employees.create', 'employees.update', 'leaves.view', 'leaves.request',
       'employees.view_profile', 'employees.manage_profile', 'attendance.view', 'attendance.manage', 'self.service',
       'requests.manage', 'discipline.view', 'recruitment.view', 'recruitment.manage',
+      'archive.view', 'archive.manage', 'calendar.manage', 'announcements.manage',
     ] as Permission[],
   },
   payroll_officer: {
@@ -256,7 +304,28 @@ export const DEFAULT_ATTENDANCE_RULES: AttendanceRulesSetting = {
   overtimeMinimumMinutes: 30,
   duplicatePunchWindowMinutes: 2,
   markAbsentWithoutPunch: true,
+  lateDayTiers: [],
 };
+
+export const DEFAULT_SECURITY: SecuritySettings = {
+  idleMinutes: 15,
+  askLocationOnLogin: true,
+  workdayStart: '07:00',
+  workdayEnd: '21:00',
+  failedLoginAlertThreshold: 8,
+  exportAlertThreshold: 15,
+};
+
+/** The group's brands, first to last. */
+export const DEFAULT_BRANDS: InterfaceSettings['brands'] = [
+  { id: 'rox', name: 'ROX', logoKey: null },
+  { id: 'dongfeng', name: 'DONGFENG', logoKey: null },
+  { id: 'forthing', name: 'FORTHING', logoKey: null },
+  { id: 'gm', name: 'GENERAL MOTORS', logoKey: null },
+  { id: 'multibrand', name: 'MULTI-BRAND', logoKey: null },
+];
+
+export const DEFAULT_UI: InterfaceSettings = { hiddenApps: [], brands: DEFAULT_BRANDS, moduleManagers: {} };
 
 export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
   baseCurrency: 'IQD',
@@ -297,6 +366,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   employeeFields: [],
   payrollRules: DEFAULT_PAYROLL_RULES,
   attendanceRules: DEFAULT_ATTENDANCE_RULES,
+  security: DEFAULT_SECURITY,
+  ui: DEFAULT_UI,
   knownPermissions: [...PERMISSIONS],
   leaveRules: {
     workingDays: [0, 1, 2, 3, 4, 6],
@@ -334,6 +405,12 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
     ) as Record<UserRole, RoleSetting>,
     knownPermissions: [...PERMISSIONS],
     attendanceRules: { ...DEFAULT_ATTENDANCE_RULES, ...value.attendanceRules },
+    security: { ...DEFAULT_SECURITY, ...value.security },
+    ui: {
+      hiddenApps: value.ui?.hiddenApps ?? [],
+      brands: value.ui?.brands?.length ? value.ui.brands : DEFAULT_BRANDS,
+      moduleManagers: value.ui?.moduleManagers ?? {},
+    },
     payrollRules: {
       ...DEFAULT_PAYROLL_RULES,
       ...value.payrollRules,

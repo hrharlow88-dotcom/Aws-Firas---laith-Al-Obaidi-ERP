@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { notifyEmployees } from '../services/notify';
 import { randomUUID } from 'node:crypto';
 import { execute, select, selectOne, transaction } from '../db/query';
 import { employeeInScope, employeeScopeSql } from '../services/access';
@@ -172,6 +173,9 @@ export class LoanController {
       await recordAudit(req, tx, 'payroll.loan_created', 'employee', employee.id, {
         loanId: id, principal, installment, paidBefore, startPeriod, currency: loanCurrency,
       });
+      await notifyEmployees([employee.id], {
+        kind: 'loan', title: 'سُجّلت سلفة باسمك', body: `${principal} ${loanCurrency} — القسط ${installment} من ${startPeriod}`, link: '/my',
+      }, tx);
     });
     res.status(201).json({ data: { id } });
   }

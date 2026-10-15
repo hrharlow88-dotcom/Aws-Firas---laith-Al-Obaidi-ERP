@@ -6,6 +6,8 @@ import { createApp } from './app';
 import { registerJob, startBackgroundJobs } from './jobs';
 import { processJournalQueue } from './services/finance';
 import { sapConfigured } from './services/sapB1';
+import { runSecurityGuard } from './services/security';
+import { processOutbox } from './services/messaging';
 
 function validateEnvironment(): void {
   const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
@@ -62,6 +64,9 @@ async function start(): Promise<void> {
   if (sapConfigured()) {
     registerJob({ name: 'sap-journal-queue', everyMs: 30000, run: async () => { await processJournalQueue(); } });
   }
+  // The security guard makes a round every two minutes; queued messages go out every half minute.
+  registerJob({ name: 'security-guard', everyMs: 120000, run: async () => { await runSecurityGuard(); } });
+  registerJob({ name: 'message-outbox', everyMs: 30000, run: async () => { await processOutbox(); } });
   startBackgroundJobs();
 }
 

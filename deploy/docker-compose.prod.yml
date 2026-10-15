@@ -76,6 +76,8 @@ services:
       - "${DEVICE_PORT:-8081}:8081"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Extra companies started with ./new-company.sh add their site here.
+      - ./companies:/etc/caddy/companies:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

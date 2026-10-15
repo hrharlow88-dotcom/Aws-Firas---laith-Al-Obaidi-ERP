@@ -18,7 +18,10 @@ export interface Session {
   notify: (message: string, isError?: boolean) => void;
   fail: (error: unknown, fallback: string) => void;
   /** Calls the API with the session token. */
-  call: <T>(path: string, options?: { method?: string; body?: unknown; form?: FormData }) => Promise<T>;
+  call: <T>(path: string, options?: { method?: string; body?: unknown; form?: FormData; background?: boolean }) => Promise<T>;
+  /** Reloads the system settings after the owner changed them. */
+  refreshSettings: () => void;
+  signOut: () => void;
 }
 
 const SessionContext = createContext<Session | null>(null);
@@ -39,6 +42,7 @@ export function buildSession(
   settings: SystemSettings,
   notify: (message: string, isError?: boolean) => void,
   onExpired: () => void,
+  refreshSettings: () => void = () => undefined,
 ): Session {
   const permissions = new Set(user.role === 'super_admin'
     ? Object.values(settings.roles).flatMap((role) => role.permissions).concat(settings.knownPermissions ?? [])
@@ -58,6 +62,8 @@ export function buildSession(
     notify,
     fail,
     call: (path, options) => api(path, token, options),
+    refreshSettings,
+    signOut: onExpired,
   };
 }
 

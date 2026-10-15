@@ -22,3 +22,6 @@
 		respond 404
 	}
 }
+
+# Other companies running their own copy of the system on this server (deploy/new-company.sh).
+import companies/*.caddy

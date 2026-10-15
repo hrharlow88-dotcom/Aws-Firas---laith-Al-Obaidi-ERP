@@ -21,3 +21,8 @@ yarn-error.log*
 /deploy/.env
 /deploy/backups/
 /deploy/company-data/
+
+# Extra companies on the same server: secrets stay on the server.
+/deploy/companies/*.env
+/deploy/companies/*.caddy
+/backend/.tok.cjs

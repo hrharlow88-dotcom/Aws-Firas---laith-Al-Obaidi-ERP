@@ -58,10 +58,11 @@ interface UserAttributes {
   failedLogins: number;
   lockedUntil: Date | null;
   lastLoginAt: Date | null;
+  lastSeenAt: Date | null;
 }
 
 type UserCreationAttributes = Optional<UserAttributes,
-  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt'>;
+  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt' | 'lastSeenAt'>;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -76,6 +77,7 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare failedLogins: number;
   declare lockedUntil: Date | null;
   declare lastLoginAt: Date | null;
+  declare lastSeenAt: Date | null;
 }
 
 User.init(
@@ -92,6 +94,7 @@ User.init(
     failedLogins: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: 'failed_logins' },
     lockedUntil: { type: DataTypes.DATE, allowNull: true, field: 'locked_until' },
     lastLoginAt: { type: DataTypes.DATE, allowNull: true, field: 'last_login_at' },
+    lastSeenAt: { type: DataTypes.DATE, allowNull: true, field: 'last_seen_at' },
   },
   { sequelize, tableName: 'users', underscored: true },
 );

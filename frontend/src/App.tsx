@@ -41,7 +41,7 @@ import { PayrollPage, PayslipPage } from './pages/PayrollPage';
 import { AuditPage, FinancePage, IntegrationsPage } from './pages/FinancePage';
 import { EmployeeCardPage, VerifyCardPage } from './pages/CardPages';
 import { RUN_STATUS } from './lib/format';
-import { APPS, appForPage, en, visibleMenus } from './lib/apps';
+import { APPS, appForPage, en, hiddenFor, visibleMenus } from './lib/apps';
 import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
@@ -52,11 +52,17 @@ import { UsersPage } from './pages/UsersPage';
 import { JobProfilesPage } from './pages/JobProfilesPage';
 import { MySpacePage } from './pages/MySpacePage';
 import { StatusTag } from './components/ui';
+import { AnnouncementGate, IdleGuard, InstallAppButton, NotificationBell, reportLoginLocation, useVisitTracking } from './components/Shell';
+import { AnnouncementsPage, ApprovalsPage, CalendarPage, MessagesPage, NoticeBoardPage } from './pages/WorkplacePages';
+import { ArchivePage, FormerEmployeesPage, PayrollArchivePage } from './pages/ArchivePages';
+import { ActivityPage, GuardPage, OwnerPage, RecycleBinPage } from './pages/OwnerPages';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
   | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
-  | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
+  | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings'
+  | 'approvals' | 'calendar' | 'notices' | 'announcements' | 'messages' | 'archive' | 'former-employees' | 'payroll-archive'
+  | 'activity' | 'guard' | 'owner' | 'recycle-bin';
 
 interface User {
   id: string;
@@ -272,6 +278,8 @@ function Workspace() {
     if (user) void loadData();
   }, [user, loadData]);
 
+  const [settingsVersion, setSettingsVersion] = useState(0);
+  const refreshSettings = useCallback(() => setSettingsVersion((value) => value + 1), []);
   useEffect(() => {
     if (!token || !user) return;
     let current = true;
@@ -285,7 +293,7 @@ function Workspace() {
         else notify(cause instanceof Error ? cause.message : 'تعذر تحميل إعدادات النظام.', true);
       });
     return () => { current = false; };
-  }, [token, user?.id, signOut, notify]);
+  }, [token, user?.id, signOut, notify, settingsVersion]);
 
   const activeEmployees = employeeSummary.active;
   const roleLabels = Object.fromEntries(
@@ -301,10 +309,11 @@ function Workspace() {
     setBusy(true);
     setError('');
     try {
-      const result = await api<{ token: string; user: User }>('/auth/login', undefined, {
+      const result = await api<{ token: string; user: User; loginEventId: string; askLocation: boolean }>('/auth/login', undefined, {
         method: 'POST',
         body: { email: form.get('email'), password: form.get('password') },
       });
+      if (result.askLocation && result.loginEventId) reportLoginLocation(result.token, result.loginEventId);
       sessionStorage.setItem('erp_token', result.token);
       setToken(result.token);
       setUser(result.user);
@@ -401,8 +410,8 @@ function Workspace() {
 
 
   const session = useMemo(
-    () => (token && user && systemSettings ? buildSession(token, user, systemSettings, notify, signOut) : null),
-    [token, user, systemSettings, notify, signOut],
+    () => (token && user && systemSettings ? buildSession(token, user, systemSettings, notify, signOut, refreshSettings) : null),
+    [token, user, systemSettings, notify, signOut, refreshSettings],
   );
 
   if (loading) {
@@ -437,18 +446,23 @@ function Workspace() {
         </nav>}
         <div className="o-navbar-end">
           <span className="o-date"><Clock3 size={14} />{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span>
+          <NotificationBell />
           <details className="o-user">
             <summary><span className="avatar avatar-small">{user.name.slice(0, 1)}</span><span className="o-user-name">{user.name}</span><ChevronDown size={14} /></summary>
             <div className="o-user-menu">
               <div className="o-user-head"><strong>{user.name}</strong><span>{roleLabels[user.role]}{user.role === 'super_admin' ? ' · System Owner & Administrator' : ''}</span></div>
               <AppearanceControls />
-              <button onClick={() => navigate('security')}><KeyRound size={15} />أمان الحساب</button>
+              <button onClick={() => navigate('security')}><KeyRound size={15} />أمان الحساب والتوقيع</button>
+              <InstallAppButton />
               <button onClick={signOut}><LogOut size={15} />تسجيل الخروج</button>
             </div>
           </details>
         </div>
       </header>
 
+      <AnnouncementGate />
+      <IdleGuard minutes={systemSettings?.security?.idleMinutes ?? 15} />
+      <VisitTracker page={page} params={route.params} module={currentApp?.id} />
       {page !== 'home' && currentApp && <Breadcrumbs page={page} app={currentApp} menus={menus} hasParams={route.params.length > 0} />}
 
       <main className={page === 'home' ? 'o-home-area' : 'page-content'}>
@@ -458,7 +472,8 @@ function Workspace() {
             <button className="icon-button" aria-label="إغلاق التنبيه" onClick={() => { setError(''); setSuccess(''); }}><X size={16} /></button>
           </div>}
 
-          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} />}
+          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} hiddenApps={systemSettings?.ui?.hiddenApps} />}
+          {currentApp && hiddenFor(currentApp, systemSettings?.ui?.hiddenApps, isAdmin) ? <p className="notice notice-error">هذا التطبيق مخفي من مالك النظام. · This app is hidden by the system owner.</p> : <>
           {(page === 'overview' || !KNOWN_PAGES.includes(page)) && <Dashboard
             employees={employees}
             branches={branches}
@@ -532,6 +547,19 @@ function Workspace() {
           {page === 'integrations' && can('integrations.manage') && <IntegrationsPage />}
           {page === 'security' && <SecurityPage onSubmit={handlePasswordChange} />}
           {page === 'settings' && canManageSettings && systemSettings && <SettingsPage value={systemSettings} busy={savingSettings} onSave={handleSettingsSave} />}
+          {page === 'approvals' && <ApprovalsPage />}
+          {page === 'calendar' && <CalendarPage />}
+          {page === 'notices' && <NoticeBoardPage />}
+          {page === 'announcements' && can('announcements.manage') && <AnnouncementsPage />}
+          {page === 'messages' && can('messages.send') && <MessagesPage />}
+          {page === 'archive' && can('archive.view') && <ArchivePage />}
+          {page === 'former-employees' && can('archive.view') && <FormerEmployeesPage />}
+          {page === 'payroll-archive' && can('payroll.view') && <PayrollArchivePage key={route.params[0] ?? 'list'} monthId={route.params[0]} />}
+          {page === 'activity' && can('audit.view') && <ActivityPage />}
+          {page === 'guard' && isAdmin && <GuardPage />}
+          {page === 'owner' && isAdmin && <OwnerPage />}
+          {page === 'recycle-bin' && isAdmin && <RecycleBinPage />}
+          </>}
 
           <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /></span><DeveloperCredit /></footer>
       </main>
@@ -544,6 +572,7 @@ function Workspace() {
 const KNOWN_PAGES: string[] = [
   'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts', 'discipline', 'tickets', 'my-tickets', 'recruitment',
   'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
+  'approvals', 'calendar', 'notices', 'announcements', 'messages', 'archive', 'former-employees', 'payroll-archive', 'activity', 'guard', 'owner', 'recycle-bin',
 ];
 
 function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {
@@ -572,11 +601,17 @@ function Breadcrumbs({ page, app, menus, hasParams }: { page: string; app: AppDe
   );
 }
 
-function AppLauncher({ companyName, userName, can, isAdmin, selfOnly }: {
-  companyName?: string; userName: string; can: (permission: Permission) => boolean; isAdmin: boolean; selfOnly: boolean;
+function VisitTracker({ page, params, module }: { page: string; params: string[]; module?: string }) {
+  useVisitTracking(page, params, module);
+  return null;
+}
+
+function AppLauncher({ companyName, userName, can, isAdmin, selfOnly, hiddenApps }: {
+  companyName?: string; userName: string; can: (permission: Permission) => boolean; isAdmin: boolean; selfOnly: boolean; hiddenApps?: string[];
 }) {
   const [query, setQuery] = useState('');
   const apps = APPS.filter((app) => !(selfOnly && app.staffOnly))
+    .filter((app) => !hiddenFor(app, hiddenApps, isAdmin))
     .filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
     .filter((app) => !query.trim() || `${app.label} ${app.description} ${en(app.label)}`.toLowerCase().includes(query.trim().toLowerCase()));
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
@@ -675,9 +710,10 @@ function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormE
           <p>أدخل بيانات حسابك للوصول إلى مساحة العمل.</p>
           {error && <div className="notice notice-error" role="alert"><CircleHelp size={17} /><span>{error}</span></div>}
           <label className="field"><span>البريد الإلكتروني أو الرقم الوظيفي · E-mail or employee ID</span><input name="email" type="text" autoComplete="username" required placeholder="name@company.com · 10123" dir="ltr" /></label>
-          <label className="field"><span>كلمة المرور</span><input name="password" type="password" autoComplete="current-password" required minLength={12} dir="ltr" /></label>
-          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : 'دخول آمن'}<ArrowLeft size={17} /></button>
-          <div className="login-security"><ShieldCheck size={15} /><span>الجلسة محمية وتنتهي تلقائياً بعد 8 ساعات.</span></div>
+          <label className="field"><span>كلمة المرور · Password</span><input name="password" type="password" autoComplete="current-password" required minLength={12} dir="ltr" /></label>
+          <DeveloperCredit compact />
+          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : 'دخول آمن · Secure sign-in'}<ArrowLeft size={17} /></button>
+          <div className="login-security"><ShieldCheck size={15} /><span>الجلسة تنتهي تلقائياً عند عدم النشاط، ويُسجَّل وقت الدخول ومكانه لحمايتك.</span></div>
         </form>
       </section>
     </main>

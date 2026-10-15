@@ -1,4 +1,6 @@
-import { FormEvent, Fragment, useState } from 'react';
+import { FormEvent, Fragment, useRef, useState } from 'react';
+import { exportWord } from '../components/DocumentFrame';
+import { DEVELOPER, SYSTEM_NAME } from '../components/Brand';
 import {
   AlertTriangle, ArrowRight, Calculator, Check, ChevronDown, ChevronLeft, Download, FileSpreadsheet, Landmark, Plus,
   Printer, RotateCcw, Trash2, Upload, Wallet, X,
@@ -400,13 +402,20 @@ export function PayslipPage({ runId, employeeId, own = false }: { runId: string;
   if (slip.loading && !data) return <section className="screen"><Loading /></section>;
   if (!data) return null;
   const rows = Math.max(data.earnings.length, data.deductions.length);
+  return <PayslipSheet data={data} rows={rows} />;
+}
+
+function PayslipSheet({ data, rows }: { data: Payslip; rows: number }) {
+  const session = useSession();
+  const sheet = useRef<HTMLElement>(null);
   return (
     <section className="screen">
       <div className="no-print screen-heading">
         <button className="back-link" onClick={() => window.history.back()}><ArrowRight size={15} />رجوع</button>
         <button className="button button-primary" onClick={() => window.print()}><Printer size={16} />طباعة / حفظ PDF</button>
+        <button className="button button-quiet" onClick={() => sheet.current && void exportWord(sheet.current, `payslip-${data.period}`)}>Word</button>
       </div>
-      <article className="payslip print-area">
+      <article className="payslip print-area" ref={sheet}>
         <header className="payslip-head">
           <img src="/brand/wordmark-900.png" alt={data.company.displayName} className="payslip-wordmark" />
           <img src="/brand/shield-256.png" alt="" className="payslip-shield" />
@@ -438,6 +447,7 @@ export function PayslipPage({ runId, employeeId, own = false }: { runId: string;
         {data.attendanceTracked && <p className="payslip-attendance">الحضور: {data.presentDays} يوم · الغياب: {data.absentDays} · بدون راتب: {data.unpaidLeaveDays} · التأخير: {formatMinutes(data.lateMinutes)} · الإضافي: {formatMinutes(data.overtimeMinutes)}</p>}
         <footer className="payslip-foot"><span>{data.company.legalName || data.company.displayName}</span><span>{data.company.address}</span><span>وثيقة صادرة من نظام الإدارة · لا تحتاج توقيعاً</span></footer>
         <div className="payslip-stripe" />
+        <footer className="doc-foot"><span>أعدّها النظام لـ {session.user.name} · صادر من {SYSTEM_NAME.ar}</span><span>{DEVELOPER.ar}</span></footer>
       </article>
     </section>
   );

@@ -25,6 +25,18 @@ import RequestController from '../controllers/RequestController';
 import DisciplineController from '../controllers/DisciplineController';
 import TicketController from '../controllers/TicketController';
 import RecruitmentController from '../controllers/RecruitmentController';
+import NotificationController from '../controllers/NotificationController';
+import SecurityController from '../controllers/SecurityController';
+import OwnerController from '../controllers/OwnerController';
+import ActivityController from '../controllers/ActivityController';
+import RecycleBinController from '../controllers/RecycleBinController';
+import ArchiveController from '../controllers/ArchiveController';
+import PayrollArchiveController from '../controllers/PayrollArchiveController';
+import CalendarController from '../controllers/CalendarController';
+import AnnouncementController from '../controllers/AnnouncementController';
+import MessageController from '../controllers/MessageController';
+import ApprovalsController from '../controllers/ApprovalsController';
+import { uploadArchive } from '../services/storage';
 import { allowAnyPermission, allowPermission, allowRoles, requireAuth } from '../middleware/auth';
 import { validateUuidParam } from '../utils/validation';
 
@@ -68,6 +80,70 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
 
 router.post('/auth/login', loginLimiter, asyncRoute(AuthController.login));
 router.get('/auth/me', requireAuth, AuthController.me);
+router.post('/auth/login-location', requireAuth, asyncRoute(AuthController.loginLocation));
+
+// Login-page branding (no sign-in needed).
+router.get('/public/branding', publicLimiter, asyncRoute(OwnerController.publicBranding));
+router.get('/public/brands/:brandId/logo', asyncRoute(OwnerController.brandLogo));
+
+// Notifications, announcements, approvals inbox, activity.
+router.get('/notifications', requireAuth, asyncRoute(NotificationController.mine));
+router.post('/notifications/read', requireAuth, asyncRoute(NotificationController.markRead));
+router.get('/me/announcements/pending', requireAuth, asyncRoute(AnnouncementController.pending));
+router.get('/me/announcements', requireAuth, asyncRoute(AnnouncementController.mine));
+router.post('/me/announcements/:id/seen', requireAuth, validateUuidParam, asyncRoute(AnnouncementController.seen));
+router.get('/announcements', requireAuth, allowPermission('announcements.manage'), asyncRoute(AnnouncementController.list));
+router.post('/announcements', requireAuth, allowPermission('announcements.manage'), asyncRoute(AnnouncementController.create));
+router.get('/announcements/:id/receipts', requireAuth, allowPermission('announcements.manage'), validateUuidParam, asyncRoute(AnnouncementController.receipts));
+router.post('/announcements/:id/withdraw', requireAuth, allowPermission('announcements.manage'), validateUuidParam, asyncRoute(AnnouncementController.withdraw));
+router.get('/messages/templates', requireAuth, allowAnyPermission('messages.send', 'users.manage'), asyncRoute(MessageController.templates));
+router.get('/messages/channels', requireAuth, allowAnyPermission('messages.send', 'users.manage'), asyncRoute(MessageController.channels));
+router.put('/messages/channels/:channel', requireAuth, allowRoles('super_admin'), asyncRoute(MessageController.saveChannel));
+router.post('/messages/channels/:channel/test', requireAuth, allowRoles('super_admin'), asyncRoute(MessageController.test));
+router.post('/messages/send', requireAuth, allowPermission('messages.send'), asyncRoute(MessageController.send));
+router.get('/messages/outbox', requireAuth, allowPermission('messages.send'), asyncRoute(MessageController.outbox));
+router.get('/approvals/inbox', requireAuth, asyncRoute(ApprovalsController.inbox));
+router.post('/activity/visit', requireAuth, asyncRoute(ActivityController.visit));
+router.get('/activity', requireAuth, allowPermission('audit.view'), asyncRoute(ActivityController.list));
+
+// Calendar.
+router.get('/calendar', requireAuth, asyncRoute(CalendarController.range));
+router.post('/calendar/events', requireAuth, asyncRoute(CalendarController.save));
+router.put('/calendar/events/:id', requireAuth, validateUuidParam, asyncRoute(CalendarController.save));
+router.post('/calendar/events/:id/cancel', requireAuth, validateUuidParam, asyncRoute(CalendarController.cancel));
+router.put('/calendar/holidays/:date', requireAuth, allowPermission('calendar.manage'), asyncRoute(CalendarController.holiday));
+
+// Document archive and former employees.
+router.get('/archive', requireAuth, allowPermission('archive.view'), asyncRoute(ArchiveController.list));
+router.post('/archive', requireAuth, allowPermission('archive.manage'), uploadArchive('file'), asyncRoute(ArchiveController.upload));
+router.get('/archive/:id/file', requireAuth, allowPermission('archive.view'), validateUuidParam, asyncRoute(ArchiveController.download));
+router.post('/archive/:id/withdraw', requireAuth, allowPermission('archive.manage'), validateUuidParam, asyncRoute(ArchiveController.withdraw));
+router.get('/employees/former', requireAuth, allowPermission('archive.view'), asyncRoute(ArchiveController.former));
+
+// Payroll archive (months before the system went live).
+router.get('/payroll/archive', requireAuth, allowPermission('payroll.view'), asyncRoute(PayrollArchiveController.list));
+router.post('/payroll/archive/preview', requireAuth, allowPermission('payroll.prepare'), uploadSingle('file'), asyncRoute(PayrollArchiveController.preview));
+router.post('/payroll/archive', requireAuth, allowPermission('payroll.prepare'), uploadSingle('file'), asyncRoute(PayrollArchiveController.save));
+router.get('/payroll/archive/:id', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollArchiveController.lines));
+router.get('/payroll/archive/:id/file', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollArchiveController.file));
+router.post('/payroll/archive/:id/withdraw', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(PayrollArchiveController.withdraw));
+
+// Owner console: security guard, recycle bin, brands, company template.
+router.get('/security/overview', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.overview));
+router.get('/security/alerts', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.alerts));
+router.post('/security/alerts/:id/resolve', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(SecurityController.resolve));
+router.get('/security/logins', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.logins));
+router.get('/security/events', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.events));
+router.get('/security/chain', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.chain));
+router.post('/security/scan', requireAuth, allowRoles('super_admin'), asyncRoute(SecurityController.scan));
+router.post('/security/users/:id/sign-out', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(SecurityController.signOutUser));
+router.get('/recycle-bin', requireAuth, allowRoles('super_admin'), asyncRoute(RecycleBinController.list));
+router.post('/recycle-bin/:id/restore', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(RecycleBinController.restore));
+router.post('/recycle-bin/:id/purge', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(RecycleBinController.purge));
+router.post('/owner/brands/:brandId/logo', requireAuth, allowRoles('super_admin'), uploadSingle('file'), asyncRoute(OwnerController.uploadBrandLogo));
+router.delete('/owner/brands/:brandId/logo', requireAuth, allowRoles('super_admin'), asyncRoute(OwnerController.removeBrandLogo));
+router.get('/owner/template', requireAuth, allowRoles('super_admin'), asyncRoute(OwnerController.exportTemplate));
+router.post('/owner/template', requireAuth, allowRoles('super_admin'), asyncRoute(OwnerController.importTemplate));
 router.post('/auth/set-password', passwordLimiter, asyncRoute(AuthController.setPasswordWithLink));
 router.get('/auth/signature', requireAuth, asyncRoute(SignatureController.get));
 router.put('/auth/signature', requireAuth, asyncRoute(SignatureController.save));
@@ -147,6 +223,9 @@ router.put(
 );
 
 router.get('/employees/:id', requireAuth, validateUuidParam, asyncRoute(EmployeeFileController.detail));
+router.post('/employees/:id/separate', requireAuth, allowPermission('employees.update'), validateUuidParam, asyncRoute(ArchiveController.separate));
+router.post('/employees/:id/reinstate', requireAuth, allowPermission('employees.update'), validateUuidParam, asyncRoute(ArchiveController.reinstate));
+router.get('/employees/:id/payroll-history', requireAuth, allowPermission('payroll.view'), validateUuidParam, asyncRoute(PayrollArchiveController.employeeHistory));
 router.get('/employees/:id/photo', requireAuth, validateUuidParam, asyncRoute(EmployeeFileController.photo));
 router.post('/employees/:id/photo', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, uploadSingle('file'), asyncRoute(EmployeeFileController.uploadPhoto));
 router.get('/employees/:id/profile', requireAuth, allowPermission('employees.view_profile'), validateUuidParam, asyncRoute(EmployeeFileController.getProfile));
