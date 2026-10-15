@@ -101,6 +101,12 @@ docker compose -f docker-compose.prod.yml run --rm -v "$PWD/backups:/b" --entryp
 - أو عبر الشبكة (مدير النظام فقط): `POST /api/admin/company-import` بحقل `files` متعدد. الملفات تُقرأ في الذاكرة ولا تُحفظ.
 إعادة الاستيراد تحدّث ولا تكرر، ولا تكتب فوق السلف الموجودة.
 
+## رابط تعيين كلمة المرور (الأسهل)
+```bash
+cd /opt/laith-erp/deploy && docker compose -f docker-compose.prod.yml exec api node dist/db/setupLink.js you@company.com
+```
+يطبع رابطاً يفتحه صاحب الحساب ويختار كلمة مروره بنفسه في المتصفح. يعمل مرة واحدة خلال 30 دقيقة.
+
 ## تغيير كلمة مرور حساب من السيرفر
 ```bash
 cd /opt/laith-erp/deploy && docker compose -f docker-compose.prod.yml exec api node dist/db/resetPassword.js you@company.com

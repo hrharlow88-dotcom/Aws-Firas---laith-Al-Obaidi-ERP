@@ -42,6 +42,7 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env}
       # caddy → nginx → api
       TRUST_PROXY_HOPS: "2"
+      PUBLIC_URL: https://${ERP_DOMAIN}
       UPLOAD_DIR: /data/uploads
       SAP_B1_URL: ${SAP_B1_URL:-}
       SAP_B1_COMPANY_DB: ${SAP_B1_COMPANY_DB:-}

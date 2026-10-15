@@ -154,6 +154,7 @@ function formatDate(value: string): string {
 function App() {
   const route = useRoute();
   if (route.page === 'verify' && route.params[0]) return <VerifyCardPage token={route.params[0]} />;
+  if (route.page === 'set-password' && route.params[0]) return <SetPasswordPage token={route.params[0]} />;
   return <Workspace />;
 }
 
@@ -588,6 +589,58 @@ function AppLauncher({ companyName, userName, can, isAdmin, selfOnly }: {
         {!apps.length && <p className="o-home-empty">لا يوجد تطبيق بهذا الاسم.</p>}
       </div>
     </section>
+  );
+}
+
+/** Choosing a password from a one-time link printed on the server console. */
+function SetPasswordPage({ token }: { token: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [doneEmail, setDoneEmail] = useState('');
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get('password') || '');
+    if (password !== String(form.get('confirm') || '')) { setError('كلمتا المرور غير متطابقتين.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch('/api/auth/set-password', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || 'تعذر تعيين كلمة المرور.');
+      setDoneEmail(result.email);
+    } catch (problem) {
+      setError(problem instanceof Error ? problem.message : 'تعذر تعيين كلمة المرور.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main className="login-layout">
+      <section className="login-story">
+        <div className="login-brand"><BrandMark size={58} /><img className="login-wordmark" src="/brand/wordmark-white.png" alt="شركة الليث العبيدي" /></div>
+        <div className="login-message"><span className="gold-rule" /><h1>كلمة مرورك<br />بيدك وحدك.</h1><p>اختر كلمة مرور تتذكرها. لا تُرسل لأحد ولا يراها أحد غيرك.</p></div>
+        <span className="login-footnote">ROX · DONGFENG · FORTHING</span>
+      </section>
+      <section className="login-panel">
+        {doneEmail ? <div className="login-form">
+          <span className="form-symbol"><ShieldCheck size={22} /></span>
+          <h2>تمت العملية</h2>
+          <p>عُيّنت كلمة المرور للحساب <span dir="ltr">{doneEmail}</span>. سجّل الدخول بها الآن.</p>
+          <a className="button button-primary login-submit" href="#/">تسجيل الدخول<ArrowLeft size={17} /></a>
+        </div> : <form className="login-form" onSubmit={(event) => void submit(event)}>
+          <span className="form-symbol"><ShieldCheck size={22} /></span>
+          <h2>تعيين كلمة المرور</h2>
+          <p>12 حرفاً على الأقل. الرابط يعمل مرة واحدة خلال 30 دقيقة.</p>
+          {error && <div className="notice notice-error" role="alert"><CircleHelp size={17} /><span>{error}</span></div>}
+          <label className="field"><span>كلمة المرور الجديدة</span><input name="password" type="password" autoComplete="new-password" required minLength={12} maxLength={72} dir="ltr" /></label>
+          <label className="field"><span>أعد كتابتها</span><input name="confirm" type="password" autoComplete="new-password" required minLength={12} maxLength={72} dir="ltr" /></label>
+          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ الحفظ…' : 'حفظ كلمة المرور'}<ArrowLeft size={17} /></button>
+        </form>}
+      </section>
+    </main>
   );
 }
 

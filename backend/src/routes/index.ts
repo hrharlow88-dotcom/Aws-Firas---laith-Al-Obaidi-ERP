@@ -63,6 +63,7 @@ function asyncRoute(handler: (req: Request, res: Response) => Promise<void>) {
 
 router.post('/auth/login', loginLimiter, asyncRoute(AuthController.login));
 router.get('/auth/me', requireAuth, AuthController.me);
+router.post('/auth/set-password', passwordLimiter, asyncRoute(AuthController.setPasswordWithLink));
 router.post('/auth/change-password', requireAuth, passwordLimiter, asyncRoute(AuthController.changePassword));
 
 router.get('/me/profile', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.profile));

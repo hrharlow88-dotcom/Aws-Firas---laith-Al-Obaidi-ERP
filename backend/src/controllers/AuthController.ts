@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { AuditLog, User, sequelize } from '../models';
+import { useSetupToken } from '../services/passwordSetup';
 
 /** Wrong passwords in a row before the account is locked, and for how long. */
 const MAX_FAILED_LOGINS = 5;
@@ -105,6 +106,27 @@ export class AuthController {
     }
     const token = jwt.sign({ sub: user.id, ver: user.tokenVersion }, secret, { expiresIn: '8h' });
     res.json({ token, message: 'تم تغيير كلمة المرور وإنهاء الجلسات الأخرى.' });
+  }
+
+  /** Sets a password with a one-time link printed on the server console. */
+  static async setPasswordWithLink(req: Request, res: Response): Promise<void> {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const token = typeof body.token === 'string' ? body.token : '';
+    const password = typeof body.password === 'string' ? body.password : '';
+    if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) {
+      res.status(400).json({ message: 'الرابط غير صالح.' });
+      return;
+    }
+    if (password.length < 12 || Buffer.byteLength(password, 'utf8') > 72) {
+      res.status(400).json({ message: 'كلمة المرور يجب ألا تقل عن 12 محرفاً ولا تتجاوز 72 بايتاً.' });
+      return;
+    }
+    const email = await useSetupToken(token, password, (req.ip || '').slice(0, 64) || null);
+    if (!email) {
+      res.status(400).json({ message: 'انتهت صلاحية الرابط أو استُخدم سابقاً. اطلب رابطاً جديداً.' });
+      return;
+    }
+    res.json({ email, message: 'عُيّنت كلمة المرور. سجّل الدخول بها الآن.' });
   }
 
   static me(req: Request, res: Response): void {
