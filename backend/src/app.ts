@@ -25,7 +25,8 @@ export function createApp() {
   app.get('/iclock/getrequest', asyncRoute(DevicePushController.poll));
   app.post('/iclock/devicecmd', deviceText, asyncRoute(DevicePushController.poll));
 
-  app.use(express.json({ limit: '2mb' }));
+  // The job description export from the performance portal is the largest body (~0.5 MB for 60 jobs).
+  app.use(express.json({ limit: '5mb' }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   app.use('/api', routes);
 

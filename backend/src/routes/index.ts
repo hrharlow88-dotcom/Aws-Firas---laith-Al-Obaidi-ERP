@@ -7,6 +7,7 @@ import UserController from '../controllers/UserController';
 import SettingsController from '../controllers/SettingsController';
 import LeaveController from '../controllers/LeaveController';
 import OrgController from '../controllers/OrgController';
+import { JobProfileController } from '../controllers/JobProfileController';
 import EmployeeFileController from '../controllers/EmployeeFileController';
 import AttendanceController from '../controllers/AttendanceController';
 import ContractController from '../controllers/ContractController';
@@ -134,6 +135,9 @@ router.get('/org/job-titles', requireAuth, asyncRoute(OrgController.listJobTitle
 router.post('/org/job-titles', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.createJobTitle));
 router.put('/org/job-titles/:id', requireAuth, allowPermission('org.manage'), validateUuidParam, asyncRoute(OrgController.updateJobTitle));
 router.get('/org/chart', requireAuth, asyncRoute(OrgController.chart));
+router.get('/org/job-profiles', requireAuth, asyncRoute(JobProfileController.list));
+router.post('/org/job-profiles/import', requireAuth, allowPermission('org.manage'), asyncRoute(JobProfileController.import));
+router.get('/org/job-titles/:id/profile', requireAuth, validateUuidParam, asyncRoute(JobProfileController.get));
 router.get('/org/import/template.xlsx', requireAuth, allowPermission('org.manage'), asyncRoute(OrgController.importTemplate));
 router.post('/org/import/preview', requireAuth, allowPermission('org.manage'), uploadSingle('file'), asyncRoute(OrgController.importPreview));
 router.post('/org/import/apply', requireAuth, allowPermission('org.manage'), uploadSingle('file'), asyncRoute(OrgController.importApply));

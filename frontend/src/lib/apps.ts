@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  BookOpenCheck, CalendarDays, CircleUserRound, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
 
@@ -73,6 +73,12 @@ export const APPS: AppDefinition[] = [
     extraPages: ['payslip'],
   },
   {
+    id: 'performance', label: 'الأداء', description: 'الأوصاف الوظيفية ومؤشرات الأداء', icon: Target,
+    colors: ['#d4657d', '#a3324d'],
+    menus: [{ page: 'kpi', label: 'الأوصاف ومؤشرات الأداء' }],
+    staffOnly: true,
+  },
+  {
     id: 'finance', label: 'المالية و SAP', description: 'القيود والترحيل', icon: Landmark,
     colors: ['#e3a83b', '#b97c12'], menus: [{ page: 'finance', label: 'القيود والربط', permission: 'finance.view' }],
   },
@@ -85,7 +91,7 @@ export const APPS: AppDefinition[] = [
     colors: ['#3bb3c9', '#1a7f93'], menus: [{ page: 'integrations', label: 'مفاتيح الربط', permission: 'integrations.manage' }],
   },
   {
-    id: 'jd', label: 'الأوصاف الوظيفية', description: 'الأوصاف ومؤشرات الأداء', icon: BookOpenCheck,
+    id: 'jd', label: 'بوابة التقييم', description: 'تقييم الأداء في نظام الأوصاف', icon: BookOpenCheck,
     colors: ['#c95b8f', '#9b2f63'], menus: [], href: 'https://alobaidi-hr.github.io/',
   },
   {

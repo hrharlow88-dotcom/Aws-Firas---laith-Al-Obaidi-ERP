@@ -753,3 +753,22 @@ table.dense td { height: 46px; padding-block: 6px; }
 .code-chip.code-ar { font-family: inherit; }
 .change-line { font-size: 12px; line-height: 1.8; }
 .change-line .muted, td .muted { color: var(--faint); }
+
+/* Job descriptions & KPIs (performance portal link) */
+.form-stack { display: flex; flex-direction: column; gap: 12px; }
+.muted-note { margin: 0; color: var(--muted); font-size: 10px; }
+.file-pick { width: fit-content; cursor: pointer; }
+.profile-stack { display: flex; flex-direction: column; gap: 14px; }
+.jp-body { padding: 14px 17px 16px; display: flex; flex-direction: column; gap: 14px; }
+.jp-purpose { margin: 0; font-size: 12px; line-height: 1.9; }
+.jp-overview { margin: 0; padding: 0 17px 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 18px; }
+.jp-body .jp-overview { padding: 0; }
+.jp-overview div { display: flex; flex-direction: column; gap: 3px; }
+.jp-overview dt { color: var(--muted); font-size: 10px; }
+.jp-overview dd { margin: 0; font-size: 11.5px; font-weight: 600; line-height: 1.6; }
+.jp-list { margin: 0; padding: 12px 36px 16px 17px; display: flex; flex-direction: column; gap: 7px; font-size: 11.5px; line-height: 1.8; }
+.jp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.jp-chips { padding-top: 12px; }
+.chip.jp-beh { background: #fdeee8; color: #9a3a1f; }
+a.button { text-decoration: none; }
+.jp-target { unicode-bidi: isolate; white-space: nowrap; }

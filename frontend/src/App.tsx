@@ -40,12 +40,13 @@ import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
 import { ContractTemplatesPage } from './pages/ContractTemplatesPage';
 import { UsersPage } from './pages/UsersPage';
+import { JobProfilesPage } from './pages/JobProfilesPage';
 import { MySpacePage } from './pages/MySpacePage';
 import { StatusTag } from './components/ui';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
-  | 'payroll-days' | 'loans' | 'contract-templates' | 'my' | 'my-payslip'
+  | 'payroll-days' | 'loans' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings';
 
 interface User {
@@ -499,6 +500,7 @@ function Workspace() {
             onSuccess={notify}
           />}
           {page === 'org' && <OrgPage branches={branchOptions} />}
+          {page === 'kpi' && <JobProfilesPage key={route.params[0] ?? 'list'} jobTitleId={route.params[0]} />}
           {page === 'attendance' && can('attendance.view') && <AttendancePage branches={branchOptions} />}
           {page === 'payroll' && can('payroll.view') && <PayrollPage key={route.params[0] ?? 'list'} runId={route.params[0]} branches={branchOptions} />}
           {page === 'payroll-days' && can('payroll.view') && <DayAdjustmentsPage />}
@@ -522,7 +524,7 @@ function Workspace() {
 
 const KNOWN_PAGES: string[] = [
   'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans',
-  'contract-templates', 'my', 'my-payslip', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
+  'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
 ];
 
 function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {

@@ -12,6 +12,7 @@ import {
 } from '../lib/format';
 import { navigate } from '../lib/router';
 import { useCrumb } from '../lib/breadcrumbs';
+import { JobProfileView } from './JobProfilesPage';
 import { useLoad, useSession } from '../lib/session';
 import type { Department, JobTitle } from './OrgPage';
 
@@ -42,7 +43,7 @@ interface EmployeeDetail {
   directReports: number;
 }
 
-type Tab = 'job' | 'personal' | 'documents' | 'contracts' | 'salary' | 'attendance' | 'payslips' | 'card';
+type Tab = 'job' | 'kpis' | 'personal' | 'documents' | 'contracts' | 'salary' | 'attendance' | 'payslips' | 'card';
 
 const STATUS: Record<string, { label: string; tone: string }> = {
   active: { label: 'على رأس العمل', tone: 'good' },
@@ -78,6 +79,7 @@ export function EmployeeProfilePage({ employeeId, branches }: { employeeId: stri
 
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: 'job', label: 'البيانات الوظيفية' },
+    { id: 'kpis', label: 'الوصف ومؤشرات الأداء' },
     ...(session.can('employees.view_profile') ? [
       { id: 'personal' as Tab, label: 'البيانات الشخصية' },
       { id: 'documents' as Tab, label: 'المستمسكات' },
@@ -120,6 +122,9 @@ export function EmployeeProfilePage({ employeeId, branches }: { employeeId: stri
       <Tabs<Tab> value={tab} onChange={setTab} items={tabs} />
 
       {tab === 'job' && <JobTab employee={employee} branches={branches} onSaved={detail.reload} />}
+      {tab === 'kpis' && (employee.jobTitleId
+        ? <JobProfileView jobTitleId={employee.jobTitleId} employeeNo={employee.employeeNo} />
+        : <section className="panel"><p className="muted-note" style={{ padding: 17 }}>اربط الموظف بمسمى وظيفي من تبويب «البيانات الوظيفية» حتى يظهر وصفه ومؤشرات أدائه.</p></section>)}
       {tab === 'personal' && <PersonalTab employeeId={employee.id} />}
       {tab === 'documents' && <DocumentsTab employeeId={employee.id} />}
       {tab === 'contracts' && <ContractsTab employeeId={employee.id} />}
