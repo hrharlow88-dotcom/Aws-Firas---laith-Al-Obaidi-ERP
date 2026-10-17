@@ -40,6 +40,7 @@ interface EmployeeDetail {
   shiftId: string | null;
   shiftName: string | null;
   hasPhoto: boolean;
+  photoVersion?: string | null;
   cardIssuedAt: string | null;
   directReports: number;
 }
@@ -96,7 +97,7 @@ export function EmployeeProfilePage({ employeeId, branches }: { employeeId: stri
     <section className="screen">
       <header className="profile-header panel">
         <div className="profile-photo-wrap">
-          <EmployeePhoto employeeId={employee.id} hasPhoto={employee.hasPhoto} name={employee.fullName} size={84} version={photoVersion} />
+          <EmployeePhoto employeeId={employee.id} hasPhoto={employee.hasPhoto} name={employee.fullName} size={84} version={photoVersion} photoVersion={employee.photoVersion} />
           {session.can('employees.manage_profile') && <>
             <button className="photo-edit" aria-label="تغيير الصورة" onClick={() => photoInput.current?.click()}><Camera size={15} /></button>
             <input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => {

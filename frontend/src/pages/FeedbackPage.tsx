@@ -4,6 +4,7 @@ import { Bi } from '../components/Brand';
 import { Empty, Loading, StatusTag, Tabs } from '../components/ui';
 import { apiBlob, openFile } from '../lib/api';
 import { formatDateTime } from '../lib/format';
+import { versionLabel } from '../lib/releases';
 import { useLoad, useSession } from '../lib/session';
 
 type Status = 'new' | 'in_progress' | 'done' | 'declined';
@@ -36,7 +37,7 @@ export function FeedbackPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="ملاحظات المستخدمين" en="User feedback" /></h2>
-        <p>ما يرسله المستخدمون من «ملاحظة على النظام» (في قائمة الحساب، وفي «المزيد» على التلفون): خطأ أو اقتراح أو سؤال، ومعه الشاشة ورقم النسخة والجهاز. غيّر الحالة واكتب رداً، فيصل صاحب الملاحظة إشعار بها.</p></div>
+        <p>ما يرسله المستخدمون من «ملاحظة على النظام» (في قائمة الحساب، وفي «المزيد» على التلفون): خطأ أو اقتراح أو سؤال، ومعه الشاشة ورقم الإصدار والجهاز. غيّر الحالة واكتب رداً، فيصل صاحب الملاحظة إشعار بها.</p></div>
         <button className="button button-quiet" onClick={list.reload}><RefreshCw size={15} />تحديث</button></div>
       <Tabs value={tab} onChange={setTab} items={[
         { id: 'new', label: 'الجديدة · New', badge: counts.new }, { id: 'in_progress', label: 'قيد المعالجة · In progress', badge: counts.in_progress },
@@ -78,7 +79,7 @@ function FeedbackItem({ note, onSaved }: { note: Note; onSaved: () => void }) {
       <p className="feedback-message">{note.message}</p>
       <div className="feedback-meta">
         {note.page && <span>الشاشة: <code dir="ltr">{note.page}</code></span>}
-        {note.appVersion && <span>النسخة: <span dir="ltr">v{note.appVersion}</span></span>}
+        {note.appVersion && <span>{versionLabel(note.appVersion)}</span>}
         {(note.device || note.viewport) && <span>الجهاز: <span dir="ltr">{[deviceName(note.device), note.viewport].filter(Boolean).join(' · ')}</span></span>}
       </div>
       {note.hasImage && <FeedbackImage id={note.id} />}
@@ -88,7 +89,7 @@ function FeedbackItem({ note, onSaved }: { note: Note; onSaved: () => void }) {
             {(Object.keys(STATUS) as Status[]).map((key) => <option key={key} value={key}>{STATUS[key].label}</option>)}
           </select></label>
         <label className="field"><span>ردك لصاحب الملاحظة (اختياري)</span>
-          <textarea rows={2} maxLength={1000} value={reply} placeholder="مثال: أُصلح في النسخة 2.1، حدّث الصفحة." onChange={(event) => setReply(event.target.value)} /></label>
+          <textarea rows={2} maxLength={1000} value={reply} placeholder="مثال: أُصلح في إصدار 2.1، حدّث الصفحة." onChange={(event) => setReply(event.target.value)} /></label>
         <button className="button button-primary" disabled={busy || !changed} onClick={() => void save()}><Save size={15} />{busy ? 'جارٍ الحفظ…' : 'حفظ وإبلاغ'}</button>
       </div>
     </article>

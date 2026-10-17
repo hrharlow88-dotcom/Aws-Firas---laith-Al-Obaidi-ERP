@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Sparkles } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Dialog, Tone } from './ui';
 import { formatDate } from '../lib/format';
-import { APP_VERSION, RELEASES, RELEASE_KIND } from '../lib/releases';
+import { APP_VERSION, RELEASES, RELEASE_KIND, versionLabel } from '../lib/releases';
 
 /** "1.2" < "1.10" < "2.0"; missing parts count as zero ("1.1" = "1.1.0"). */
 export function compareVersions(a: string, b: string): number {
@@ -15,15 +15,13 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-const shortVersion = (version: string) => version.replace(/\.0$/, '');
-
-/** The running version; opens the release history. */
+/** The running version, as «إصدار 2.2» only; opens the release history. */
 export function VersionBadge({ className = '' }: { className?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
       <button type="button" className={`version-badge ${className}`} onClick={() => setOpen(true)} title="ما الجديد · What's new">
-        <Sparkles size={12} />v{APP_VERSION}
+        {versionLabel(APP_VERSION)}
       </button>
       <WhatsNew open={open} onClose={() => setOpen(false)} />
     </>
@@ -32,12 +30,12 @@ export function VersionBadge({ className = '' }: { className?: string }) {
 
 export function WhatsNew({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Dialog open={open} title="ما الجديد · What's new" subtitle={`النسخة الحالية v${APP_VERSION}`} onClose={onClose} wide>
+    <Dialog open={open} title="ما الجديد · What's new" subtitle={versionLabel(APP_VERSION)} onClose={onClose} wide>
       <ol className="release-list">
         {RELEASES.map((release) => (
           <li key={release.version}>
             <div className="release-head">
-              <strong className="release-version">v{release.version}</strong>
+              <strong className="release-version">{versionLabel(release.version)}</strong>
               <span><b>{release.title}</b><small dir="ltr">{release.titleEn}</small></span>
               <time dateTime={release.date}>{formatDate(release.date)}</time>
             </div>
@@ -90,7 +88,7 @@ export function UpdateBanner() {
   return (
     <div className="update-banner no-print" role="status">
       <RefreshCw size={15} />
-      <span>نسخة جديدة من النظام v{shortVersion(server)} متاحة · A new version is available</span>
+      <span>متاح الآن: {versionLabel(server)}</span>
       <button type="button" className="button button-primary button-small" onClick={() => void reloadFresh()}>تحديث الآن</button>
     </div>
   );

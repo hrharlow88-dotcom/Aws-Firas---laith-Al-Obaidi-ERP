@@ -28,6 +28,24 @@ export async function api<T>(path: string, token?: string, options: Options = {}
   return result as T;
 }
 
+/** Sends a form and reports how much of it has gone up (large files); fails like api(). */
+export function apiUpload<T>(path: string, token: string, form: FormData, onProgress: (fraction: number) => void): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `/api${path}`);
+    request.setRequestHeader('Authorization', `Bearer ${token}`);
+    request.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
+    request.onload = () => {
+      let result: { message?: string; details?: unknown } = {};
+      try { result = JSON.parse(request.responseText || '{}'); } catch { /* not JSON (a proxy page) */ }
+      if (request.status >= 200 && request.status < 300) resolve(result as T);
+      else reject(new ApiError(result.message || (request.status === 413 ? 'الملف أكبر من الحجم المسموح.' : 'تعذر إكمال الطلب.'), request.status, result.details));
+    };
+    request.onerror = () => reject(new ApiError('انقطع الاتصال أثناء رفع الملف. حاول مرة أخرى.', 0));
+    request.send(form);
+  });
+}
+
 /** Fetches a protected file (document, export) and returns it as a blob URL. */
 export async function apiBlob(path: string, token: string): Promise<{ url: string; name: string | null }> {
   const response = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${token}` } });

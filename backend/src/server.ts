@@ -9,6 +9,7 @@ import { sapConfigured } from './services/sapB1';
 import { runSecurityGuard } from './services/security';
 import { runHrReminders } from './services/hrReminders';
 import { processOutbox } from './services/messaging';
+import { sweepStagedImports } from './services/photoZip';
 
 function validateEnvironment(): void {
   const required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD'];
@@ -70,6 +71,8 @@ async function start(): Promise<void> {
   registerJob({ name: 'message-outbox', everyMs: 30000, run: async () => { await processOutbox(); } });
   // HR reminders (passports, residencies, birthdays, probation, anniversaries, contracts, advances, holidays); each goes out once.
   registerJob({ name: 'hr-reminders', everyMs: 3600000, run: async () => { await runHrReminders(); } });
+  // Photo ZIP previews nobody confirmed are removed once they expire.
+  registerJob({ name: 'photo-zip-staging', everyMs: 3600000, run: async () => { await sweepStagedImports(); } });
   startBackgroundJobs();
 }
 

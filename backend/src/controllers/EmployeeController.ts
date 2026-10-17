@@ -43,10 +43,10 @@ export class EmployeeController {
     const isRecent = req.query.recent === '1';
     const order: Order = isRecent ? [['hireDate', 'DESC'], ['fullName', 'ASC']] : [['fullName', 'ASC']];
     const attributes: Array<keyof EmployeeAttributes> | undefined = ['branch_manager', 'line_manager'].includes(req.user?.role ?? '')
-      ? ['id', 'employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate']
+      ? ['id', 'employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate', 'photoDocumentId']
       : maySeeEmployeeContact(req.user?.role)
         ? undefined
-        : ['id', 'employeeNo', 'fullName', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate'];
+        : ['id', 'employeeNo', 'fullName', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate', 'photoDocumentId'];
 
     const result = await Employee.findAndCountAll({
       where,

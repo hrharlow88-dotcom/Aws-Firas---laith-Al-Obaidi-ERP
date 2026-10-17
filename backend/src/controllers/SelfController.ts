@@ -24,7 +24,7 @@ export class SelfController {
               b.name AS "branchName", COALESCE(d.name, e.department) AS department, COALESCE(j.name, e."position") AS position,
               m.full_name AS "managerName", to_char(e.hire_date, 'YYYY-MM-DD') AS "hireDate",
               e.employment_status AS "employmentStatus", e.employment_type AS "employmentType",
-              e.photo_document_id IS NOT NULL AS "hasPhoto", s.name AS "shiftName", e.email, e.phone
+              e.photo_document_id IS NOT NULL AS "hasPhoto", e.photo_document_id AS "photoVersion", s.name AS "shiftName", e.email, e.phone
        FROM employees e
        JOIN branches b ON b.id = e.branch_id
        LEFT JOIN departments d ON d.id = e.department_id

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Camera, CheckCircle2, Download, FileSpreadsheet, ImagePlus, Images, Upload, X } from 'lucide-react';
+import { Camera, CheckCircle2, Download, FileArchive, FileSpreadsheet, ImageOff, ImagePlus, Images, Upload, X } from 'lucide-react';
 import { Bi } from '../components/Brand';
 import { Dialog, Empty, Loading, Stat, Tabs, Tone, Warning } from '../components/ui';
-import { apiBlob, downloadFile } from '../lib/api';
+import { ApiError, apiBlob, apiUpload, downloadFile } from '../lib/api';
 import { formatDateTime, formatNumber } from '../lib/format';
 import { navigate } from '../lib/router';
 import { useLoad, useSession } from '../lib/session';
@@ -144,6 +144,192 @@ function SubmissionPhoto({ id }: { id: string }) {
   return url ? <img className="submission-photo" src={url} alt="" /> : <span className="submission-photo submission-photo-empty"><Camera size={20} /></span>;
 }
 
+type ZipStatus = 'ready' | 'has_photo' | 'unmatched' | 'duplicate' | 'corrupt' | 'too_large' | 'encrypted' | 'not_image';
+interface ZipItem {
+  index: number; entry: string; employeeNo: string; status: ZipStatus; reason: string | null; thumb: string | null;
+  employee: { id: string; employeeNo: string; fullName: string; branchName: string; hasPhoto: boolean } | null;
+}
+interface ZipPreview {
+  importId: string; fileName: string; expiresAt: string; items: ZipItem[];
+  summary: { files: number; ready: number; hasPhoto: number; unmatched: number; duplicate: number; invalid: number; ignored: number };
+  limits: { zipMb: number; images: number; imageMb: number };
+}
+type ZipOutcome = 'added' | 'replaced' | 'skipped' | 'failed';
+interface ZipResult {
+  fileName: string;
+  summary: Record<ZipOutcome, number>;
+  items: Array<{ entry: string; employeeNo: string; fullName: string | null; result: ZipOutcome; reason: string | null }>;
+}
+
+const ZIP_STATUS: Record<ZipStatus, { label: string; tone: string }> = {
+  ready: { label: 'جاهزة', tone: 'good' },
+  has_photo: { label: 'لديه صورة', tone: 'warn' },
+  unmatched: { label: 'غير مطابقة', tone: 'bad' },
+  duplicate: { label: 'مكررة', tone: 'bad' },
+  corrupt: { label: 'تالفة', tone: 'bad' },
+  too_large: { label: 'كبيرة جداً', tone: 'bad' },
+  encrypted: { label: 'محمية بكلمة مرور', tone: 'bad' },
+  not_image: { label: 'ليست صورة', tone: 'muted' },
+};
+const ZIP_OUTCOME: Record<ZipOutcome, { label: string; tone: string }> = {
+  added: { label: 'أُضيفت', tone: 'good' },
+  replaced: { label: 'استُبدلت', tone: 'info' },
+  skipped: { label: 'تُجوزت', tone: 'warn' },
+  failed: { label: 'فشلت', tone: 'bad' },
+};
+const INVALID: ZipStatus[] = ['corrupt', 'too_large', 'encrypted', 'not_image'];
+type ZipFilter = 'all' | 'ready' | 'has_photo' | 'unmatched' | 'duplicate' | 'invalid';
+
+/** The result as a spreadsheet-friendly CSV (opens in Excel with Arabic intact). */
+function downloadZipReport(result: ZipResult) {
+  const cell = (value: string | null) => `"${(value ?? '').replace(/"/g, '""')}"`;
+  const lines = [
+    ['الملف', 'الرقم الوظيفي', 'الموظف', 'النتيجة', 'السبب'].map(cell).join(','),
+    ...result.items.map((item) => [item.entry, item.employeeNo, item.fullName, ZIP_OUTCOME[item.result].label, item.reason].map(cell).join(',')),
+  ];
+  const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `تقرير-صور-الموظفين-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+/** Employee photos from one ZIP: checked and previewed by the server, saved only on confirmation. */
+function PhotoZip() {
+  const session = useSession();
+  const [busy, setBusy] = useState<'' | 'apply'>('');
+  const [upload, setUpload] = useState<number | null>(null);
+  const [preview, setPreview] = useState<ZipPreview | null>(null);
+  const [replace, setReplace] = useState(false);
+  const [filter, setFilter] = useState<ZipFilter>('all');
+  const [result, setResult] = useState<ZipResult | null>(null);
+
+  async function check(file: File) {
+    setPreview(null);
+    setResult(null);
+    setReplace(false);
+    setUpload(0);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const response = await apiUpload<{ data: ZipPreview }>('/employees/photos/zip/preview', session.token, form, setUpload);
+      setPreview(response.data);
+      setFilter('all');
+    } catch (error) {
+      session.fail(error, 'تعذر فحص الملف.');
+    } finally {
+      setUpload(null);
+    }
+  }
+
+  async function apply() {
+    if (!preview) return;
+    setBusy('apply');
+    try {
+      const response = await session.call<{ data: ZipResult }>(`/employees/photos/zip/${preview.importId}/apply`, { body: { replace } });
+      setResult(response.data);
+      setPreview(null);
+      const { added, replaced, failed } = response.data.summary;
+      session.notify(`أُضيفت ${formatNumber(added)} صورة${replaced ? ` واستُبدلت ${formatNumber(replaced)}` : ''}${failed ? `، وفشلت ${formatNumber(failed)}` : ''}.`);
+    } catch (error) {
+      session.fail(error, 'تعذر حفظ الصور.');
+      if (error instanceof ApiError && error.status === 410) setPreview(null);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function cancel() {
+    if (preview) await session.call(`/employees/photos/zip/${preview.importId}`, { method: 'DELETE' }).catch(() => undefined);
+    setPreview(null);
+  }
+
+  const items = preview?.items.filter((item) => (filter === 'all' ? true : filter === 'invalid' ? INVALID.includes(item.status) : item.status === filter)) ?? [];
+  const toSave = preview ? preview.summary.ready + (replace ? preview.summary.hasPhoto : 0) : 0;
+  const uploading = upload !== null;
+  return (
+    <section className="panel zip-panel">
+      <div className="panel-head">
+        <div><h3>رفع صور الموظفين بملف ZIP</h3><p>ملف واحد فيه صور الموظفين. يفحصه النظام ويطابق كل صورة بالرقم الوظيفي ويعرضها عليك، ولا يُحفظ شيء قبل التأكيد.</p></div>
+        {!preview && !result && <label className={`button button-primary file-button ${uploading ? 'is-busy' : ''}`}><FileArchive size={15} />{uploading ? (upload! < 1 ? `جارٍ الرفع ${Math.round(upload! * 100)}%` : 'جارٍ فحص الصور…') : 'اختيار ملف ZIP'}
+          <input type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void check(file); event.target.value = ''; }} /></label>}
+      </div>
+      {!preview && !result && <div className="panel-pad">
+        <ul className="zip-guide" aria-label="طريقة تسمية الصور">
+          <li>سمِّ كل صورة <b>بالرقم الوظيفي فقط</b>، مثل <code dir="ltr">10172.jpg</code></li>
+          <li>الرقم يُطابق كما هو مكتوب: <code dir="ltr">010172</code> غير <code dir="ltr">10172</code></li>
+          <li>الصيغ: JPG وJPEG وPNG وWebP، ويمكن أن تكون الصور داخل مجلدات في الملف</li>
+          <li>حتى 100 ميغابايت للملف و1000 صورة و15 ميغابايت للصورة الواحدة</li>
+          <li>من لديه صورة تبقى صورته، إلا إذا اخترت الاستبدال بعد المعاينة</li>
+        </ul>
+      </div>}
+      {preview && <>
+        <div className="panel-pad">
+          <p className="muted zip-file"><FileArchive size={14} /><span dir="ltr">{preview.fileName}</span> · {formatNumber(preview.summary.files)} ملف{preview.summary.ignored ? ` · تجاهلنا ${formatNumber(preview.summary.ignored)} من ملفات النظام` : ''}</p>
+          <div className="stat-row">
+            <Stat label="جاهزة للإضافة" value={formatNumber(preview.summary.ready)} tone={preview.summary.ready ? 'good' : undefined} />
+            <Stat label="لديهم صورة سابقة" value={formatNumber(preview.summary.hasPhoto)} tone={preview.summary.hasPhoto ? 'warn' : undefined} foot={replace ? 'ستُستبدل' : 'تبقى كما هي'} />
+            <Stat label="غير مطابقة أو مكررة" value={formatNumber(preview.summary.unmatched + preview.summary.duplicate)} tone={preview.summary.unmatched + preview.summary.duplicate ? 'bad' : undefined} foot={`${formatNumber(preview.summary.duplicate)} مكررة`} />
+            <Stat label="تالفة أو مرفوضة" value={formatNumber(preview.summary.invalid)} tone={preview.summary.invalid ? 'bad' : undefined} />
+          </div>
+          {preview.summary.hasPhoto > 0 && <label className="settings-check zip-replace"><input type="checkbox" checked={replace} onChange={(event) => setReplace(event.target.checked)} />
+            استبدال الصور الحالية لـ {formatNumber(preview.summary.hasPhoto)} موظف لديهم صورة</label>}
+        </div>
+        <div className="panel-pad"><Tabs<ZipFilter> value={filter} onChange={setFilter} items={[
+          { id: 'all', label: 'الكل', badge: preview.items.length },
+          { id: 'ready', label: 'جاهزة', badge: preview.summary.ready },
+          { id: 'has_photo', label: 'لديهم صورة', badge: preview.summary.hasPhoto },
+          { id: 'unmatched', label: 'غير مطابقة', badge: preview.summary.unmatched },
+          { id: 'duplicate', label: 'مكررة', badge: preview.summary.duplicate },
+          { id: 'invalid', label: 'تالفة أو مرفوضة', badge: preview.summary.invalid },
+        ]} /></div>
+        {items.length ? <div className="table-scroll"><table className="dense zip-table">
+          <thead><tr><th>الصورة</th><th>الملف</th><th>الرقم الوظيفي</th><th>الموظف</th><th>الحالة</th></tr></thead>
+          <tbody>{items.map((item) => <tr key={item.index}>
+            <td>{item.thumb ? <img className="zip-thumb" src={item.thumb} alt="" loading="lazy" /> : <span className="zip-thumb zip-thumb-empty"><ImageOff size={16} /></span>}</td>
+            <td className="wrap"><span dir="ltr">{item.entry}</span></td>
+            <td><span dir="ltr">{item.employeeNo || '—'}</span></td>
+            <td>{item.employee ? <><strong>{item.employee.fullName}</strong><small className="table-sub">{item.employee.branchName}</small></> : <span className="muted">—</span>}</td>
+            <td className="wrap"><Tone tone={item.status === 'has_photo' && replace ? 'info' : ZIP_STATUS[item.status].tone}>{item.status === 'has_photo' && replace ? 'تُستبدل' : ZIP_STATUS[item.status].label}</Tone><small className="table-sub">{item.status === 'has_photo' && replace ? 'تحل محل صورته الحالية بعد التأكيد' : item.reason}</small></td>
+          </tr>)}</tbody>
+        </table></div> : <Empty icon={<CheckCircle2 size={22} />} title="لا صور في هذا التصنيف" text="اختر تصنيفاً آخر من الأعلى." />}
+        <div className="dialog-actions panel-pad">
+          <button className="button button-primary" disabled={!toSave || busy === 'apply'} onClick={() => void apply()}><Upload size={15} />{busy === 'apply' ? 'جارٍ الحفظ…' : `تأكيد ورفع ${formatNumber(toSave)} صورة`}</button>
+          <button className="button button-quiet" disabled={busy === 'apply'} onClick={() => void cancel()}>إلغاء</button>
+          <small className="muted">المعاينة محفوظة حتى {formatDateTime(preview.expiresAt)}</small>
+        </div>
+      </>}
+      {result && <>
+        <div className="panel-pad">
+          <div className="stat-row">
+            <Stat label="أُضيفت" value={formatNumber(result.summary.added)} tone={result.summary.added ? 'good' : undefined} />
+            <Stat label="استُبدلت" value={formatNumber(result.summary.replaced)} />
+            <Stat label="تُجوزت" value={formatNumber(result.summary.skipped)} tone={result.summary.skipped ? 'warn' : undefined} />
+            <Stat label="فشلت" value={formatNumber(result.summary.failed)} tone={result.summary.failed ? 'bad' : undefined} />
+          </div>
+          <p className="muted">الصور المحفوظة تظهر الآن في ملفات الموظفين ودليل الموظفين والهيكل التنظيمي، لمن يملك صلاحية رؤيتهم فقط.</p>
+        </div>
+        <div className="table-scroll"><table className="dense zip-table">
+          <thead><tr><th>الملف</th><th>الرقم الوظيفي</th><th>الموظف</th><th>النتيجة</th></tr></thead>
+          <tbody>{result.items.map((item, index) => <tr key={`${item.entry}-${index}`}>
+            <td className="wrap"><span dir="ltr">{item.entry}</span></td>
+            <td><span dir="ltr">{item.employeeNo || '—'}</span></td>
+            <td>{item.fullName ?? <span className="muted">—</span>}</td>
+            <td className="wrap"><Tone tone={ZIP_OUTCOME[item.result].tone}>{ZIP_OUTCOME[item.result].label}</Tone>{item.reason && <small className="table-sub">{item.reason}</small>}</td>
+          </tr>)}</tbody>
+        </table></div>
+        <div className="dialog-actions panel-pad">
+          <button className="button button-primary" onClick={() => downloadZipReport(result)}><Download size={15} />تنزيل التقرير</button>
+          <button className="button button-quiet" onClick={() => setResult(null)}>رفع ملف آخر</button>
+        </div>
+      </>}
+    </section>
+  );
+}
+
 function Photos() {
   const session = useSession();
   const waiting = useLoad<Submission[]>('/employees/photo-submissions', []);
@@ -205,6 +391,8 @@ function Photos() {
 
   const matched = matches?.filter((item) => item.employee).length ?? 0;
   return (
+    <>
+    <PhotoZip />
     <div className="split">
       <section className="panel">
         <div className="panel-head"><div><h3>صور من بوابة الموظفين</h3><p>صور أرسلها الموظفون من «خدمتي». اعتمدها كلها بضغطة واحدة، أو واحدة واحدة.</p></div>
@@ -247,5 +435,6 @@ function Photos() {
         <div className="dialog-actions"><button className="button button-primary" disabled={!note.trim()} onClick={() => void reject()}>رفض وإبلاغ الموظف</button><button className="button button-quiet" onClick={() => setRejecting(null)}>إلغاء</button></div>
       </Dialog>
     </div>
+    </>
   );
 }

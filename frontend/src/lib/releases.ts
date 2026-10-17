@@ -18,6 +18,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.2',
+    date: '2026-10-17',
+    title: 'صور الموظفين بملف ZIP واحد',
+    titleEn: 'Employee photos from one ZIP',
+    items: [
+      { kind: 'new', ar: 'رفع صور الموظفين بملف ZIP واحد من «الموظفون ← استيراد وتحديث ← الصور»: كل صورة باسم الرقم الوظيفي (مثل 10172.jpg)، ومعاينة لكل صورة قبل الحفظ (جاهزة، غير مطابقة، مكررة، تالفة، لديه صورة)، والاستبدال خيار صريح، وتقرير بالنتيجة للتنزيل', en: 'Employee photos from one ZIP in Employees → Import and update → Photos: each photo named by employee number (e.g. 10172.jpg), a preview of every photo before saving (ready, unmatched, duplicate, damaged, already has a photo), replacing only when chosen, and a downloadable report' },
+      { kind: 'improve', ar: 'صور الموظفين تظهر في دليل الموظفين والهيكل التنظيمي وأحدث المنضمين، ضمن صلاحيات من يشاهد', en: 'Employee photos now show in the directory, the org chart and the newest joiners, within each viewer\'s access' },
+      { kind: 'improve', ar: 'الإصدار يظهر «إصدار 2.2» فقط، وعبارة المطوّر صارت «بناء وتطوير»', en: 'The version reads «إصدار 2.2» only, and the developer credit reads «Built & developed by»' },
+      { kind: 'security', ar: 'ملف ZIP يُفحص قبل أي حفظ: حدود للحجم وعدد الصور، رفض المسارات الضارة والملفات التنفيذية، وكل صورة تُفك وتُعاد كتابتها بلا بيانات الكاميرا والموقع وتُحفظ مشفّرة', en: 'The ZIP is checked before anything is saved: size and count limits, unsafe paths and programs refused, and every photo decoded and rewritten without camera or location data, stored encrypted' },
+    ],
+  },
+  {
     version: '2.1.1',
     date: '2026-10-17',
     title: 'تصحيح تحميل الخطوط',
@@ -131,6 +143,9 @@ export const RELEASES: Release[] = [
 ];
 
 export const APP_VERSION = RELEASES[0].version;
+
+/** How a version is shown to people, everywhere: «إصدار 2.2» and nothing else ("2.2.0" from the server reads "2.2"). */
+export const versionLabel = (version: string): string => `إصدار ${version.replace(/\.0$/, '')}`;
 
 export const RELEASE_KIND: Record<ReleaseItemKind, { ar: string; en: string; tone: string }> = {
   new: { ar: 'جديد', en: 'New', tone: 'good' },

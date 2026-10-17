@@ -5,6 +5,8 @@ import { Dialog, Empty, Loading, Tabs, Tone } from '../components/ui';
 import { navigate } from '../lib/router';
 import { useLoad, useSession } from '../lib/session';
 import { OrgImport } from './OrgImport';
+import { PersonMark } from '../components/EmployeePhoto';
+import { useEmployeeThumbs } from '../lib/photos';
 
 export interface Department {
   id: string;
@@ -41,6 +43,7 @@ interface ChartEmployee {
   managerId: string | null;
   jobTitle: string;
   branchName: string;
+  photoVersion?: string | null;
 }
 
 type Tab = 'departments' | 'titles' | 'chart' | 'import';
@@ -171,6 +174,7 @@ function OrgChart({ departments }: { departments: Department[] }) {
   const [expandAll, setExpandAll] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const people = chart.data.employees.filter((person) => !departmentId || person.departmentId === departmentId);
+  const thumbs = useEmployeeThumbs(chart.data.employees);
   const ids = new Set(people.map((person) => person.id));
   const roots = people.filter((person) => !person.managerId || !ids.has(person.managerId));
   const reportsOf = useMemo(() => {
@@ -197,6 +201,7 @@ function OrgChart({ departments }: { departments: Department[] }) {
       <li key={person.id}>
         <div className={`chart-node level-${level}`}>
           <button className="chart-card" onClick={() => navigate('employees', person.id)}>
+            <PersonMark name={person.fullName} src={thumbs[person.id]} className="chart-photo" />
             <strong>{person.fullName}</strong><small>{person.jobTitle}</small><small>{person.branchName}</small>
           </button>
           {team.length > 0 && <button className="chart-toggle" onClick={() => toggle(person.id)} aria-expanded={expanded} title={expanded ? 'طي' : 'عرض الفريق'}>

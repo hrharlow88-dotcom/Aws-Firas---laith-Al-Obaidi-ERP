@@ -1472,6 +1472,20 @@ html[data-mode="dark"] .o-user-menu { background: var(--paper); border-color: va
 .progress-line { height: 8px; border-radius: 999px; background: var(--canvas); overflow: hidden; }
 .progress-line span { display: block; height: 100%; background: var(--brand); transition: width .2s ease; }
 
+/* Employees: photos from one ZIP (guide, preview, result), and photos in lists and the org chart. */
+.zip-panel { margin-bottom: 16px; }
+.zip-guide { display: grid; gap: 6px; margin: 0; padding: 12px 16px; padding-inline-start: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas); color: var(--ink); font-size: 13.5px; line-height: 1.6; }
+.zip-guide code { padding: 0 5px; border-radius: 4px; background: var(--paper); font-size: 13px; }
+.zip-file { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; }
+.zip-replace { margin-top: 10px; color: var(--ink); }
+.zip-thumb { display: block; width: 44px; height: 44px; border-radius: 6px; object-fit: cover; border: 1px solid var(--line); }
+.zip-thumb-empty { display: grid; place-items: center; background: var(--canvas); color: var(--muted); }
+.zip-table td small.table-sub { white-space: normal; }
+.file-button.is-busy { pointer-events: none; opacity: .75; }
+img.person-mark { display: block; object-fit: cover; background: var(--teal-wash); }
+.chart-node .chart-card .chart-photo { justify-self: center; width: 40px; height: 40px; margin-bottom: 4px; display: grid; place-items: center; border-radius: 50%; background: var(--teal-wash); color: var(--teal); font-size: 15px; font-weight: 700; }
+.chart-node .chart-card img.chart-photo { display: block; object-fit: cover; }
+
 /* Attendance: the fingerprint system's three files. */
 .fp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 12px; padding: 0 18px 18px; }
 .fp-card { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }

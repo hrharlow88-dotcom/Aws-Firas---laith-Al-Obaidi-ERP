@@ -14,7 +14,7 @@ import { ACTION, DisciplineRecord, RECORD_STATUS, RecordView } from './Disciplin
 interface MyProfile {
   id: string; employeeNo: string; fullName: string; nameEn: string | null; branchName: string; department: string;
   position: string; managerName: string | null; hireDate: string; employmentStatus: string; employmentType: string;
-  hasPhoto: boolean; shiftName: string | null; email: string | null; phone: string | null;
+  hasPhoto: boolean; photoVersion?: string | null; shiftName: string | null; email: string | null; phone: string | null;
 }
 interface MyPayslip { runId: string; period: string; currency: string; totalEarnings: number; totalDeductions: number; netPay: number }
 interface Balance { leaveTypeId: string; leaveTypeName: string; unit: string; balance: number; pending: number; available: number }
@@ -97,7 +97,7 @@ export function MySpacePage() {
     <section className="screen portal">
       {portal.welcome.trim() && <div className="portal-welcome" role="note"><p>{portal.welcome}</p></div>}
       {portal.card ? <header className="portal-card">
-        <div className="portal-card-photo"><EmployeePhoto employeeId={me.id} hasPhoto={me.hasPhoto} name={me.fullName} size={96} /></div>
+        <div className="portal-card-photo"><EmployeePhoto employeeId={me.id} hasPhoto={me.hasPhoto} name={me.fullName} size={96} photoVersion={me.photoVersion} /></div>
         <div className="portal-card-body">
           <span className="portal-card-company"><Bi ar={"مجموعة الليث العبيدي للسيارات"} en={"Al-Laith Al-Obaidi Automotive Group"} /></span>
           <h2>{me.fullName} <StatusTag map={STATUS} value={me.employmentStatus} /></h2>

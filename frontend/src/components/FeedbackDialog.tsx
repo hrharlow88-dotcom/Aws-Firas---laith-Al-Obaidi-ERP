@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { Bug, HelpCircle, ImagePlus, Lightbulb, Send, X } from 'lucide-react';
-import { APP_VERSION } from '../lib/releases';
+import { APP_VERSION, versionLabel } from '../lib/releases';
 import { formatDateTime } from '../lib/format';
 import { useSession } from '../lib/session';
 import { Dialog, StatusTag } from './ui';
@@ -57,7 +57,7 @@ export function FeedbackDialog({ open, onClose }: { open: boolean; onClose: () =
 
   const current = KINDS.find((item) => item.id === kind)!;
   return (
-    <Dialog open={open} title="ملاحظة على النظام · Feedback" subtitle="تصل لمالك النظام مع اسم الشاشة ورقم النسخة ونوع جهازك." onClose={onClose}>
+    <Dialog open={open} title="ملاحظة على النظام · Feedback" subtitle="تصل لمالك النظام مع اسم الشاشة ورقم الإصدار ونوع جهازك." onClose={onClose}>
       {open && <form onSubmit={(event) => void submit(event)}>
         <div className="feedback-kinds" role="radiogroup" aria-label="نوع الملاحظة">
           {KINDS.map((item) => { const Icon = item.icon; return <button key={item.id} type="button" role="radio" aria-checked={kind === item.id} className={kind === item.id ? 'is-active' : ''} onClick={() => setKind(item.id)}><Icon size={18} />{item.label}</button>; })}
@@ -66,7 +66,7 @@ export function FeedbackDialog({ open, onClose }: { open: boolean; onClose: () =
         <div className="feedback-attach">
           {file ? <span className="feedback-file"><ImagePlus size={15} />{file.name}<button type="button" className="icon-button" aria-label="إزالة الصورة" onClick={() => setFile(null)}><X size={14} /></button></span>
             : <label className="button button-quiet button-small file-button"><ImagePlus size={14} />إرفاق لقطة شاشة<input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>}
-          <small className="muted" dir="ltr">{page} · v{APP_VERSION} · {window.innerWidth}×{window.innerHeight}</small>
+          <small className="muted"><span dir="ltr">{page}</span> · {versionLabel(APP_VERSION)} · <span dir="ltr">{window.innerWidth}×{window.innerHeight}</span></small>
         </div>
         <div className="dialog-actions"><button className="button button-primary" disabled={busy}><Send size={15} />{busy ? 'جارٍ الإرسال…' : 'إرسال'}</button><button type="button" className="button button-quiet" onClick={onClose}>إلغاء</button></div>
         {mine.length > 0 && <div className="feedback-mine">

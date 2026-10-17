@@ -102,7 +102,7 @@ export class EmployeeFileController {
               e.hire_date AS "hireDate", e.termination_date AS "terminationDate",
               e.employment_status AS "employmentStatus", e.employment_type AS "employmentType",
               e.attendance_pin AS "attendancePin", e.shift_id AS "shiftId", s.name AS "shiftName",
-              e.photo_document_id IS NOT NULL AS "hasPhoto", e.card_issued_at AS "cardIssuedAt",
+              e.photo_document_id IS NOT NULL AS "hasPhoto", e.photo_document_id AS "photoVersion", e.card_issued_at AS "cardIssuedAt",
               (SELECT count(*)::int FROM employees r WHERE r.manager_id = e.id AND r.employment_status <> 'inactive') AS "directReports"
        FROM employees e
        JOIN branches b ON b.id = e.branch_id
@@ -455,7 +455,7 @@ export class EmployeeFileController {
               COALESCE(j.name, e."position") AS "jobTitle", COALESCE(d.name, e.department) AS "department",
               b.name AS "branchName", e.hire_date AS "hireDate", p.blood_type AS "bloodType",
               e.card_token AS "cardToken", e.card_issued_at AS "cardIssuedAt",
-              e.photo_document_id IS NOT NULL AS "hasPhoto", e.employment_status AS "employmentStatus"
+              e.photo_document_id IS NOT NULL AS "hasPhoto", e.photo_document_id AS "photoVersion", e.employment_status AS "employmentStatus"
        FROM employees e
        JOIN branches b ON b.id = e.branch_id
        LEFT JOIN departments d ON d.id = e.department_id

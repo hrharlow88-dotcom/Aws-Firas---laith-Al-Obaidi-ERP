@@ -231,7 +231,7 @@ export class OrgController {
       select(
         `SELECT e.id, e.employee_no AS "employeeNo", e.full_name AS "fullName", e.department_id AS "departmentId",
                 e.manager_id AS "managerId", COALESCE(j.name, e."position") AS "jobTitle",
-                e.photo_document_id IS NOT NULL AS "hasPhoto", b.name AS "branchName"
+                e.photo_document_id IS NOT NULL AS "hasPhoto", e.photo_document_id AS "photoVersion", b.name AS "branchName"
          FROM employees e
          LEFT JOIN job_titles j ON j.id = e.job_title_id
          JOIN branches b ON b.id = e.branch_id

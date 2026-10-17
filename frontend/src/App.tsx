@@ -26,6 +26,8 @@ import { buildSession, SessionProvider, useLoad, useSession } from './lib/sessio
 import { navigate, useRoute } from './lib/router';
 import { AppearanceControls, Bi, BrandStrip, CompanyStrip, DeveloperCredit, SYSTEM_NAME, usePublicBranding } from './components/Brand';
 import { UpdateBanner, VersionBadge } from './components/Version';
+import { PersonMark } from './components/EmployeePhoto';
+import { useEmployeeThumbs } from './lib/photos';
 import { ChatButton } from './components/ChatButton';
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
 import { DOCUMENT_TYPES, EMPLOYMENT_TYPES, formatMoney, monthLabel } from './lib/format';
@@ -162,6 +164,7 @@ interface Employee {
   departmentId?: string | null;
   jobTitleId?: string | null;
   employmentType?: string;
+  photoDocumentId?: string | null;
 }
 
 interface ApiResult<T> {
@@ -849,6 +852,7 @@ function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCr
     session.can('payroll.view') ? '/payroll/runs' : null, [],
   );
   const recent = [...employees].sort((a, b) => b.hireDate.localeCompare(a.hireDate)).slice(0, 5);
+  const thumbs = useEmployeeThumbs(recent);
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
   const alertCount = (alerts.data?.documents.length ?? 0) + (alerts.data?.contracts.length ?? 0) + (alerts.data?.residency?.length ?? 0);
   return (
@@ -876,7 +880,7 @@ function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCr
           </> : <>
             <div className="panel-head"><div><h3>أحدث المنضمين</h3><p>آخر الموظفين بحسب تاريخ التعيين</p></div><button className="text-button" onClick={() => onNavigate('employees')}>عرض الدليل<ArrowLeft size={15} /></button></div>
             {recent.length ? <div className="table-scroll"><table><thead><tr><th>الموظف</th><th>القسم والمنصب</th><th>الفرع</th><th>تاريخ التعيين</th></tr></thead><tbody>
-              {recent.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><span className="person-mark">{employee.fullName.slice(0, 1)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td></tr>)}
+              {recent.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><PersonMark name={employee.fullName} src={thumbs[employee.id]} /><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td></tr>)}
             </tbody></table></div> : <EmptyState icon={<Users size={22} />} title="لا توجد سجلات موظفين بعد" description="أضف الفروع والموظفين للبدء بإدارة موارد المجموعة." action="إضافة أول موظف" onClick={onAddEmployee} />}
           </>}
         </section>
@@ -917,6 +921,7 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
   const activeTitles = titles.data.filter((item) => item.isActive);
   const defaultShift = shifts.data.find((item) => item.isDefault && item.isActive)?.id ?? '';
   const [view, setView] = useViewMode('employees');
+  const thumbs = useEmployeeThumbs(employees);
   const branchName = (employee: Employee) => employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—';
   const byDepartment = employees.reduce<Record<string, Employee[]>>((groups, employee) => {
     (groups[employee.department || '—'] ||= []).push(employee);
@@ -964,11 +969,11 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
           </div>)}
         </div> : view === 'grid' ? <div className="card-grid">
           {employees.map((employee) => <button key={employee.id} className="person-card" onClick={() => navigate('employees', employee.id)}>
-            <span className="person-mark">{employee.fullName.slice(0, 1)}</span>
+            <PersonMark name={employee.fullName} src={thumbs[employee.id]} />
             <span><strong>{employee.fullName}</strong><small>{employee.position}</small><small>{employee.department} · {branchName(employee)}</small><small dir="ltr">{employee.employeeNo}</small></span>
           </button>)}
         </div> : <div className="table-scroll"><table className="directory-table"><thead><tr><th>الموظف</th><th>القسم والمنصب</th><th>الفرع</th><th>تاريخ التعيين</th><th>الحالة</th>{customFields.map((field) => <th key={field.id}>{field.label}</th>)}</tr></thead><tbody>
-          {employees.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><span className="person-mark">{employee.fullName.slice(0, 1)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}{employee.email ? ` · ${employee.email}` : ''}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`state-pill state-${employee.employmentStatus}`}><i />{statusNames[employee.employmentStatus]}</span></td>{customFields.map((field) => <td key={field.id}>{employee.customFields?.[field.key] ?? '—'}</td>)}</tr>)}
+          {employees.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><PersonMark name={employee.fullName} src={thumbs[employee.id]} /><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}{employee.email ? ` · ${employee.email}` : ''}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`state-pill state-${employee.employmentStatus}`}><i />{statusNames[employee.employmentStatus]}</span></td>{customFields.map((field) => <td key={field.id}>{employee.customFields?.[field.key] ?? '—'}</td>)}</tr>)}
         </tbody></table></div>}<div className="pagination"><span>عرض {Math.min((page - 1) * 25 + 1, total).toLocaleString('ar-IQ-u-nu-latn')}–{Math.min(page * 25, total).toLocaleString('ar-IQ-u-nu-latn')} من {total.toLocaleString('ar-IQ-u-nu-latn')}</span><div><button className="button button-quiet" disabled={page <= 1 || busy} onClick={() => onPage(page - 1)}>السابق</button><span>{page.toLocaleString('ar-IQ-u-nu-latn')} / {pageCount.toLocaleString('ar-IQ-u-nu-latn')}</span><button className="button button-quiet" disabled={page >= pageCount || busy} onClick={() => onPage(page + 1)}>التالي</button></div></div></> : <EmptyState icon={<Users size={22} />} title={search ? 'لا توجد نتائج مطابقة' : 'دليل الموظفين فارغ'} description={search ? 'جرّب البحث برقم الموظف أو القسم.' : 'ابدأ بإضافة أول سجل موظف واربطه بفرعه.'} action={!search && canManage ? 'إضافة موظف' : undefined} onClick={onCreate} />}
         {busy && <div className="table-loading">جارٍ تحديث السجلات…</div>}
       </section>

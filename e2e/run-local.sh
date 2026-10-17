@@ -31,3 +31,5 @@ done
 node ../backend/dist/db/seedDemo.js > seed.log 2>&1 || { echo "The demo seed failed; see e2e/seed.log" >&2; exit 1; }
 node tokens.mjs > tokens.json
 BASE="http://127.0.0.1:$PORT" TOKENS=tokens.json node screens.mjs
+# The photo ZIP flow changes data, so it runs after the screens were measured.
+[ "${SKIP_FLOWS:-}" = "1" ] || BASE="http://127.0.0.1:$PORT" TOKENS=tokens.json node photo-zip.mjs

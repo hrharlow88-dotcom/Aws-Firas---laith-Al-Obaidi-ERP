@@ -15,9 +15,9 @@ export const SYSTEM_NAME = {
 };
 
 export const DEVELOPER = {
-  ar: 'بناء وإعداد وتطوير: السيد أوس فراس الشلال — مدير الموارد البشرية للعراق',
-  en: 'Built, prepared & developed by Mr. Aws Firas Al-Shalal — HR Manager, Iraq',
-  short: 'بناء وإعداد وتطوير: أوس فراس الشلال',
+  ar: 'بناء وتطوير: السيد أوس فراس الشلال — مدير الموارد البشرية للعراق',
+  en: 'Built & developed by Mr. Aws Firas Al-Shalal — HR Manager, Iraq',
+  short: 'بناء وتطوير: أوس فراس الشلال',
 };
 
 export interface BrandItem { id: string; name: string; logo: string | null }

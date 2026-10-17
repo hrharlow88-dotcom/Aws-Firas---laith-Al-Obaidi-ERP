@@ -10,7 +10,7 @@ import { useLoad } from '../lib/session';
 interface CardData {
   id: string; employeeNo: string; fullName: string; nameEn: string | null; jobTitle: string; department: string;
   branchName: string; hireDate: string; bloodType: string | null; cardToken: string | null; cardIssuedAt: string | null;
-  hasPhoto: boolean; employmentStatus: string;
+  hasPhoto: boolean; photoVersion?: string | null; employmentStatus: string;
 }
 
 function verifyUrl(token: string): string {
@@ -20,7 +20,7 @@ function verifyUrl(token: string): string {
 /** Printable CR80 ID card (85.6 × 54 mm), front and back. */
 export function EmployeeCardPage({ employeeId }: { employeeId: string }) {
   const card = useLoad<CardData | null>(`/employees/${employeeId}/card`, null);
-  const photo = useEmployeePhoto(employeeId, Boolean(card.data?.hasPhoto));
+  const photo = useEmployeePhoto(employeeId, Boolean(card.data?.hasPhoto), 0, card.data?.photoVersion);
   useCrumb(card.data && { label: card.data.fullName, href: `#/employees/${employeeId}` }, 'البطاقة');
   const [qr, setQr] = useState<string | null>(null);
   useEffect(() => {
