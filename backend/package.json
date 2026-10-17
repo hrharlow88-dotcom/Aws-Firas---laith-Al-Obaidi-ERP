@@ -1,30 +1,52 @@
 {
   "name": "laith-erp-api",
-  "version": "1.0.0",
+  "version": "2.2.0",
   "private": true,
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "migrate": "node dist/db/cli.js",
+    "import:company": "node dist/db/importCompany.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
+    "multer": "^2.4.0",
+    "nodemailer": "^10.1.2",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",
-    "sequelize": "^6.37.5"
+    "sequelize": "^6.37.5",
+    "sharp": "^0.35.5",
+    "umzug": "^3.8.3",
+    "undici": "^6.29.0",
+    "web-push": "^3.6.7",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
+    "@types/multer": "^2.3.0",
     "@types/node": "^22.10.2",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.7.2"
+    "@types/nodemailer": "^8.0.2",
+    "@types/supertest": "^7.2.1",
+    "@types/web-push": "^3.6.4",
+    "@types/yauzl": "^3.4.0",
+    "supertest": "^7.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

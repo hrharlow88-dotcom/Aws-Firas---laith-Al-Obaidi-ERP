@@ -1,7 +1,11 @@
+import { Bi } from './components/Brand';
 import { useEffect, useState } from 'react';
 import { Check, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import type { PortalSettings } from './lib/portal';
+export type { PortalSettings } from './lib/portal';
 
-export type UserRole = 'super_admin' | 'hr_manager' | 'hr_staff' | 'finance' | 'branch_manager' | 'viewer';
+export type UserRole = 'super_admin' | 'hr_manager' | 'hr_staff' | 'finance' | 'branch_manager' | 'viewer'
+  | 'employee' | 'line_manager' | 'payroll_officer' | 'auditor' | 'executive' | 'it_admin';
 export type Permission =
   | 'branches.manage'
   | 'employees.create'
@@ -10,10 +14,40 @@ export type Permission =
   | 'leaves.view'
   | 'leaves.request'
   | 'leaves.approve'
-  | 'leaves.manage_balances';
+  | 'leaves.manage_balances'
+  | 'org.manage'
+  | 'employees.view_profile'
+  | 'employees.manage_profile'
+  | 'compensation.view'
+  | 'compensation.manage'
+  | 'attendance.view'
+  | 'attendance.manage'
+  | 'payroll.view'
+  | 'payroll.prepare'
+  | 'payroll.approve'
+  | 'payroll.audit'
+  | 'payroll.disburse'
+  | 'requests.manage'
+  | 'discipline.view'
+  | 'discipline.manage'
+  | 'tickets.manage'
+  | 'recruitment.view'
+  | 'recruitment.manage'
+  | 'archive.view'
+  | 'archive.manage'
+  | 'calendar.manage'
+  | 'announcements.manage'
+  | 'messages.send'
+  | 'finance.view'
+  | 'finance.manage'
+  | 'finance.post'
+  | 'audit.view'
+  | 'integrations.manage'
+  | 'self.service';
 
 export type PayrollComponentCategory = 'earning' | 'deduction';
-export type PayrollCalculation = 'manual' | 'percentage_of_gross' | 'percentage_of_basic' | 'per_day';
+export type PayrollCalculation =
+  | 'manual' | 'percentage_of_gross' | 'percentage_of_basic' | 'per_day' | 'per_late_minute' | 'per_overtime_hour';
 
 export interface PayrollComponentSetting {
   id: string;
@@ -24,6 +58,35 @@ export interface PayrollComponentSetting {
   active: boolean;
   statutory: boolean;
   legalApproved: boolean;
+  isBasic?: boolean;
+}
+
+export interface AttendanceRules {
+  lateMonthlyAllowanceMinutes: number;
+  overtimeMinimumMinutes: number;
+  duplicatePunchWindowMinutes: number;
+  markAbsentWithoutPunch: boolean;
+  lateDayTiers?: Array<{ minutes: number; days: number }>;
+}
+
+export interface SecuritySettings {
+  idleMinutes: number;
+  askLocationOnLogin: boolean;
+  workdayStart: string;
+  workdayEnd: string;
+  failedLoginAlertThreshold: number;
+  exportAlertThreshold: number;
+  autoBlockMinutes?: number;
+  wafEnabled?: boolean;
+  requestsPerMinute?: number;
+}
+
+export interface InterfaceSettings {
+  hiddenApps: string[];
+  brands: Array<{ id: string; name: string; logoKey: string | null }>;
+  moduleManagers: Record<string, string[]>;
+  texts?: Record<string, { ar: string; en?: string }>;
+  appOrder?: string[];
 }
 
 export interface SystemSettings {
@@ -48,6 +111,8 @@ export interface SystemSettings {
     dayCountBasis?: 'working' | 'calendar';
     requiresMedicalCertificate?: boolean;
     deductsBalance?: boolean;
+    monthlyAccrual?: boolean;
+    accrualEmploymentTypes?: string[];
   }>;
   approvalSteps: Array<{ id: string; role: UserRole }>;
   roles: Record<UserRole, { label: string; permissions: Permission[] }>;
@@ -63,9 +128,17 @@ export interface SystemSettings {
   payrollRules: {
     baseCurrency: string;
     monthlyDivisor: number;
+    approvalChain?: boolean;
+    launchPeriod?: string | null;
     roundingDigits: number;
     components: PayrollComponentSetting[];
   };
+  attendanceRules: AttendanceRules;
+  security?: SecuritySettings;
+  ui?: InterfaceSettings;
+  hr?: HrSettings;
+  portal?: PortalSettings;
+  knownPermissions?: Permission[];
   leaveRules: {
     workingDays: number[];
     officialHolidays: string[];
@@ -73,7 +146,16 @@ export interface SystemSettings {
     hourlyMonthlyQuota: number;
     hourlyMonthlyUsageLimit: number;
     lowBalanceThreshold: number;
+    accrualStartPeriod?: string | null;
+    compLeaveDaysPerHoliday?: number;
   };
+}
+
+export interface HrSettings {
+  documentRules: { local: string[]; foreign: string[]; exempt: Array<{ employeeId: string; docType: string }>; priority: string[] };
+  expenseSteps: Array<{ type: 'manager' | 'role' | 'user'; role?: UserRole; userId?: string }>;
+  expenseCategories: string[];
+  ai: { enabled: boolean; model: string };
 }
 
 const roles: Array<{ id: UserRole; label: string }> = [
@@ -82,6 +164,12 @@ const roles: Array<{ id: UserRole; label: string }> = [
   { id: 'hr_staff', label: 'موظف موارد بشرية' },
   { id: 'finance', label: 'المالية' },
   { id: 'branch_manager', label: 'مدير فرع' },
+  { id: 'payroll_officer', label: 'مسؤول الرواتب' },
+  { id: 'line_manager', label: 'مدير مباشر' },
+  { id: 'employee', label: 'موظف' },
+  { id: 'auditor', label: 'تدقيق (قراءة فقط)' },
+  { id: 'executive', label: 'الإدارة العليا' },
+  { id: 'it_admin', label: 'مدير النظام التقني' },
   { id: 'viewer', label: 'مشاهدة فقط' },
 ];
 
@@ -135,18 +223,82 @@ const POLICY_LEAVE_TYPES: SystemSettings['leaveTypes'] = [
   },
 ];
 
-const permissions: Array<{ id: Permission; label: string }> = [
-  { id: 'branches.manage', label: 'إضافة الفروع وتعديلها' },
-  { id: 'employees.create', label: 'إضافة الموظفين' },
-  { id: 'employees.update', label: 'تعديل الموظفين' },
-  { id: 'users.manage', label: 'إدارة حسابات المستخدمين' },
-  { id: 'leaves.view', label: 'عرض الإجازات والأرصدة' },
-  { id: 'leaves.request', label: 'إنشاء وإلغاء طلب الإجازة' },
-  { id: 'leaves.approve', label: 'اعتماد ورفض الإجازات' },
-  { id: 'leaves.manage_balances', label: 'إدارة أرصدة الإجازات' },
+const permissionGroups: Array<{ label: string; items: Array<{ id: Permission; label: string }> }> = [
+  { label: 'الموظفون والهيكل', items: [
+    { id: 'branches.manage', label: 'إضافة الفروع وتعديلها' },
+    { id: 'org.manage', label: 'إدارة الأقسام والمسميات' },
+    { id: 'employees.create', label: 'إضافة الموظفين' },
+    { id: 'employees.update', label: 'تعديل الموظفين' },
+    { id: 'employees.view_profile', label: 'عرض الملف الشخصي والمستمسكات' },
+    { id: 'employees.manage_profile', label: 'تعديل الملف ورفع المستمسكات والبطاقة' },
+  ] },
+  { label: 'الإجازات', items: [
+    { id: 'leaves.view', label: 'عرض الإجازات والأرصدة' },
+    { id: 'leaves.request', label: 'إنشاء وإلغاء طلب الإجازة' },
+    { id: 'leaves.approve', label: 'اعتماد ورفض الإجازات' },
+    { id: 'leaves.manage_balances', label: 'إدارة أرصدة الإجازات' },
+  ] },
+  { label: 'الحضور', items: [
+    { id: 'attendance.view', label: 'عرض الحضور والانصراف' },
+    { id: 'attendance.manage', label: 'الدوامات والاستيراد والتصحيح' },
+  ] },
+  { label: 'الرواتب', items: [
+    { id: 'compensation.view', label: 'عرض الرواتب والحسابات المصرفية' },
+    { id: 'compensation.manage', label: 'تعديل الرواتب وطرق الدفع' },
+    { id: 'payroll.view', label: 'عرض مسيرات الرواتب والقسائم' },
+    { id: 'payroll.prepare', label: 'إعداد واحتساب المسيرات' },
+    { id: 'payroll.approve', label: 'اعتماد المسيرات (المدير التنفيذي) وإعادة فتحها' },
+    { id: 'payroll.audit', label: 'تدقيق المسيرات والتوقيع عليها' },
+    { id: 'payroll.disburse', label: 'صرف الرواتب (المالية)' },
+  ] },
+  { label: 'الطلبات والانضباط', items: [
+    { id: 'requests.manage', label: 'معالجة طلبات الموظفين (إجازات، سلف، تكاليف عمل)' },
+    { id: 'discipline.view', label: 'عرض سجل الإنذارات والعقوبات' },
+    { id: 'discipline.manage', label: 'تسجيل الإنذارات والعقوبات والمخالفات' },
+  ] },
+  { label: 'التوظيف والتذاكر', items: [
+    { id: 'recruitment.view', label: 'عرض الشواغر والمتقدمين' },
+    { id: 'recruitment.manage', label: 'إدارة التوظيف ومراحل المتقدمين' },
+    { id: 'tickets.manage', label: 'معالجة التذاكر (تقنية، صيانة، نقل)' },
+  ] },
+  { label: 'الأرشيف والتقويم والتواصل', items: [
+    { id: 'archive.view', label: 'عرض أرشيف الوثائق والموظفين السابقين' },
+    { id: 'archive.manage', label: 'رفع الوثائق وسحبها والوثائق السرية' },
+    { id: 'calendar.manage', label: 'مواعيد الشركة والعطل الرسمية في التقويم' },
+    { id: 'announcements.manage', label: 'نشر الإعلانات والتعاميم بشاشة كاملة' },
+    { id: 'messages.send', label: 'إرسال الدعوات والرسائل (بريد، واتساب، SMS)' },
+  ] },
+  { label: 'المالية والرقابة', items: [
+    { id: 'finance.view', label: 'عرض القيود وربط الحسابات' },
+    { id: 'finance.manage', label: 'ربط الحسابات بـ SAP' },
+    { id: 'finance.post', label: 'إنشاء القيود وترحيلها إلى SAP' },
+    { id: 'audit.view', label: 'عرض سجل التدقيق' },
+    { id: 'users.manage', label: 'إدارة حسابات المستخدمين' },
+    { id: 'integrations.manage', label: 'مفاتيح الربط مع الأنظمة الأخرى' },
+  ] },
+  { label: 'الخدمة الذاتية', items: [
+    { id: 'self.service', label: 'ملفي وقسائم راتبي (السجل الشخصي فقط)' },
+  ] },
 ];
 
-type SettingsTab = 'company' | 'leave' | 'payroll' | 'approvals' | 'roles' | 'fields';
+type SettingsTab = 'company' | 'leave' | 'payroll' | 'attendance' | 'approvals' | 'roles' | 'fields';
+
+const calculationLabels: Record<PayrollCalculation, string> = {
+  manual: 'إدخال يدوي عند إعداد المسير',
+  percentage_of_gross: 'نسبة من الراتب الكلي',
+  percentage_of_basic: 'نسبة من الراتب الأساسي',
+  per_day: 'لكل يوم (غياب أو حضور)',
+  per_overtime_hour: 'لكل ساعة عمل إضافي',
+  per_late_minute: 'لكل دقيقة تأخير أو خروج مبكر',
+};
+
+function rateLabel(calculation: PayrollCalculation): string {
+  if (calculation.startsWith('percentage')) return 'النسبة %';
+  if (calculation === 'per_day') return 'معامل الأجر اليومي';
+  if (calculation === 'per_overtime_hour') return 'معامل أجر الساعة (مثلاً 1.5)';
+  if (calculation === 'per_late_minute') return 'معامل أجر الدقيقة';
+  return 'القيمة الافتراضية';
+}
 
 function createId(): string {
   return crypto.randomUUID();
@@ -172,6 +324,10 @@ export function SettingsPage({ value, busy, onSave }: {
 
   function updatePayrollRules(patch: Partial<SystemSettings['payrollRules']>) {
     setSettings((current) => ({ ...current, payrollRules: { ...current.payrollRules, ...patch } }));
+  }
+
+  function updateAttendanceRules(patch: Partial<AttendanceRules>) {
+    setSettings((current) => ({ ...current, attendanceRules: { ...current.attendanceRules, ...patch } }));
   }
 
   function updatePayrollComponent(id: string, patch: Partial<PayrollComponentSetting>) {
@@ -295,6 +451,7 @@ export function SettingsPage({ value, busy, onSave }: {
     { id: 'company', label: 'بيانات الشركة' },
     { id: 'leave', label: 'أنواع الإجازات' },
     { id: 'payroll', label: 'إعدادات الرواتب' },
+    { id: 'attendance', label: 'قواعد الحضور' },
     { id: 'approvals', label: 'سير الموافقات' },
     { id: 'roles', label: 'الأدوار والصلاحيات' },
     { id: 'fields', label: 'حقول الموظف' },
@@ -343,10 +500,11 @@ export function SettingsPage({ value, busy, onSave }: {
                   {item.unit === 'days' && <label className="field"><span>أساس احتساب الأيام</span><select value={item.dayCountBasis || 'working'} onChange={(event) => updateLeaveType(item.id, { dayCountBasis: event.target.value as 'working' | 'calendar' })}><option value="working">أيام العمل</option><option value="calendar">أيام تقويمية</option></select></label>}
                   {item.name.includes('مرض') && <label className="settings-check"><input type="checkbox" checked={item.requiresMedicalCertificate || false} onChange={(event) => updateLeaveType(item.id, { requiresMedicalCertificate: event.target.checked })} />يتطلب تقريراً طبياً</label>}
                   <label className="settings-check"><input type="checkbox" checked={item.deductsBalance !== false} onChange={(event) => updateLeaveType(item.id, { deductsBalance: event.target.checked })} />يُخصم من دفتر رصيد الإجازات</label>
-                  {item.serviceEntitlements?.length ? (
+                  {item.unit === 'days' && item.annualEntitlement !== null && item.deductsBalance !== false && <label className="settings-check"><input type="checkbox" checked={item.monthlyAccrual === true} onChange={(event) => updateLeaveType(item.id, { monthlyAccrual: event.target.checked })} />يُستحق شهرياً (الاستحقاق السنوي ÷ 12 يُضاف للرصيد كل شهر)</label>}
+                  {item.serviceEntitlements?.length || item.monthlyAccrual ? (
                     <div className="policy-tiers">
                       <strong>الاستحقاق السنوي المرجعي حسب سنوات الخدمة</strong>
-                      {item.serviceEntitlements.map((tier, tierIndex) => (
+                      {(item.serviceEntitlements ?? []).map((tier, tierIndex) => (
                         <div className="policy-tier" key={tier.minimumYears}>
                           <span>من السنة</span>
                           <input aria-label="سنة بدء الشريحة" type="number" min="0" max="60" value={tier.minimumYears} onChange={(event) => updateLeaveType(item.id, { serviceEntitlements: item.serviceEntitlements?.map((row, index) => index === tierIndex ? { ...row, minimumYears: Number(event.target.value) } : row) })} />
@@ -365,7 +523,7 @@ export function SettingsPage({ value, busy, onSave }: {
                           }],
                         });
                       }}><Plus size={14} />إضافة شريحة</button>
-                      <small>الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.</small>
+                      <small>{item.monthlyAccrual ? 'الشريحة تُطبق من الشهر الذي يكمل فيه الموظف سنوات خدمتها، ويُرحّل الاستحقاق من «الإجازات ← الاستحقاق الشهري».' : 'الاستحقاق المرجعي لا يُضاف تلقائياً إلى دفتر الرصيد؛ يلزم إجراء تسوية/اعتماد رصيد.'}</small>
                     </div>
                   ) : null}
                   <label className="settings-check"><input type="checkbox" checked={item.paid} onChange={(event) => updateLeaveType(item.id, { paid: event.target.checked })} />إجازة مدفوعة</label>
@@ -400,6 +558,7 @@ export function SettingsPage({ value, busy, onSave }: {
                 <label className="field"><span>الحد الأقصى للإجازة الزمنية للطلب</span><input type="number" min="0.25" max="24" step="0.25" value={settings.leaveRules.maxHoursPerRequest} onChange={(event) => updateLeaveRules({ maxHoursPerRequest: Number(event.target.value) })} /></label>
                 <label className="field"><span>الحصة الشهرية للإجازة بالساعات</span><input type="number" min="0" max="744" step="0.25" value={settings.leaveRules.hourlyMonthlyQuota} onChange={(event) => updateLeaveRules({ hourlyMonthlyQuota: Number(event.target.value) })} /></label>
                 <label className="field"><span>مرات استخدام الساعات شهرياً</span><input type="number" min="0" max="31" step="1" value={settings.leaveRules.hourlyMonthlyUsageLimit} onChange={(event) => updateLeaveRules({ hourlyMonthlyUsageLimit: Number(event.target.value) })} /></label>
+                <label className="field"><span>أول شهر للاستحقاق الشهري</span><input type="month" value={settings.leaveRules.accrualStartPeriod ?? ''} onChange={(event) => updateLeaveRules({ accrualStartPeriod: event.target.value || null })} /><small>الأشهر قبله داخلة في الأرصدة الافتتاحية ولا يُرحّل لها استحقاق.</small></label>
                 <label className="field"><span>تنبيه انخفاض الرصيد</span><input type="number" min="0" max="10000" step="0.25" value={settings.leaveRules.lowBalanceThreshold} onChange={(event) => updateLeaveRules({ lowBalanceThreshold: Number(event.target.value) })} /></label>
               </div>
             </div>
@@ -412,6 +571,8 @@ export function SettingsPage({ value, busy, onSave }: {
             </div>
             <div className="settings-policy-body payroll-policy-body">
               <label className="field"><span>العملة الأساسية (ISO 4217)</span><input value={settings.payrollRules.baseCurrency} maxLength={3} dir="ltr" onChange={(event) => updatePayrollRules({ baseCurrency: event.target.value.toUpperCase() })} /></label>
+              <label className="settings-check"><input type="checkbox" checked={settings.payrollRules.approvalChain === true} onChange={(event) => updatePayrollRules({ approvalChain: event.target.checked })} />سلسلة اعتماد المسير بالتوقيع الإلكتروني: الموارد البشرية ← التدقيق ← المدير التنفيذي ← المالية للصرف</label>
+              <label className="field"><span><Bi ar={"شهر انطلاق النظام"} en={"Go-live month"} /></span><input type="month" value={settings.payrollRules.launchPeriod ?? ''} onChange={(event) => updatePayrollRules({ launchPeriod: event.target.value || null })} /><small>آخر شهر صُرف خارج النظام. هو وما قبله في «أرشيف المسيرات»، ومسيرات النظام تبدأ بعده.</small></label>
               <label className="field"><span>أيام الشهر لأغراض احتساب الأجر اليومي</span><input type="number" min="1" max="31" step="0.5" value={settings.payrollRules.monthlyDivisor} onChange={(event) => updatePayrollRules({ monthlyDivisor: Number(event.target.value) })} /></label>
               <label className="field"><span>الخانات العشرية للتقريب</span><input type="number" min="0" max="4" step="1" value={settings.payrollRules.roundingDigits} onChange={(event) => updatePayrollRules({ roundingDigits: Number(event.target.value) })} /></label>
             </div>
@@ -428,8 +589,11 @@ export function SettingsPage({ value, busy, onSave }: {
                 <div className="form-grid">
                   <label className="field"><span>اسم المكوّن *</span><input value={item.name} maxLength={80} required onChange={(event) => updatePayrollComponent(item.id, { name: event.target.value })} /></label>
                   <label className="field"><span>نوع المكوّن</span><select value={item.category} onChange={(event) => updatePayrollComponent(item.id, { category: event.target.value as PayrollComponentCategory })}><option value="earning">استحقاق / دخل</option><option value="deduction">استقطاع</option></select></label>
-                  <label className="field"><span>طريقة الاحتساب</span><select value={item.calculation} onChange={(event) => updatePayrollComponent(item.id, { calculation: event.target.value as PayrollCalculation })}><option value="manual">إدخال يدوي عند إعداد المسير</option><option value="percentage_of_gross">نسبة من الراتب الكلي</option><option value="percentage_of_basic">نسبة من الراتب الأساسي</option><option value="per_day">مبلغ لكل يوم أو وحدة</option></select></label>
-                  <label className="field"><span>{item.calculation.startsWith('percentage') ? 'النسبة %' : item.calculation === 'per_day' ? 'معامل احتساب اليوم' : 'القيمة الافتراضية'}</span><input type="number" min="0" max={item.calculation.startsWith('percentage') ? 100 : 100000} step="0.01" value={item.rate} onChange={(event) => updatePayrollComponent(item.id, { rate: Number(event.target.value) })} /></label>
+                  <label className="field"><span>طريقة الاحتساب</span><select value={item.calculation} onChange={(event) => updatePayrollComponent(item.id, { calculation: event.target.value as PayrollCalculation })}>{(Object.keys(calculationLabels) as PayrollCalculation[])
+                    .filter((calculation) => !(calculation === 'per_overtime_hour' && item.category === 'deduction') && !(calculation === 'per_late_minute' && item.category === 'earning'))
+                    .map((calculation) => <option key={calculation} value={calculation}>{calculationLabels[calculation]}</option>)}</select></label>
+                  <label className="field"><span>{rateLabel(item.calculation)}</span><input type="number" min="0" max={item.calculation.startsWith('percentage') ? 100 : 100000} step="0.01" value={item.rate} onChange={(event) => updatePayrollComponent(item.id, { rate: Number(event.target.value) })} /></label>
+                  {item.category === 'earning' && <label className="settings-check"><input type="radio" name="basic-component" checked={Boolean(item.isBasic)} onChange={() => updatePayrollRules({ components: settings.payrollRules.components.map((component) => ({ ...component, isBasic: component.id === item.id })) })} />هذا هو الراتب الأساسي</label>}
                   <label className="settings-check"><input type="checkbox" checked={item.active} disabled={item.statutory && !item.legalApproved} onChange={(event) => updatePayrollComponent(item.id, { active: event.target.checked })} />مكوّن مفعّل للاستخدام</label>
                   <label className="settings-check"><input type="checkbox" checked={item.statutory} onChange={(event) => updatePayrollComponent(item.id, event.target.checked ? { statutory: true, active: false, legalApproved: false } : { statutory: false, legalApproved: false })} />مكوّن قانوني أو رسمي</label>
                   {item.statutory && <label className="settings-check"><input type="checkbox" checked={item.legalApproved} onChange={(event) => updatePayrollComponent(item.id, { legalApproved: event.target.checked })} />تمت مراجعته واعتماده قانونياً</label>}
@@ -438,11 +602,34 @@ export function SettingsPage({ value, busy, onSave }: {
             </div> : <SettingsEmpty title="لا توجد مكونات للرواتب" text="أضف مكونات الدخل والاستقطاع التي تعتمدها شركتك." onAdd={addPayrollComponent} />}
           </>}
 
+          {tab === 'attendance' && <>
+            <div className="panel-head"><div><h3>قواعد احتساب الحضور</h3><p>تُطبق على الموظفين المسند لهم دوام. التأخير يُحتسب من بداية الدوام عند تجاوز فترة السماح المحددة لكل دوام.</p></div></div>
+            <div className="form-grid">
+              <label className="field"><span>دقائق تأخير معفاة شهرياً</span><input type="number" min="0" max="6000" step="1" value={settings.attendanceRules.lateMonthlyAllowanceMinutes} onChange={(event) => updateAttendanceRules({ lateMonthlyAllowanceMinutes: Number(event.target.value) })} /><small>تُطرح قبل احتساب خصم دقائق التأخير.</small></label>
+              <label className="field"><span>أقل مدة تحتسب عملاً إضافياً (دقيقة)</span><input type="number" min="0" max="600" step="1" value={settings.attendanceRules.overtimeMinimumMinutes} onChange={(event) => updateAttendanceRules({ overtimeMinimumMinutes: Number(event.target.value) })} /></label>
+              <label className="field"><span>دمج البصمات المتكررة خلال (دقيقة)</span><input type="number" min="0" max="60" step="1" value={settings.attendanceRules.duplicatePunchWindowMinutes} onChange={(event) => updateAttendanceRules({ duplicatePunchWindowMinutes: Number(event.target.value) })} /></label>
+              <label className="settings-check settings-wide"><input type="checkbox" checked={settings.attendanceRules.markAbsentWithoutPunch} onChange={(event) => updateAttendanceRules({ markAbsentWithoutPunch: event.target.checked })} />اعتبار يوم العمل بلا بصمة ولا إجازة معتمدة غياباً</label>
+            </div>
+            <div className="panel-head"><div><h3><Bi ar={"سياسة التأخير اليومية للشركة"} en={"Daily lateness policy"} /></h3><p>اليوم المتأخر بالدقائق المحددة أو أكثر يُخصم منه جزء من يوم (أعلى شريحة تنطبق). تُطبق تلقائياً عند احتساب المسير بعد رفع البصمات. اتركها فارغة إن لم تعتمد الشركة شرائح.</p></div>
+              <button className="button button-quiet" type="button" onClick={() => updateAttendanceRules({ lateDayTiers: [...(settings.attendanceRules.lateDayTiers ?? []), { minutes: 30, days: 0.25 }] })}><Plus size={15} />إضافة شريحة</button></div>
+            {(settings.attendanceRules.lateDayTiers ?? []).length ? <div className="settings-list">
+              {(settings.attendanceRules.lateDayTiers ?? []).map((tier, index) => <div className="approval-row" key={index}>
+                <label className="field"><span>تأخير من (دقيقة)</span><input type="number" min="1" max="1440" value={tier.minutes} onChange={(event) => updateAttendanceRules({ lateDayTiers: (settings.attendanceRules.lateDayTiers ?? []).map((row, i) => i === index ? { ...row, minutes: Number(event.target.value) } : row) })} /></label>
+                <label className="field"><span>يُخصم (يوم)</span><input type="number" min="0.05" max="3" step="0.05" value={tier.days} onChange={(event) => updateAttendanceRules({ lateDayTiers: (settings.attendanceRules.lateDayTiers ?? []).map((row, i) => i === index ? { ...row, days: Number(event.target.value) } : row) })} /></label>
+                <div className="approval-actions"><button className="icon-button" type="button" aria-label="حذف الشريحة" onClick={() => updateAttendanceRules({ lateDayTiers: (settings.attendanceRules.lateDayTiers ?? []).filter((_, i) => i !== index) })}><Trash2 size={16} /></button></div>
+              </div>)}
+            </div> : <p className="muted"><Bi ar={"لا توجد شرائح."} en={"No tiers."} /></p>}
+            <div className="permission-note leave-policy-warning">
+              <ShieldCheck size={18} />
+              <div><strong>قبل تفعيل الخصومات</strong><span>مكونا «العمل الإضافي» و«خصم دقائق التأخير» معطلان افتراضياً في إعدادات الرواتب. فعّلهما بعد اعتماد نسب الإضافي وسياسة التأخير من الإدارة والمستشار القانوني.</span></div>
+            </div>
+          </>}
+
           {tab === 'approvals' && <>
             <div className="panel-head"><div><h3>خطوات الموافقة</h3><p>رتّب الأدوار حسب تسلسل الاعتماد الذي تقره الشركة.</p></div><button className="button button-quiet" onClick={addApprovalStep}><Plus size={15} />إضافة خطوة</button></div>
             {settings.approvalSteps.length ? <div className="settings-list">
               {settings.approvalSteps.map((step, index) => <div className="approval-row" key={step.id}>
-                <span className="approval-number">{(index + 1).toLocaleString('ar-IQ')}</span>
+                <span className="approval-number">{(index + 1).toLocaleString('ar-IQ-u-nu-latn')}</span>
                 <label className="field"><span>الدور المعتمد</span><select value={step.role} onChange={(event) => setSettings((current) => ({ ...current, approvalSteps: current.approvalSteps.map((row) => row.id === step.id ? { ...row, role: event.target.value as UserRole } : row) }))}>{roles.map((role) => <option key={role.id} value={role.id}>{settings.roles[role.id].label}</option>)}</select></label>
                 <div className="approval-actions">
                   <button className="button button-quiet" disabled={index === 0} onClick={() => moveApprovalStep(index, -1)} aria-label="تقديم خطوة">↑</button>
@@ -458,9 +645,12 @@ export function SettingsPage({ value, busy, onSave }: {
             <div className="role-settings-list">
               {roles.map((role) => <section className="role-settings-row" key={role.id}>
                 <label className="field role-label"><span>اسم الدور</span><input value={settings.roles[role.id].label} maxLength={80} onChange={(event) => setSettings((current) => ({ ...current, roles: { ...current.roles, [role.id]: { ...current.roles[role.id], label: event.target.value } } }))} /></label>
-                <div className="permission-options"><span className="field-caption">الإجراءات المسموحة</span>{permissions.map((permission) => <label className="settings-check" key={permission.id}>
-                  <input type="checkbox" checked={settings.roles[role.id].permissions.includes(permission.id)} disabled={role.id === 'super_admin'} onChange={(event) => togglePermission(role.id, permission.id, event.target.checked)} />{permission.label}
-                </label>)}
+                <div className="permission-options"><span className="field-caption">الإجراءات المسموحة</span>{permissionGroups.map((group) => <div className="permission-group" key={group.label}>
+                  <span className="permission-group-label">{group.label}</span>
+                  {group.items.map((permission) => <label className="settings-check" key={permission.id}>
+                    <input type="checkbox" checked={settings.roles[role.id].permissions.includes(permission.id)} disabled={role.id === 'super_admin'} onChange={(event) => togglePermission(role.id, permission.id, event.target.checked)} />{permission.label}
+                  </label>)}
+                </div>)}
                   {role.id === 'super_admin' && <small>يحتفظ مدير النظام بكامل صلاحيات الإدارة.</small>}
                 </div>
               </section>)}

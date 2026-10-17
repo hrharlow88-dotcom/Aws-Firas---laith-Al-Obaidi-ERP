@@ -3,11 +3,13 @@ import { Op, Order } from 'sequelize';
 import { Branch, Employee, SystemSetting } from '../models';
 import type { EmployeeAttributes } from '../models';
 import { DEFAULT_SYSTEM_SETTINGS } from '../config/systemSettings';
-import { audited } from '../utils/audit';
+import { audited, diffFields } from '../utils/audit';
+import { ORG_FIELDS, resolveOrgFields } from '../services/employeeOrg';
 import { isDateOnly, isUuid } from '../utils/validation';
+import { accessScope, employeeScopeWhere, inScope } from '../services/access';
 
 function maySeeEmployeeContact(role: string | undefined): boolean {
-  return ['super_admin', 'hr_manager', 'hr_staff', 'branch_manager'].includes(role || '');
+  return ['super_admin', 'hr_manager', 'hr_staff', 'branch_manager', 'line_manager'].includes(role || '');
 }
 
 function maySeeEmployeeCustomFields(role: string | undefined): boolean {
@@ -16,18 +18,15 @@ function maySeeEmployeeCustomFields(role: string | undefined): boolean {
 
 export class EmployeeController {
   static async list(req: Request, res: Response): Promise<void> {
-    if (req.user?.role === 'branch_manager' && !req.user.branchId) {
-      res.json({ data: [], pagination: { total: 0, page: 1, pageSize: 25 } });
-      return;
-    }
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
-    const branchId = req.user?.role === 'branch_manager' ? req.user.branchId : req.query.branchId;
+    const branchId = req.query.branchId;
     if (branchId && !isUuid(branchId)) {
       res.status(400).json({ message: 'معرّف الفرع غير صالح.' });
       return;
     }
     const where = {
-      ...(branchId ? { branchId: String(branchId) } : {}),
+      ...employeeScopeWhere(req),
+      ...(branchId && accessScope(req).kind !== 'branch' ? { branchId: String(branchId) } : {}),
       ...(search
         ? {
             [Op.or]: [
@@ -43,11 +42,11 @@ export class EmployeeController {
     const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 50));
     const isRecent = req.query.recent === '1';
     const order: Order = isRecent ? [['hireDate', 'DESC'], ['fullName', 'ASC']] : [['fullName', 'ASC']];
-    const attributes: Array<keyof EmployeeAttributes> | undefined = req.user?.role === 'branch_manager'
-      ? ['id', 'employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate']
+    const attributes: Array<keyof EmployeeAttributes> | undefined = ['branch_manager', 'line_manager'].includes(req.user?.role ?? '')
+      ? ['id', 'employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate', 'photoDocumentId']
       : maySeeEmployeeContact(req.user?.role)
         ? undefined
-        : ['id', 'employeeNo', 'fullName', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate'];
+        : ['id', 'employeeNo', 'fullName', 'branchId', 'department', 'position', 'employmentStatus', 'hireDate', 'photoDocumentId'];
 
     const result = await Employee.findAndCountAll({
       where,
@@ -61,12 +60,7 @@ export class EmployeeController {
   }
 
   static async summary(req: Request, res: Response): Promise<void> {
-    if (req.user?.role === 'branch_manager' && !req.user.branchId) {
-      res.json({ data: { total: 0, active: 0, onLeave: 0, inactive: 0 } });
-      return;
-    }
-    const branchId = req.user?.role === 'branch_manager' ? req.user.branchId : undefined;
-    const scope = branchId ? { branchId } : undefined;
+    const scope = employeeScopeWhere(req);
     const [total, active, onLeave] = await Promise.all([
       Employee.count({ where: scope }),
       Employee.count({ where: { ...(scope || {}), employmentStatus: 'active' } }),
@@ -77,10 +71,15 @@ export class EmployeeController {
 
   static async create(req: Request, res: Response): Promise<void> {
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-    if (Object.keys(input).some((field) => !['employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'customFields'].includes(field))) {
+    if (Object.keys(input).some((field) => ![
+      'employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'customFields', ...ORG_FIELDS,
+    ].includes(field))) {
       res.status(400).json({ message: 'يتضمن الطلب حقلاً غير قابل للتعديل.' });
       return;
     }
+    const org = await resolveOrgFields(input);
+    if (org.department) input.department = org.department;
+    if (org.position) input.position = org.position;
     const required = ['employeeNo', 'fullName', 'branchId', 'department', 'position', 'hireDate'];
     if (required.some((field) => typeof input[field] !== 'string' || !String(input[field]).trim())) {
       res.status(400).json({ message: 'أكمل رقم الموظف والاسم والفرع والقسم والمنصب وتاريخ التعيين.' });
@@ -94,7 +93,8 @@ export class EmployeeController {
       res.status(400).json({ message: 'معرّف الفرع غير صالح.' });
       return;
     }
-    if (req.user?.role === 'branch_manager' && input.branchId !== req.user.branchId) {
+    const scopeKind = accessScope(req);
+    if (scopeKind.kind !== 'all' && (scopeKind.kind !== 'branch' || input.branchId !== scopeKind.branchId)) {
       res.status(403).json({ message: 'لا يمكنك إضافة موظف إلى فرع آخر.' });
       return;
     }
@@ -136,6 +136,13 @@ export class EmployeeController {
       position: String(input.position).trim(),
       hireDate: String(input.hireDate),
       customFields: customValues as Record<string, string | number>,
+      departmentId: org.departmentId ?? null,
+      jobTitleId: org.jobTitleId ?? null,
+      managerId: org.managerId ?? null,
+      employmentType: org.employmentType ?? 'permanent',
+      attendancePin: org.attendancePin ?? null,
+      shiftId: org.shiftId ?? null,
+      terminationDate: org.terminationDate ?? null,
     }, { transaction }));
     if (!maySeeEmployeeCustomFields(req.user?.role)) {
       const { customFields: _customFields, ...safeEmployee } = employee.toJSON();
@@ -151,14 +158,20 @@ export class EmployeeController {
       res.status(404).json({ message: 'الموظف غير موجود.' });
       return;
     }
-    if (req.user?.role === 'branch_manager' && employee.branchId !== req.user.branchId) {
-      res.status(403).json({ message: 'لا يمكنك تعديل بيانات موظف من فرع آخر.' });
+    if (!(await inScope(req, employee.id))) {
+      res.status(404).json({ message: 'الموظف غير موجود.' });
       return;
     }
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
-    const editableFields = ['employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'employmentStatus'];
+    const editableFields = ['employeeNo', 'fullName', 'email', 'phone', 'branchId', 'department', 'position', 'hireDate', 'employmentStatus', ...ORG_FIELDS];
     if (Object.keys(input).some((field) => !editableFields.includes(field))) {
       res.status(400).json({ message: 'يتضمن الطلب حقلاً غير قابل للتعديل.' });
+      return;
+    }
+    // Fields that change pay are reserved for HR even when a branch manager may edit the record.
+    const payrollAffecting = ['hireDate', 'terminationDate', 'employmentType', 'shiftId', 'attendancePin'];
+    if (accessScope(req).kind !== 'all' && payrollAffecting.some((field) => input[field] !== undefined)) {
+      res.status(403).json({ message: 'تاريخ التعيين وترك الخدمة ونوع التوظيف والدوام ورقم البصمة تعدلها الموارد البشرية فقط.' });
       return;
     }
     if (
@@ -170,7 +183,7 @@ export class EmployeeController {
     }
     if (
       input.employmentStatus !== undefined &&
-      !['active', 'inactive', 'on_leave'].includes(String(input.employmentStatus))
+      !['active', 'inactive', 'on_leave', 'suspended'].includes(String(input.employmentStatus))
     ) {
       res.status(400).json({ message: 'حالة الموظف المحددة غير صالحة.' });
       return;
@@ -185,7 +198,20 @@ export class EmployeeController {
       position?: string;
       hireDate?: string;
       employmentStatus?: Employee['employmentStatus'];
+      departmentId?: string | null;
+      jobTitleId?: string | null;
+      managerId?: string | null;
+      employmentType?: Employee['employmentType'];
+      attendancePin?: string | null;
+      shiftId?: string | null;
+      terminationDate?: string | null;
     } = {};
+    const org = await resolveOrgFields(input, employee.id);
+    for (const field of ORG_FIELDS) {
+      if (org[field] !== undefined) (updates as Record<string, unknown>)[field] = org[field];
+    }
+    if (org.department) input.department = org.department;
+    if (org.position) input.position = org.position;
     if (typeof input.employeeNo === 'string') updates.employeeNo = input.employeeNo.trim();
     if (typeof input.fullName === 'string') updates.fullName = input.fullName.trim();
     if (typeof input.email === 'string') updates.email = input.email.trim() || null;
@@ -194,7 +220,7 @@ export class EmployeeController {
     if (typeof input.department === 'string') updates.department = input.department.trim();
     if (typeof input.position === 'string') updates.position = input.position.trim();
     if (typeof input.hireDate === 'string') updates.hireDate = input.hireDate.trim();
-    if (['active', 'inactive', 'on_leave'].includes(String(input.employmentStatus))) {
+    if (['active', 'inactive', 'on_leave', 'suspended'].includes(String(input.employmentStatus))) {
       updates.employmentStatus = input.employmentStatus as Employee['employmentStatus'];
     }
     if (Object.keys(updates).length === 0) {
@@ -214,7 +240,7 @@ export class EmployeeController {
       res.status(400).json({ message: 'معرّف الفرع غير صالح.' });
       return;
     }
-    if (req.user?.role === 'branch_manager' && updates.branchId !== undefined && updates.branchId !== req.user.branchId) {
+    if (accessScope(req).kind !== 'all' && updates.branchId !== undefined && updates.branchId !== employee.branchId) {
       res.status(403).json({ message: 'لا يمكنك نقل الموظف إلى فرع آخر.' });
       return;
     }
@@ -225,7 +251,14 @@ export class EmployeeController {
         return;
       }
     }
-    const updatedEmployee = await audited(req.user!.id, 'employee.updated', 'employee', (transaction) => employee.update(updates, { transaction }));
+    const before = employee.toJSON() as unknown as Record<string, unknown>;
+    const updatedEmployee = await audited(
+      req.user!.id,
+      'employee.updated',
+      'employee',
+      (transaction) => employee.update(updates, { transaction }),
+      { changes: diffFields(before, updates as Record<string, unknown>) },
+    );
     if (!maySeeEmployeeCustomFields(req.user?.role)) {
       const { customFields: _customFields, ...safeEmployee } = updatedEmployee.toJSON();
       res.json({ data: safeEmployee });

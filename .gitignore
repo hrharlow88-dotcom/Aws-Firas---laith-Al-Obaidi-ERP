@@ -12,3 +12,23 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Company data (names, salaries) never goes into this public repository.
+/company-data/
+*.xlsx
+*.xls
+*.csv
+!backend/tests/fixtures/**
+/deploy/.env
+/deploy/backups/
+/deploy/company-data/
+
+# Extra companies on the same server: secrets stay on the server.
+/deploy/companies/*.env
+/deploy/companies/*.caddy
+/backend/.tok.cjs
+
+# Screen check (e2e/): its packages and the files each run writes.
+/e2e/node_modules/
+/e2e/results/
+/e2e/tokens.json
+/e2e/*.log
