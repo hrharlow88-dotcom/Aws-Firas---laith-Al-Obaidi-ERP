@@ -18,6 +18,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.0',
+    date: '2026-10-17',
+    title: 'النظام تطبيق على التلفون: إشعارات، شريط سفلي، تثبيت على الشاشة، وملاحظات المستخدمين',
+    titleEn: 'The system as a phone app: notifications, a tab bar, home-screen install, and user feedback',
+    items: [
+      { kind: 'new', ar: 'إشعارات على التلفون والحاسبة حتى والنظام مغلق: الإجازات والاعتمادات والمحادثات والرواتب. المالك يفعّلها مرة من «لوحة المالك ← القنوات»، ثم يفعّلها كل شخص على جهازه من «المزيد» أو من الجرس. على الآيفون تعمل من النظام المثبت على الشاشة الرئيسية', en: 'Notifications on phones and computers even when the system is closed: leave, approvals, chat and payroll. The owner switches them on once in Owner console → Channels; each person then turns them on per device from More or the bell. On iPhone they work in the system installed on the home screen' },
+      { kind: 'new', ar: 'شريط سفلي على التلفون مثل التطبيقات: الرئيسية، اعتماداتي أو خدمتي، المحادثات بعدد غير المقروء، والمزيد (الإشعارات، التثبيت، الملاحظات، أمان الحساب، الألوان واللغة، الخروج)', en: 'A tab bar on phones like an app: Home, Approvals or My portal, Chat with its unread count, and More (notifications, install, feedback, account security, colours and language, sign out)' },
+      { kind: 'new', ar: 'تثبيت النظام على الشاشة الرئيسية: بطاقة بالخطوات للآيفون والأندرويد، ثم يفتح بملء الشاشة بأيقونته', en: 'Install on the home screen: a card with the steps for iPhone and Android; it then opens full screen from its icon' },
+      { kind: 'new', ar: '«ملاحظة على النظام» لكل مستخدم: خطأ أو اقتراح أو سؤال مع لقطة شاشة، تصل للمالك برقم (FB-0001) مع الشاشة ورقم النسخة والجهاز. المالك يرد ويغيّر الحالة من «لوحة المالك ← ملاحظات المستخدمين» فيصل صاحبها إشعار', en: 'Send feedback, for everyone: a fault, an idea or a question with a screenshot, reaching the owner numbered (FB-0001) with the screen, version and device. The owner answers and sets its status in Owner console → User feedback, and the sender is notified' },
+      { kind: 'new', ar: 'النسخ الاحتياطي خارج الخادم: المالك ينزّل نسخ الليلة (قاعدة البيانات والملفات) من «لوحة المالك ← النسخ الاحتياطي»، ويذكّره النظام كل أسبوع حتى يفعل. كل تنزيل يُسجّل', en: 'Backups off the server: the owner downloads the nightly copies (database and files) from Owner console → Backups, with a weekly reminder until done. Every download is recorded' },
+      { kind: 'improve', ar: 'قائمة «المزيد» على التلفون ترتفع من أسفل الشاشة بدل أن تغطيها كلها', en: 'The More menu on phones rises from the bottom instead of covering the whole screen' },
+      { kind: 'security', ar: 'ترقية مكتبة رفع الملفات لسد ثغرة تعطيل، والخادم لا يرسل الإشعارات إلا لخدمات المتصفحات المعروفة (Google وApple وMozilla وMicrosoft)', en: 'File-upload library upgraded to close a denial-of-service flaw; the server sends notifications only to the known browser push services (Google, Apple, Mozilla, Microsoft)' },
+    ],
+  },
+  {
     version: '1.3',
     date: '2026-10-17',
     title: 'بوابة الموظف بيد المالك، إكسل الموظفين الشامل، وملفات البصمة الثلاثة',

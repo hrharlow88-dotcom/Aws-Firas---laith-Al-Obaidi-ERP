@@ -3,6 +3,7 @@ import { Transaction } from 'sequelize';
 import { execute, select } from '../db/query';
 import { Permission, PERMISSIONS } from '../config/systemSettings';
 import { getSettings } from './settings';
+import { pushAfterCommit } from './push';
 import { ROLES } from '../types';
 
 export interface NoticeInput {
@@ -34,6 +35,7 @@ export async function notifyUsers(userIds: Array<string | null | undefined>, not
     tx,
   );
   await queueNoticeEmails(ids, notice, tx);
+  pushAfterCommit(ids, { title: notice.title, body: notice.body, link: notice.link, tag: notice.kind }, tx);
   return rows.length;
 }
 

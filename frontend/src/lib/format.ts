@@ -130,3 +130,10 @@ export const WARNING_LABELS: Record<string, string> = {
   earnings_below_gross: 'المكونات أقل من الراتب الكلي',
   component_needs_attendance: 'مكونات تتطلب الحضور',
 };
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}

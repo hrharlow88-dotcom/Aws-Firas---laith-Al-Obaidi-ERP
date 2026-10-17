@@ -1,4 +1,4 @@
-import { FormEvent, lazy, ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, lazy, ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
   KeyRound,
   LayoutGrid,
   LogOut,
+  MessageSquarePlus,
   Plus,
   Search,
   ShieldCheck,
@@ -36,6 +37,7 @@ import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
 import { Loading, StatusTag } from './components/ui';
 import { AnnouncementGate, IdleGuard, InstallAppButton, NotificationBell, reportLoginLocation, useVisitTracking } from './components/Shell';
+import { BottomBar, InstallBanner } from './components/BottomBar';
 
 /**
  * Loads a screen's file. After an update the old file names are gone, so a tab
@@ -93,6 +95,8 @@ const ActivityPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).t
 const GuardPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.GuardPage })));
 const OwnerPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.OwnerPage })));
 const RecycleBinPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.RecycleBinPage })));
+const FeedbackPage = lazy(() => loadScreen(() => import('./pages/FeedbackPage')).then((module) => ({ default: module.FeedbackPage })));
+const FeedbackDialog = lazy(() => loadScreen(() => import('./components/FeedbackDialog')).then((module) => ({ default: module.FeedbackDialog })));
 const ChatPage = lazy(() => loadScreen(() => import('./pages/ChatPage')).then((module) => ({ default: module.ChatPage })));
 const CompaniesPage = lazy(() => loadScreen(() => import('./pages/CompaniesPage')).then((module) => ({ default: module.CompaniesPage })));
 const PayrollRegisterPage = lazy(() => loadScreen(() => import('./pages/PayrollRegisterPage')).then((module) => ({ default: module.PayrollRegisterPage })));
@@ -111,7 +115,7 @@ type Page =
   | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'employees-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings'
   | 'approvals' | 'calendar' | 'notices' | 'announcements' | 'messages' | 'archive' | 'former-employees' | 'payroll-archive'
-  | 'activity' | 'guard' | 'owner' | 'recycle-bin' | 'chat' | 'companies'
+  | 'activity' | 'guard' | 'owner' | 'recycle-bin' | 'feedback' | 'chat' | 'companies'
   | 'payroll-register' | 'comp-leave' | 'holidays' | 'documents-check' | 'expenses' | 'approval-requests' | 'approval-categories' | 'ai';
 
 interface User {
@@ -240,6 +244,20 @@ function Workspace() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showEmployeeForm, setShowEmployeeForm] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // The account menu closes like any menu: on a choice, a tap elsewhere, Escape, or a new screen.
+  const userMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (event: Event) => {
+      const menu = userMenu.current;
+      if (!menu?.open) return;
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', close); };
+  }, []);
+  useEffect(() => { if (userMenu.current) userMenu.current.open = false; }, [page]);
   const [showBranchForm, setShowBranchForm] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const rolePermissions = systemSettings?.roles[user?.role || 'viewer'].permissions
@@ -546,6 +564,7 @@ function Workspace() {
       case 'guard': return allow(isAdmin, <GuardPage />);
       case 'owner': return allow(isAdmin, <OwnerPage />);
       case 'recycle-bin': return allow(isAdmin, <RecycleBinPage />);
+      case 'feedback': return allow(isAdmin, <FeedbackPage />);
       case 'chat': return <ChatPage key="chat" channelId={id} />;
       case 'companies': return <CompaniesPage />;
       case 'payroll-register': return allow(can('payroll.view'), <PayrollRegisterPage />);
@@ -588,13 +607,17 @@ function Workspace() {
           <span className="o-date"><Clock3 size={14} />{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date())}</span>
           <ChatButton />
           <NotificationBell />
-          <details className="o-user">
+          <details className="o-user" ref={userMenu}>
             <summary><span className="avatar avatar-small">{user.name.slice(0, 1)}</span><span className="o-user-name">{user.name}</span><ChevronDown size={14} /></summary>
-            <div className="o-user-menu">
+            <div className="o-user-menu" onClick={(event) => {
+              const target = event.target as HTMLElement;
+              if (target.closest('button') && !target.closest('.appearance') && userMenu.current) userMenu.current.open = false;
+            }}>
               <div className="o-user-head"><strong>{user.name}</strong><span>{roleLabels[user.role]}{user.role === 'super_admin' ? ' · System Owner & Administrator' : ''}</span></div>
               <AppearanceControls />
               <button onClick={() => navigate('security')}><KeyRound size={15} />أمان الحساب والتوقيع</button>
               <InstallAppButton />
+              <button onClick={() => setFeedbackOpen(true)}><MessageSquarePlus size={15} /><Bi ar={"ملاحظة على النظام"} en={"Send feedback"} /></button>
               <button onClick={signOut}><LogOut size={15} />تسجيل الخروج</button>
             </div>
           </details>
@@ -614,6 +637,7 @@ function Workspace() {
             <button className="icon-button" aria-label="إغلاق التنبيه" onClick={() => { setError(''); setSuccess(''); }}><X size={16} /></button>
           </div>}
 
+          {page === 'home' && <InstallBanner />}
           {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} hiddenApps={systemSettings?.ui?.hiddenApps} appOrder={systemSettings?.ui?.appOrder} appAccess={user.appAccess} />}
           {page !== 'home' && (currentApp && hiddenFor(currentApp, systemSettings?.ui?.hiddenApps, isAdmin, user.appAccess)
             ? <p className="notice notice-error"><Bi ar={"هذا التطبيق مخفي من مالك النظام."} en={"This app is hidden by the system owner."} /></p>
@@ -621,6 +645,8 @@ function Workspace() {
 
           <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /><VersionBadge /></span><DeveloperCredit /></footer>
       </main>
+      <BottomBar page={page} staff={user.role !== 'employee'} onFeedback={() => setFeedbackOpen(true)} onSignOut={signOut} appearance={<AppearanceControls />} />
+      {feedbackOpen && <Suspense fallback={null}><FeedbackDialog open onClose={() => setFeedbackOpen(false)} /></Suspense>}
     </div>
     </CrumbProvider>
     </SessionProvider>

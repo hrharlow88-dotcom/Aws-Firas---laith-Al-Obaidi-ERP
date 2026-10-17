@@ -47,6 +47,8 @@ services:
       DEMO_BRIDGE_URL: ${DEMO_BRIDGE_URL:-}
       DEMO_BRIDGE_KEY: ${DEMO_BRIDGE_KEY:-}
       UPLOAD_DIR: /data/uploads
+      # The nightly backups, read-only: the owner downloads a copy to keep off the server.
+      BACKUP_DIR: /backups
       SAP_B1_URL: ${SAP_B1_URL:-}
       SAP_B1_COMPANY_DB: ${SAP_B1_COMPANY_DB:-}
       SAP_B1_USER: ${SAP_B1_USER:-}
@@ -56,6 +58,7 @@ services:
       - uploads:/data/uploads
       # Company workbooks for `import:company` (read-only, never in the image).
       - ./company-data:/import:ro
+      - ${BACKUP_DIR:-./backups}:/backups:ro
     depends_on:
       database:
         condition: service_healthy

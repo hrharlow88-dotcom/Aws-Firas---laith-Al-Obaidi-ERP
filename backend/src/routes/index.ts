@@ -2,6 +2,9 @@ import { requirePortal } from '../services/portal';
 import { PhotoController } from '../controllers/PhotoController';
 import { EmployeeImportController } from '../controllers/EmployeeImportController';
 import { FingerprintFileController } from '../controllers/FingerprintFileController';
+import { PushController } from '../controllers/PushController';
+import { FeedbackController } from '../controllers/FeedbackController';
+import { BackupController } from '../controllers/BackupController';
 import express, { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import AuthController from '../controllers/AuthController';
@@ -75,6 +78,22 @@ const publicLimiter = rateLimit({
   message: { message: 'طلبات كثيرة. حاول بعد قليل.' },
 });
 
+const pushTestLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'جرّبت الإشعار كثيراً. انتظر قليلاً.' },
+});
+
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'أرسلت ملاحظات كثيرة خلال ساعة. حاول لاحقاً.' },
+});
+
 const integrationLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 120,
@@ -99,6 +118,19 @@ router.get('/public/brands/:brandId/logo', asyncRoute(OwnerController.brandLogo)
 
 // Notifications, announcements, approvals inbox, activity.
 router.get('/notifications', requireAuth, asyncRoute(NotificationController.mine));
+// Notifications pushed to phones and computers (each person turns them on per device).
+router.get('/push/config', requireAuth, asyncRoute(PushController.config));
+router.post('/push/subscriptions', requireAuth, asyncRoute(PushController.subscribe));
+router.delete('/push/subscriptions', requireAuth, asyncRoute(PushController.unsubscribe));
+router.post('/push/test', requireAuth, pushTestLimiter, asyncRoute(PushController.test));
+router.get('/push/status', requireAuth, allowRoles('super_admin'), asyncRoute(PushController.status));
+router.put('/push/channel', requireAuth, allowRoles('super_admin'), asyncRoute(PushController.setChannel));
+// Notes on the system from anyone who uses it, for the owner.
+router.post('/feedback', requireAuth, feedbackLimiter, uploadSingle('file'), asyncRoute(FeedbackController.create));
+router.get('/feedback/mine', requireAuth, asyncRoute(FeedbackController.mine));
+router.get('/feedback', requireAuth, allowRoles('super_admin'), asyncRoute(FeedbackController.list));
+router.get('/feedback/:id/image', requireAuth, validateUuidParam, asyncRoute(FeedbackController.image));
+router.patch('/feedback/:id', requireAuth, allowRoles('super_admin'), validateUuidParam, asyncRoute(FeedbackController.update));
 router.post('/notifications/read', requireAuth, asyncRoute(NotificationController.markRead));
 router.get('/me/announcements/pending', requireAuth, asyncRoute(AnnouncementController.pending));
 router.get('/me/announcements', requireAuth, asyncRoute(AnnouncementController.mine));
@@ -248,6 +280,8 @@ router.post('/recycle-bin/:id/purge', requireAuth, allowRoles('super_admin'), va
 router.post('/owner/brands/:brandId/logo', requireAuth, allowRoles('super_admin'), uploadSingle('file'), asyncRoute(OwnerController.uploadBrandLogo));
 router.delete('/owner/brands/:brandId/logo', requireAuth, allowRoles('super_admin'), asyncRoute(OwnerController.removeBrandLogo));
 router.get('/owner/template', requireAuth, allowRoles('super_admin'), asyncRoute(OwnerController.exportTemplate));
+router.get('/owner/backups', requireAuth, allowRoles('super_admin'), asyncRoute(BackupController.list));
+router.get('/owner/backups/:name', requireAuth, allowRoles('super_admin'), asyncRoute(BackupController.download));
 router.post('/owner/template', requireAuth, allowRoles('super_admin'), asyncRoute(OwnerController.importTemplate));
 router.post('/auth/set-password', passwordLimiter, asyncRoute(AuthController.setPasswordWithLink));
 router.get('/auth/signature', requireAuth, asyncRoute(SignatureController.get));

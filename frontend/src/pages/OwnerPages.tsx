@@ -1,6 +1,6 @@
 import { ChangeEvent, useState } from 'react';
 import {
-  Download, EyeOff, Plus, Fingerprint, Image, LogOut, MapPin, RefreshCw, RotateCcw, Save, ShieldCheck, Trash2, Upload,
+  BellRing, DatabaseBackup, Download, EyeOff, Plus, Fingerprint, Image, LogOut, MapPin, RefreshCw, RotateCcw, Save, ShieldCheck, Trash2, Upload,
 } from 'lucide-react';
 import { Bi, refreshBrands, useBrands, BiText } from '../components/Brand';
 import { EDITABLE_TEXTS } from '../lib/texts';
@@ -8,7 +8,8 @@ import { DemoAccounts } from './DemoAccounts';
 import { Dialog, Empty, Loading, Stat, Tabs, Tone, useReasonPrompt } from '../components/ui';
 import { downloadFile } from '../lib/api';
 import { APPS, en, orderedApps } from '../lib/apps';
-import { formatDateTime, formatNumber } from '../lib/format';
+import { formatBytes, formatDateTime, formatNumber } from '../lib/format';
+import { PushToggle } from '../components/PushToggle';
 import { useLoad, useSession } from '../lib/session';
 import { FirewallPanel, RadarPanel, ScanPanel } from './SecurityRadar';
 import { DEFAULT_PORTAL, PortalSettings } from '../lib/portal';
@@ -259,7 +260,7 @@ const PORTAL_GROUPS: Array<{ title: string; items: Array<{ key: PortalSwitch; la
 /** Owner console: what the interface shows, the brands, sign-in and guard settings, outside channels, module managers, and the company template. */
 export function OwnerPage() {
   const session = useSession();
-  const [tab, setTab] = useState<'interface' | 'portal' | 'texts' | 'brands' | 'security' | 'channels' | 'managers' | 'demo' | 'clone'>('interface');
+  const [tab, setTab] = useState<'interface' | 'portal' | 'texts' | 'brands' | 'security' | 'channels' | 'managers' | 'demo' | 'backups' | 'clone'>('interface');
   const [draft, setDraft] = useState<SystemSettings>(() => JSON.parse(JSON.stringify(session.settings)));
   const [busy, setBusy] = useState(false);
   const brands = useBrands();
@@ -336,7 +337,7 @@ export function OwnerPage() {
       <Tabs value={tab} onChange={setTab} items={[
         { id: 'interface', label: 'الواجهة · Interface' }, { id: 'portal', label: 'بوابة الموظف · Employee portal' }, { id: 'texts', label: 'النصوص والتسميات · Texts' }, { id: 'brands', label: 'العلامات · Brands' }, { id: 'security', label: 'الجلسة والأمان · Security' },
         { id: 'demo', label: 'الحسابات التجريبية · Demo' },
-        { id: 'channels', label: 'القنوات · Channels' }, { id: 'managers', label: 'مسؤولو التطبيقات · App owners' }, { id: 'clone', label: 'استنساخ لشركة · Clone' },
+        { id: 'channels', label: 'القنوات · Channels' }, { id: 'managers', label: 'مسؤولو التطبيقات · App owners' }, { id: 'backups', label: 'النسخ الاحتياطي · Backups' }, { id: 'clone', label: 'استنساخ لشركة · Clone' },
       ]} />
       {tab === 'interface' && <section className="panel">
         <div className="panel-head"><div><h3><Bi ar={"التطبيقات وترتيبها"} en={"Apps and their order"} /></h3><p>رتّب التطبيقات بالأسهم كما تريدها في الشاشة الرئيسية للجميع، وأخفِ ما لا تحتاجه (المخفي لا يظهر لأحد غيرك). لتحديد تطبيقات مستخدم بعينه: الإعدادات ← المستخدمون ← «التطبيقات».</p></div>
@@ -414,6 +415,7 @@ export function OwnerPage() {
       </div></section>}
       {tab === 'channels' && <section className="panel">
         <div className="panel-head"><div><h3>قنوات الإرسال الخارجية</h3><p>لا يُرسل شيء خارج النظام حتى تفعّل القناة هنا بإعدادات مزوّدك. الأسرار تُحفظ مشفّرة ولا تُعرض مرة أخرى. واتساب يحتاج حساب WhatsApp Business على منصة Meta.</p></div></div>
+        <PushChannelCard />
         <div className="channel-cards">{['email', 'whatsapp', 'sms'].map((id) => { const state = channels.data.find((item) => item.channel === id); return <div key={id} className="channel-card">
           <strong>{id === 'email' ? 'البريد الإلكتروني · E-mail' : id === 'whatsapp' ? 'واتساب · WhatsApp' : 'رسائل نصية · SMS'}</strong>
           <Tone tone={state?.enabled ? 'good' : 'muted'}>{state?.enabled ? 'مفعّلة' : 'متوقفة (إرسال يدوي)'}</Tone>
@@ -430,6 +432,7 @@ export function OwnerPage() {
           </select>
         </div>)}</div>
       </section>}
+      {tab === 'backups' && <section className="panel"><BackupsPanel /></section>}
       {tab === 'clone' && <section className="panel">
         <div className="panel-head"><div><h3><Bi ar={"استنساخ النظام لشركة أخرى"} en={"Clone for another company"} /></h3>
           <p>١) نزّل قالب الشركة: الإعدادات والأدوار وقواعد الرواتب والإجازات والفروع والأقسام والمسميات والدوامات — بلا موظفين أو رواتب أو ملفات أو كلمات مرور.<br />
@@ -454,3 +457,74 @@ export function OwnerPage() {
   );
 }
 
+/** Phone and computer notifications: one switch for the whole system; each person then turns them on per device. */
+function PushChannelCard() {
+  const session = useSession();
+  const status = useLoad<{ enabled: boolean; devices: number; people: number }>('/push/status', { enabled: false, devices: 0, people: 0 });
+  const [busy, setBusy] = useState(false);
+  async function toggle(enabled: boolean) {
+    setBusy(true);
+    try {
+      await session.call('/push/channel', { method: 'PUT', body: { enabled } });
+      session.notify(enabled ? 'فُعّلت إشعارات التلفون. يفعّلها كل شخص على جهازه من «المزيد» أو من الجرس.' : 'أُوقفت إشعارات التلفون. الأجهزة المسجلة تبقى وتعود حين تفعّلها.');
+      status.reload();
+    } catch (error) { session.fail(error, 'تعذر الحفظ.'); } finally { setBusy(false); }
+  }
+  const on = status.data.enabled;
+  return (
+    <div className="push-channel">
+      <div className="push-channel-head">
+        <span className="push-channel-icon"><BellRing size={20} /></span>
+        <div>
+          <strong><Bi ar="إشعارات التلفون والحاسبة" en="Push notifications" /></strong>
+          <p>تصل إشعارات النظام (الإجازات، الاعتمادات، المحادثات، الرواتب) للتلفون والحاسبة حتى والنظام مغلق. لا تحتاج حساباً عند أي مزوّد، والمفاتيح تُنشأ على الخادم وتُحفظ مشفّرة.</p>
+        </div>
+        <Tone tone={on ? 'good' : 'muted'}>{on ? 'مفعّلة' : 'متوقفة'}</Tone>
+      </div>
+      {on && <p className="push-channel-count">{status.data.people ? `${formatNumber(status.data.people)} شخص فعّلها على ${formatNumber(status.data.devices)} جهاز.` : 'لم يفعّلها أحد على جهازه بعد.'} على الآيفون تعمل من النظام المثبت على الشاشة الرئيسية فقط.</p>}
+      <div className="push-channel-actions">
+        <button className={`button ${on ? 'button-quiet' : 'button-primary'}`} disabled={busy || status.loading} onClick={() => void toggle(!on)}>{on ? 'إيقاف للجميع' : 'تفعيل للجميع'}</button>
+      </div>
+      {on && <div className="push-channel-mine"><h4>هذا الجهاز</h4><PushToggle /></div>}
+    </div>
+  );
+}
+
+interface BackupFileRow { name: string; kind: 'database' | 'files'; size: number; createdAt: string }
+
+/** The nightly backups on the server, for the owner to keep a copy elsewhere. */
+function BackupsPanel() {
+  const session = useSession();
+  const list = useLoad<{ available: boolean; files: BackupFileRow[]; lastDownload: string | null }>('/owner/backups', { available: true, files: [], lastDownload: null });
+  const [busy, setBusy] = useState<string | null>(null);
+  async function download(name: string) {
+    setBusy(name);
+    try { await downloadFile(`/owner/backups/${encodeURIComponent(name)}`, session.token, name); list.reload(); }
+    catch (error) { session.fail(error, 'تعذر التنزيل.'); } finally { setBusy(null); }
+  }
+  const stale = !list.data.lastDownload || Date.now() - new Date(list.data.lastDownload).getTime() > 7 * 86400000;
+  const newest = (kind: BackupFileRow['kind']) => list.data.files.find((file) => file.kind === kind)?.name;
+  return (
+    <>
+      <div className="panel-head"><div><h3><Bi ar="النسخ الاحتياطي" en="Backups" /></h3>
+        <p>الخادم يأخذ كل ليلة نسخة من قاعدة البيانات ومن الملفات المرفوعة (مشفّرة)، ويحتفظ بها 14 يوماً على نفس الخادم. إذا تعطّل الخادم تضيع معه، لذلك نزّل نسخة أسبوعياً واحفظها خارجه. يذكّرك النظام كل أسبوع حتى تفعل.</p></div>
+        <button className="button button-quiet" onClick={list.reload}><RefreshCw size={15} />تحديث</button></div>
+      <div className={`callout ${stale ? 'callout-warn' : 'callout-good'} backup-callout`}><DatabaseBackup size={17} /><div>
+        <strong>{list.data.lastDownload ? `آخر تنزيل: ${formatDateTime(list.data.lastDownload)}` : 'لم تُنزَّل أي نسخة خارج الخادم بعد'}</strong>
+        <span>نزّل أحدث ملفين: قاعدة البيانات <code dir="ltr">db_…dump</code> والملفات <code dir="ltr">uploads_…tar.gz</code>، واحفظهما على قرص خارجي أو حساب سحابي خاص بالشركة. واحفظ معهما، في مكان منفصل، نسخة من مفتاح التشفير <code dir="ltr">DATA_ENCRYPTION_KEY</code> الموجود في ملف <code dir="ltr">deploy/.env</code> على الخادم؛ بدونه لا تُقرأ أرقام الهويات والحسابات ولا الملفات المرفوعة.</span>
+      </div></div>
+      {list.loading ? <Loading /> : !list.data.available ? <Empty icon={<DatabaseBackup size={22} />} title="مجلد النسخ غير مربوط بهذا الخادم" text="يُربط تلقائياً في التشغيل الفعلي (deploy/docker-compose.prod.yml)." />
+        : !list.data.files.length ? <Empty icon={<DatabaseBackup size={22} />} title="لا توجد نسخ بعد" text="تُؤخذ نسخة تلقائياً كل ليلة، وقبل كل تحديث للنظام." />
+        : <div className="table-scroll"><table className="dense">
+          <thead><tr><th>النسخة</th><th>النوع</th><th>الحجم</th><th>التاريخ</th><th /></tr></thead>
+          <tbody>{list.data.files.map((file) => <tr key={file.name}>
+            <td><span dir="ltr">{file.name}</span>{(file.name === newest('database') || file.name === newest('files')) && <> <Tone tone="info">الأحدث</Tone></>}</td>
+            <td>{file.kind === 'database' ? 'قاعدة البيانات' : 'الملفات المرفوعة'}{file.name.includes('pre-update') ? ' (قبل التحديث)' : ''}</td>
+            <td dir="ltr">{formatBytes(file.size)}</td>
+            <td>{formatDateTime(file.createdAt)}</td>
+            <td><button className="button button-quiet button-small" disabled={busy !== null} onClick={() => void download(file.name)}><Download size={13} />{busy === file.name ? 'جارٍ التنزيل…' : 'تنزيل'}</button></td>
+          </tr>)}</tbody>
+        </table></div>}
+    </>
+  );
+}

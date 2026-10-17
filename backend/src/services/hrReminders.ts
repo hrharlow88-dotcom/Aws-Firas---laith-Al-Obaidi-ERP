@@ -1,5 +1,8 @@
 import { execute, select, selectOne } from '../db/query';
 import { notifyPermission, notifyUsers, NoticeInput } from './notify';
+import { backupDir, lastDownload, listBackups } from './backups';
+
+const BACKUP_REMINDER_ID = '00000000-0000-4000-8000-0000000000b1';
 
 /** Today in Baghdad as YYYY-MM-DD. */
 export function baghdadToday(now = new Date()): string {
@@ -169,6 +172,22 @@ export async function runHrReminders(now = new Date()): Promise<ReminderSummary>
     const users = await select<{ id: string }>('SELECT id FROM users WHERE is_active AND NOT is_demo');
     await notifyUsers(users.map((user) => user.id), { kind: 'calendar', title: `عطلة رسمية: ${holiday.name}`, body: `يوم ${holiday.date}.`, link: '/calendar' });
     count('holiday');
+  }
+  // Backups off the server: a weekly nudge to the owner until a copy is downloaded.
+  if (backupDir() && (await listBackups()).length) {
+    const last = await lastDownload();
+    if (!last || Date.parse(last) < now.getTime() - 7 * 86400000) {
+      const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+      const monday = new Date(Date.parse(`${today}T00:00:00Z`) - ((weekday + 6) % 7) * 86400000).toISOString().slice(0, 10);
+      if (await once('backup_offsite', BACKUP_REMINDER_ID, monday)) {
+        await notifyUsers(await owners(), {
+          kind: 'backup', title: 'نزّل نسخة احتياطية خارج السيرفر',
+          body: last ? `آخر تنزيل ${last.slice(0, 10)}. لوحة المالك ← النسخ الاحتياطي.` : 'لم تُنزَّل أي نسخة بعد. لوحة المالك ← النسخ الاحتياطي.',
+          link: '/owner',
+        });
+        count('backup_offsite');
+      }
+    }
   }
   return sent;
 }

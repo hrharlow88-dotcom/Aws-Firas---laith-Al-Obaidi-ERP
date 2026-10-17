@@ -75,13 +75,15 @@ export function Warning({ title, children }: { title: string; children: ReactNod
 }
 
 /** A dialog built on <dialog> so focus, Escape and the backdrop behave natively. */
-export function Dialog({ open, title, subtitle, onClose, children, wide }: {
+export function Dialog({ open, title, subtitle, onClose, children, wide, sheet }: {
   open: boolean;
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** On phones: a sheet rising from the bottom instead of a full screen. */
+  sheet?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -93,7 +95,7 @@ export function Dialog({ open, title, subtitle, onClose, children, wide }: {
   return (
     <dialog
       ref={ref}
-      className={`dialog ${wide ? 'dialog-wide' : ''}`}
+      className={`dialog ${wide ? 'dialog-wide' : ''} ${sheet ? 'dialog-sheet' : ''}`}
       onClose={onClose}
       onClick={(event) => { if (event.target === ref.current) onClose(); }}
     >

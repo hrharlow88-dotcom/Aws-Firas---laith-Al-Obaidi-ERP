@@ -20,6 +20,7 @@ import * as m0016 from './migrations/0016-chat-companies-firewall-demo';
 import * as m0017 from './migrations/0017-governorates-foreign-expenses-ai';
 import * as m0018 from './migrations/0018-indexes-photo-link';
 import * as m0019 from './migrations/0019-portal-photos-fingerprint-files';
+import * as m0020 from './migrations/0020-push-feedback';
 
 export interface MigrationContext {
   queryInterface: QueryInterface;
@@ -54,6 +55,7 @@ const MIGRATIONS: Array<[string, MigrationModule]> = [
   ['0017-governorates-foreign-expenses-ai', m0017],
   ['0018-indexes-photo-link', m0018],
   ['0019-portal-photos-fingerprint-files', m0019],
+  ['0020-push-feedback', m0020],
 ];
 
 export function createMigrator(sequelize: Sequelize) {

@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api';
 import { navigate } from '../lib/router';
 import { useSession } from '../lib/session';
 import { formatDateTime } from '../lib/format';
+import { PushToggle, pushOnHere } from './PushToggle';
 
 interface Notice { id: string; kind: string; title: string; body: string | null; link: string | null; createdAt: string; readAt: string | null }
 
@@ -23,7 +24,7 @@ export function NotificationBell() {
       setItems(result.data.items);
       setUnread(result.data.unread);
       // A desktop notification for anything new, when the person allowed it.
-      if (!first.current && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      if (!first.current && !pushOnHere() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         for (const item of result.data.items.filter((entry) => !entry.readAt && !seen.current.has(entry.id)).slice(0, 3)) {
           new Notification(item.title, { body: item.body ?? '', icon: '/brand/shield-256.png', tag: item.id });
         }
@@ -41,6 +42,19 @@ export function NotificationBell() {
     return () => window.clearInterval(timer);
   }, [load]);
 
+  // Closes on a tap elsewhere, Escape, or a new screen.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent ? event.key === 'Escape' : event.type === 'hashchange' || !box.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    window.addEventListener('hashchange', close);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', close); window.removeEventListener('hashchange', close); };
+  }, [open]);
+
   async function openItem(item: Notice) {
     setOpen(false);
     if (!item.readAt) await session.call('/notifications/read', { method: 'POST', body: { ids: [item.id] } }).catch(() => undefined);
@@ -49,7 +63,7 @@ export function NotificationBell() {
   }
 
   return (
-    <div className="o-bell">
+    <div className="o-bell" ref={box}>
       <button className="o-bell-button" onClick={() => setOpen(!open)} aria-label={`الإشعارات (${unread})`} aria-expanded={open}>
         {unread ? <BellRing size={18} /> : <Bell size={18} />}
         {unread > 0 && <span className="o-bell-count">{unread > 99 ? '99+' : unread}</span>}
@@ -58,8 +72,7 @@ export function NotificationBell() {
         <div className="o-bell-head"><strong><Bi ar={"الإشعارات"} en={"Notifications"} /></strong>
           {unread > 0 && <button className="button button-quiet button-small" onClick={async () => { await session.call('/notifications/read', { method: 'POST', body: { all: true } }); void load(); }}><CheckCheck size={14} />قراءة الكل</button>}
         </div>
-        {typeof Notification !== 'undefined' && Notification.permission === 'default' &&
-          <button className="o-bell-enable" onClick={() => void Notification.requestPermission()}><Bi ar={"فعّل تنبيهات سطح المكتب والهاتف"} en={"Enable device alerts"} /></button>}
+        <PushToggle compact />
         <div className="o-bell-list">
           {items.length ? items.map((item) => <button key={item.id} className={`o-bell-item ${item.readAt ? '' : 'is-unread'}`} onClick={() => void openItem(item)}>
             <strong>{item.title}</strong>{item.body && <span>{item.body}</span>}<small>{formatDateTime(item.createdAt)}</small>
@@ -198,6 +211,19 @@ interface InstallPrompt extends Event { prompt: () => Promise<void> }
 let deferredInstall: InstallPrompt | null = null;
 window.addEventListener('beforeinstallprompt', (event) => { event.preventDefault(); deferredInstall = event as InstallPrompt; });
 
+/** Android, Windows and macOS browsers offer their own install dialog; null elsewhere (iPhone uses the Share sheet). */
+export function canPromptInstall(): boolean {
+  return Boolean(deferredInstall);
+}
+
+export async function promptInstall(): Promise<boolean> {
+  if (!deferredInstall) return false;
+  const prompt = deferredInstall;
+  deferredInstall = null;
+  await prompt.prompt();
+  return true;
+}
+
 /** "Install the app" for Android, Windows and macOS (Chrome/Edge); iPhone and iPad get the Share-sheet steps. */
 export function InstallAppButton() {
   const [help, setHelp] = useState(false);
@@ -207,7 +233,7 @@ export function InstallAppButton() {
   return (
     <>
       <button onClick={async () => {
-        if (deferredInstall) { await deferredInstall.prompt(); deferredInstall = null; } else setHelp(!help);
+        if (!(await promptInstall())) setHelp(!help);
       }}><Download size={15} /><Bi ar={"تثبيت التطبيق"} en={"Install app"} /></button>
       {help && <p className="install-help">{ios
         ? 'على آيفون وآيباد: افتح النظام في Safari ← زر المشاركة ← «إضافة إلى الشاشة الرئيسية».'
