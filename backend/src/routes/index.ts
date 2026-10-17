@@ -1,7 +1,7 @@
 import { requirePortal } from '../services/portal';
 import { PhotoController } from '../controllers/PhotoController';
 import { EmployeePhotosController } from '../controllers/EmployeePhotosController';
-import { uploadPhotoZip } from '../services/photoZip';
+import { photoZipTurn, uploadPhotoZip } from '../services/photoZip';
 import { EmployeeImportController } from '../controllers/EmployeeImportController';
 import { FingerprintFileController } from '../controllers/FingerprintFileController';
 import { PushController } from '../controllers/PushController';
@@ -365,7 +365,7 @@ router.get('/employees/photo-submissions/:id/file', requireAuth, allowPermission
 router.post('/employees/photo-submissions/:id/reject', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(PhotoController.reject));
 router.post('/employees/photos/match', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(PhotoController.match));
 // One ZIP of photos named by employee number: checked and previewed, then saved on confirmation (v2.2).
-router.post('/employees/photos/zip/preview', requireAuth, allowPermission('employees.manage_profile'), uploadPhotoZip('file'), asyncRoute(EmployeePhotosController.zipPreview));
+router.post('/employees/photos/zip/preview', requireAuth, allowPermission('employees.manage_profile'), photoZipTurn, uploadPhotoZip('file'), asyncRoute(EmployeePhotosController.zipPreview));
 router.post('/employees/photos/zip/:importId/apply', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(EmployeePhotosController.zipApply));
 router.delete('/employees/photos/zip/:importId', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(EmployeePhotosController.zipDiscard));
 // Small photos for lists and the org chart, many in one request (within the user's scope).

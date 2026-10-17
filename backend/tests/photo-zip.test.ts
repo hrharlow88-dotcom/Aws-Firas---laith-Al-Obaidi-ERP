@@ -5,7 +5,7 @@ import { crc32, deflateRawSync } from 'node:zlib';
 import sharp from 'sharp';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { SystemSettings } from '../src/config/systemSettings';
-import { selectOne } from '../src/db/query';
+import { execute, selectOne } from '../src/db/query';
 import { PHOTO_ZIP_LIMITS, sweepStagedImports } from '../src/services/photoZip';
 import { uploadRoot } from '../src/services/storage';
 import { api, makeBranch, makeEmployee, makeUser } from './helpers';
@@ -262,3 +262,86 @@ describe('employee photos from one ZIP', () => {
     await api().post(`/api/employees/photos/zip/${randomUUID()}/apply`).set(hr.auth).send({}).expect(410);
   });
 });
+
+describe('what the security review asked for', () => {
+  it('refuses programs hidden in system folders or behind trailing dots and spaces', async () => {
+    const photo = await image('jpeg', '#abcdef');
+    for (const name of ['__MACOSX/setup.exe', '._run.sh', 'setup.exe.', 'tool.bat  ']) {
+      const response = await preview(hr, makeZip([{ name: `${no('1')}.jpg`, data: photo }, { name, data: Buffer.from('MZ') }])).expect(400);
+      expect(response.body.message).toMatch(/ملفاً تنفيذياً/);
+    }
+  });
+
+  it('matches nobody with an over-long or control-character name, and reports too-big pictures', async () => {
+    const photo = await image('jpeg', '#a0a0a0');
+    const huge = await sharp({ create: { width: 8000, height: 7000, channels: 3, background: '#ffffff' } }).png().toBuffer();
+    const response = await preview(hr, makeZip([
+      { name: `${'1'.repeat(45)}.jpg`, data: photo },
+      { name: `${no('1')}\u0001.jpg`, data: photo },
+      { name: `${no('2')}.png`, data: huge },
+    ])).expect(200);
+    const [long, control, big] = response.body.data.items;
+    expect([long.status, control.status, big.status]).toEqual(['unmatched', 'unmatched', 'too_large']);
+    expect(control.entry).toContain('\ufffd');
+    expect(big.reason).toContain('أبعاد');
+  });
+
+  it('stops at the budgets for pixels, prepared photos and upload size', async () => {
+    const photos = await Promise.all(['#111111', '#222222', '#333333'].map((color) => image('jpeg', color)));
+    const zip = makeZip(photos.map((data, index) => ({ name: `${no(String(index))}q.jpg`, data })));
+    PHOTO_ZIP_LIMITS.totalPixels = 64 * 64 * 2;
+    await preview(hr, zip).expect(400).expect((res) => expect(res.body.message).toContain('أبعاد الصور'));
+    PHOTO_ZIP_LIMITS.totalPixels = savedLimits.totalPixels;
+    PHOTO_ZIP_LIMITS.outputBytes = 1;
+    await preview(hr, zip).expect(400).expect((res) => expect(res.body.message).toContain('بعد تجهيزها'));
+    PHOTO_ZIP_LIMITS.outputBytes = savedLimits.outputBytes;
+    PHOTO_ZIP_LIMITS.zipBytes = zip.length - 1;
+    await preview(hr, zip).expect(413).expect((res) => expect(res.body.message).toContain('ملف ZIP أكبر'));
+    PHOTO_ZIP_LIMITS.zipBytes = savedLimits.zipBytes;
+    await preview(hr, zip).expect(200);
+  });
+
+  it('checks the number again when saving, and saves a preview only once', async () => {
+    const renamed = await makeEmployee(branchId, { employeeNo: no('20'), fullName: 'سيتغير رقمه' });
+    const first = await preview(hr, makeZip([{ name: `${no('20')}.jpg`, data: await image('jpeg', '#336699') }])).expect(200);
+    await execute('UPDATE employees SET employee_no = :employeeNo WHERE id = :id', { employeeNo: no('21'), id: renamed.id });
+    const applied = await api().post(`/api/employees/photos/zip/${first.body.data.importId}/apply`).set(hr.auth).send({}).expect(200);
+    expect(applied.body.data.summary).toEqual({ added: 0, replaced: 0, skipped: 0, failed: 1 });
+    expect(applied.body.data.items[0].reason).toContain('تغيّر الرقم');
+    expect(await photoDocument(renamed.id)).toBeNull();
+
+    const twice = await makeEmployee(branchId, { employeeNo: no('22'), fullName: 'تأكيد مرتين' });
+    const second = await preview(hr, makeZip([{ name: `${no('22')}.jpg`, data: await image('jpeg', '#993366') }])).expect(200);
+    const both = await Promise.all([1, 2].map(() => api().post(`/api/employees/photos/zip/${second.body.data.importId}/apply`).set(hr.auth).send({ replace: true })));
+    const statuses = both.map((response) => response.status).sort();
+    expect(statuses[0]).toBe(200);
+    expect([409, 410]).toContain(statuses[1]);
+    const documents = await selectOne<{ count: number }>(
+      "SELECT count(*)::int AS count FROM employee_documents WHERE employee_id = :id AND doc_type = 'photo'", { id: twice.id },
+    );
+    expect(documents!.count).toBe(1);
+  });
+
+  it('works for a line manager on their own team only', async () => {
+    await api().put('/api/settings').set(owner.auth).send({
+      ...original,
+      roles: { ...original.roles, line_manager: { ...original.roles.line_manager, permissions: [...original.roles.line_manager.permissions, 'employees.manage_profile'] } },
+    }).expect(200);
+    const boss = await makeEmployee(branchId, { employeeNo: no('30'), fullName: 'مدير الفريق' });
+    const member = await makeEmployee(branchId, { employeeNo: no('31'), fullName: 'عضو الفريق', managerId: boss.id });
+    const outsider = await makeEmployee(branchId, { employeeNo: no('32'), fullName: 'خارج الفريق' });
+    const lead = await makeUser('line_manager', null, boss.id);
+    const response = await preview(lead, makeZip([
+      { name: `${no('31')}.jpg`, data: await image('jpeg', '#445566') },
+      { name: `${no('32')}.jpg`, data: await image('jpeg', '#665544') },
+    ])).expect(200);
+    expect(response.body.data.items.map((item: { status: string }) => item.status)).toEqual(['ready', 'unmatched']);
+    expect(JSON.stringify(response.body)).not.toContain('خارج الفريق');
+    const applied = await api().post(`/api/employees/photos/zip/${response.body.data.importId}/apply`).set(lead.auth).send({}).expect(200);
+    expect(applied.body.data.summary).toEqual({ added: 1, replaced: 0, skipped: 1, failed: 0 });
+    expect(await photoDocument(member.id)).not.toBeNull();
+    expect(await photoDocument(outsider.id)).toBeNull();
+    await api().put('/api/settings').set(owner.auth).send(original).expect(200);
+  });
+});
+

@@ -180,12 +180,22 @@ const ZIP_OUTCOME: Record<ZipOutcome, { label: string; tone: string }> = {
 const INVALID: ZipStatus[] = ['corrupt', 'too_large', 'encrypted', 'not_image'];
 type ZipFilter = 'all' | 'ready' | 'has_photo' | 'unmatched' | 'duplicate' | 'invalid';
 
-/** The result as a spreadsheet-friendly CSV (opens in Excel with Arabic intact). */
+/**
+ * The result as a spreadsheet-friendly CSV (opens in Excel with Arabic intact). File names come
+ * from the uploaded ZIP, so a name starting like a formula (= + - @) is written as plain text.
+ */
 function downloadZipReport(result: ZipResult) {
-  const cell = (value: string | null) => `"${(value ?? '').replace(/"/g, '""')}"`;
+  const cell = (value: string | null) => {
+    const text = value ?? '';
+    return `"${(/^[=+\-@\t\r]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
+  };
+  // Excel would read 010172 as the number 10172; ="010172" keeps the employee number as written.
+  const number = (value: string) => (/^\d+$/.test(value) ? `"=""${value}"""` : cell(value));
   const lines = [
     ['الملف', 'الرقم الوظيفي', 'الموظف', 'النتيجة', 'السبب'].map(cell).join(','),
-    ...result.items.map((item) => [item.entry, item.employeeNo, item.fullName, ZIP_OUTCOME[item.result].label, item.reason].map(cell).join(',')),
+    ...result.items.map((item) => [
+      cell(item.entry), number(item.employeeNo), cell(item.fullName), cell(ZIP_OUTCOME[item.result].label), cell(item.reason),
+    ].join(',')),
   ];
   const url = URL.createObjectURL(new Blob([`﻿${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');

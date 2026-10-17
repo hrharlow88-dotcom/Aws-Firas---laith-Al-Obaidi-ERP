@@ -121,6 +121,7 @@ check(/أُضيفت\s*2/.test(resultText) && /فشلت\s*2/.test(resultText) && 
 const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'تنزيل التقرير' }).click()]);
 const report = fs.readFileSync(await download.path(), 'utf8');
 check(report.includes(people[0].employeeNo) && report.includes('أُضيفت') && report.includes('السبب'), 'report downloads with every file, result and reason');
+check(report.includes('"=""0000000000"""'), 'report keeps a number with leading zeros as written (Excel shows 0000000000, not 0)');
 const saved = (await db.query('SELECT id FROM employees WHERE id = ANY($1::uuid[]) AND photo_document_id IS NOT NULL', [[people[0].id, people[1].id]])).rows.length;
 check(saved === 2, 'both photos are linked to their employees in the database');
 
