@@ -1,3 +1,4 @@
+import { planLoan } from './LoanController';
 import { Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { promises as fsp } from 'node:fs';
@@ -52,7 +53,7 @@ export class ContractController {
 
   static async listTemplates(_req: Request, res: Response): Promise<void> {
     const rows = await select(
-      `SELECT t.id, t.name, t.contract_type AS "contractType", t.description, t.original_name AS "originalName",
+      `SELECT t.id, t.name, t.contract_type AS "contractType", t.kind, t.description, t.original_name AS "originalName",
               t.size_bytes AS "sizeBytes", t.fields, t.is_active AS "isActive", t.created_at AS "createdAt",
               u.name AS "uploadedByName",
               (SELECT count(*)::int FROM employee_contracts c WHERE c.template_id = t.id) AS "usedCount"
@@ -66,7 +67,8 @@ export class ContractController {
     const file = req.file;
     if (!file) throw badRequest('اختر ملف Word (.docx).');
     const input = body(req);
-    assertOnlyKeys(input, ['name', 'contractType', 'description']);
+    assertOnlyKeys(input, ['name', 'contractType', 'description', 'kind']);
+    const kind = input.kind === 'advance' ? 'advance' : 'contract';
     const name = requiredText(input, 'name', 120, 'اسم القالب');
     const contractType = optionalText(input, 'contractType', 20) || null;
     if (contractType && !CONTRACT_TYPES.includes(contractType)) throw badRequest('نوع العقد غير صالح.');
@@ -86,10 +88,10 @@ export class ContractController {
     const id = randomUUID();
     await transaction(async (tx) => {
       await execute(
-        `INSERT INTO contract_templates (id, name, contract_type, description, storage_key, original_name, size_bytes, sha256, fields, uploaded_by)
-         VALUES (:id, :name, :contractType, :description, :storageKey, :originalName, :size, :hash, :fields::jsonb, :userId)`,
+        `INSERT INTO contract_templates (id, name, contract_type, description, storage_key, original_name, size_bytes, sha256, fields, uploaded_by, kind)
+         VALUES (:id, :name, :contractType, :description, :storageKey, :originalName, :size, :hash, :fields::jsonb, :userId, :kind)`,
         {
-          id, name, contractType, description: optionalText(input, 'description', 500) ?? null, storageKey,
+          id, name, contractType, kind, description: optionalText(input, 'description', 500) ?? null, storageKey,
           originalName: uploadedName(file, 'template.docx'), size: file.size, hash: sha256(file.buffer),
           fields: JSON.stringify(fields), userId: req.user!.id,
         },
@@ -179,7 +181,65 @@ export class ContractController {
   }
 }
 
-async function contractValues(
+/** Fills an advance-form template for one advance and keeps it in the employee's documents. */
+export async function advanceForm(req: Request, res: Response): Promise<void> {
+  const input = body(req);
+  const template = await templateOr404(String(input.templateId ?? ''));
+  if (!template.isActive) throw conflict('القالب موقوف.');
+  const loan = await selectOne<{
+    id: string; employeeId: string; currency: string; principal: number; installment: number; paidBefore: number;
+    installmentsPaidBefore: number; installmentsTotal: number | null; startPeriod: string; status: string; kind: string; reference: string | null;
+  }>(
+    `SELECT id, employee_id AS "employeeId", currency, principal::float AS principal, installment::float AS installment, paid_before::float AS "paidBefore",
+            installments_paid_before AS "installmentsPaidBefore", installments_total AS "installmentsTotal", start_period AS "startPeriod",
+            status, kind, reference
+     FROM employee_loans WHERE id = :id`,
+    { id: req.params.id },
+  );
+  if (!loan) throw notFound('السلفة غير موجودة.');
+  const employee = await employeeInScope(req, loan.employeeId);
+  const taken = await select<{ period: string; amount: number; runStatus: string; runId: string }>(
+    `SELECT x.period, x.amount::float AS amount, r.status AS "runStatus", r.id AS "runId"
+     FROM loan_repayments x JOIN payroll_runs r ON r.id = x.run_id WHERE x.loan_id = :id AND r.status <> 'cancelled' ORDER BY x.period`,
+    { id: loan.id },
+  );
+  const plan = planLoan(loan, taken).filter((row) => row.period);
+  const values = await contractValues(employee.id, { startsOn: null, endsOn: null, probationEndsOn: null, contractNo: loan.reference });
+  const remaining = plan.length ? plan[plan.length - 1].balanceAfter : 0;
+  const fmt = (value: number) => `${value.toLocaleString('en-US')} ${loan.currency}`;
+  const left = loan.principal - loan.paidBefore - taken.filter((row) => ['approved', 'posted'].includes(row.runStatus)).reduce((sum, row) => sum + row.amount, 0);
+  Object.assign(values, {
+    loan_no: loan.reference ?? loan.id.slice(0, 8).toUpperCase(),
+    loan_kind: loan.kind === 'direct' ? 'استقطاع مباشر من الراتب' : 'أقساط شهرية',
+    loan_amount: fmt(loan.principal),
+    loan_months: String(plan.length || loan.installmentsTotal || 1),
+    loan_installment: fmt(loan.installment),
+    loan_start: plan[0]?.period ?? loan.startPeriod,
+    loan_end: plan[plan.length - 1]?.period ?? loan.startPeriod,
+    loan_schedule: plan.map((row) => `${row.period}: ${fmt(row.amount)} (المتبقي ${fmt(row.balanceAfter)})`).join(' — '),
+    loan_remaining: fmt(Math.max(0, Math.round(left * 100) / 100)),
+  });
+  void remaining;
+  const filled = await fillTemplate(await readStoredFile(template.storageKey), values);
+  const storageKey = await storeFile(`employees/${employee.id}`, filled, 'docx');
+  const documentId = randomUUID();
+  const fileName = `استمارة سلفة ${values.name || employee.employeeNo} ${values.loan_start}.docx`.replace(/[\\/:*?"<>|]/g, '-');
+  await transaction(async (tx) => {
+    await execute(
+      `INSERT INTO employee_documents (id, employee_id, doc_type, title, doc_number, issue_date, storage_key, original_name, mime_type, size_bytes, sha256, uploaded_by)
+       VALUES (:documentId, :employeeId, 'other', :title, :docNo, :issueDate, :storageKey, :fileName, :mime, :size, :hash, :userId)`,
+      {
+        documentId, employeeId: employee.id, title: `استمارة سلفة ${values.loan_amount}`.slice(0, 160), docNo: values.loan_no,
+        issueDate: new Date().toISOString().slice(0, 10), storageKey, fileName, mime: DOCX_MIME, size: filled.length, hash: sha256(filled), userId: req.user!.id,
+      },
+      tx,
+    );
+    await recordAudit(req, tx, 'payroll.loan_form_generated', 'employee', employee.id, { loanId: loan.id, documentId, template: template.name });
+  });
+  res.status(201).json({ data: { documentId } });
+}
+
+export async function contractValues(
   employeeId: string,
   terms: { startsOn: string | null; endsOn: string | null; probationEndsOn: string | null; contractNo: string | null },
 ): Promise<Record<string, string>> {

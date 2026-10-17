@@ -82,11 +82,14 @@ export const DOCUMENT_TYPES: Record<string, string> = {
   national_id: 'البطاقة الوطنية',
   residence_card: 'بطاقة السكن',
   passport: 'جواز السفر',
+  residency_permit: 'الإقامة',
+  visa: 'الفيزا / سمة الدخول',
   driving_license: 'إجازة السوق',
   contract: 'عقد العمل',
   cv: 'السيرة الذاتية',
   certificate: 'شهادة دراسية / خبرة',
   medical: 'تقرير طبي',
+  photo: 'الصورة الشخصية',
   other: 'مستند آخر',
 };
 

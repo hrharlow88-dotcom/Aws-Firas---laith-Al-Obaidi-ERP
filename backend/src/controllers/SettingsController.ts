@@ -83,8 +83,10 @@ function validateEmployeeFields(value: unknown): value is EmployeeFieldSetting[]
 function validateLeaveRules(value: unknown): value is SystemSettings['leaveRules'] {
   if (!isRecord(value) || !hasOnlyKeys(value, [
     'workingDays', 'officialHolidays', 'maxHoursPerRequest', 'hourlyMonthlyQuota',
-    'hourlyMonthlyUsageLimit', 'lowBalanceThreshold', 'accrualStartPeriod',
+    'hourlyMonthlyUsageLimit', 'lowBalanceThreshold', 'accrualStartPeriod', 'compLeaveDaysPerHoliday',
   ])) return false;
+  if (value.compLeaveDaysPerHoliday !== undefined && !(typeof value.compLeaveDaysPerHoliday === 'number' &&
+    value.compLeaveDaysPerHoliday >= 0.5 && value.compLeaveDaysPerHoliday <= 3)) return false;
   if (value.accrualStartPeriod !== undefined && value.accrualStartPeriod !== null &&
     !(typeof value.accrualStartPeriod === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(value.accrualStartPeriod))) return false;
   const workingDays = value.workingDays;
@@ -207,7 +209,9 @@ function validateSecurity(value: unknown): boolean {
 
 function validateInterface(value: unknown): boolean {
   if (value === undefined) return true;
-  if (!isRecord(value) || !hasOnlyKeys(value, ['hiddenApps', 'brands', 'moduleManagers', 'texts'])) return false;
+  if (!isRecord(value) || !hasOnlyKeys(value, ['hiddenApps', 'brands', 'moduleManagers', 'texts', 'appOrder'])) return false;
+  if (value.appOrder !== undefined && !(Array.isArray(value.appOrder) && value.appOrder.length <= 60 &&
+    value.appOrder.every((app) => typeof app === 'string' && /^[a-z-]{2,30}$/.test(app)))) return false;
   const texts = value.texts;
   if (texts !== undefined && !(isRecord(texts) && Object.keys(texts).length <= 400 &&
     Object.entries(texts).every(([key, text]) => key.length >= 1 && key.length <= 120 && isRecord(text) && hasOnlyKeys(text, ['ar', 'en']) &&
@@ -227,6 +231,34 @@ function validateInterface(value: unknown): boolean {
     new Set(brands.map((brand) => (brand as Record<string, unknown>).id)).size === brands.length;
 }
 
+const DOC = /^[a-z_]{2,30}$/;
+function validateSteps(value: unknown): boolean {
+  return Array.isArray(value) && value.length >= 1 && value.length <= 6 && value.every((step) => isRecord(step) &&
+    hasOnlyKeys(step, ['type', 'role', 'userId']) &&
+    (step.type === 'manager' || (step.type === 'role' && isUserRole(step.role)) ||
+      (step.type === 'user' && typeof step.userId === 'string' && /^[0-9a-f-]{36}$/i.test(step.userId))));
+}
+
+function validateHr(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, ['documentRules', 'expenseSteps', 'expenseCategories', 'ai'])) return false;
+  const rules = value.documentRules;
+  if (rules !== undefined && !(isRecord(rules) && hasOnlyKeys(rules, ['local', 'foreign', 'exempt', 'priority']) &&
+    ['local', 'foreign'].every((key) => Array.isArray(rules[key]) && (rules[key] as unknown[]).length <= 20 &&
+      (rules[key] as unknown[]).every((type) => typeof type === 'string' && DOC.test(type))) &&
+    Array.isArray(rules.exempt) && rules.exempt.length <= 2000 && rules.exempt.every((item) => isRecord(item) &&
+      hasOnlyKeys(item, ['employeeId', 'docType']) && typeof item.employeeId === 'string' && /^[0-9a-f-]{36}$/i.test(item.employeeId) &&
+      typeof item.docType === 'string' && DOC.test(item.docType)) &&
+    Array.isArray(rules.priority) && rules.priority.length <= 2000 &&
+    rules.priority.every((id) => typeof id === 'string' && /^[0-9a-f-]{36}$/i.test(id)))) return false;
+  if (value.expenseSteps !== undefined && !validateSteps(value.expenseSteps)) return false;
+  if (value.expenseCategories !== undefined && !(Array.isArray(value.expenseCategories) && value.expenseCategories.length >= 1 &&
+    value.expenseCategories.length <= 40 && value.expenseCategories.every((item) => isText(item, 40) && item.trim().length > 0))) return false;
+  const ai = value.ai;
+  return ai === undefined || (isRecord(ai) && hasOnlyKeys(ai, ['enabled', 'model']) && typeof ai.enabled === 'boolean' &&
+    typeof ai.model === 'string' && /^[a-z0-9.-]{3,60}$/.test(ai.model));
+}
+
 function validateSettings(value: unknown): value is SystemSettings {
   if (
     !isRecord(value) ||
@@ -234,8 +266,9 @@ function validateSettings(value: unknown): value is SystemSettings {
     !isRecord(value.roles) ||
     !hasOnlyKeys(value, [
       'company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules',
-      'attendanceRules', 'knownPermissions', 'security', 'ui',
+      'attendanceRules', 'knownPermissions', 'security', 'ui', 'hr',
     ]) ||
+    !validateHr(value.hr) ||
     !validateSecurity(value.security) ||
     !validateInterface(value.ui) ||
     (value.knownPermissions !== undefined && (!Array.isArray(value.knownPermissions) ||

@@ -15,7 +15,7 @@ import {
 import { isDateOnly, isUuid } from '../utils/validation';
 
 export const DOCUMENT_TYPES = [
-  'national_id', 'residence_card', 'passport', 'driving_license', 'contract',
+  'national_id', 'residence_card', 'passport', 'residency_permit', 'visa', 'driving_license', 'contract',
   'cv', 'certificate', 'medical', 'photo', 'other',
 ] as const;
 
@@ -44,6 +44,13 @@ const PROFILE_COLUMNS: Record<string, string> = {
   bankName: 'bank_name',
   bankAccountNo: 'bank_account_no',
   walletProvider: 'wallet_provider',
+  // Foreign employees: passport and residency (visa); reminders go out before they expire.
+  residencyStatus: 'residency_status',
+  passportNo: 'passport_no',
+  passportExpiry: 'passport_expiry',
+  residencyType: 'residency_type',
+  residencyNo: 'residency_no',
+  residencyExpiry: 'residency_expiry',
 };
 
 /** Bank and payment details are payroll data and need compensation.manage to change. */
@@ -124,6 +131,7 @@ export class EmployeeFileController {
     }
     const canSeePay = await can(req, 'compensation.view');
     row.nationalIdNo = decryptField(row.nationalIdNo as string | null);
+    row.passportNo = decryptField(row.passportNo as string | null);
     const bank = decryptField(row.bankAccountNo as string | null);
     row.bankAccountNo = canSeePay ? bank : maskTail(bank);
     res.json({ data: row });
@@ -161,6 +169,12 @@ export class EmployeeFileController {
       bankName: optionalText(input, 'bankName', 120),
       bankAccountNo: encryptField(optionalText(input, 'bankAccountNo', 60)),
       walletProvider: optionalText(input, 'walletProvider', 60),
+      residencyStatus: optionalChoice(input, 'residencyStatus', ['local', 'foreign'] as const) ?? undefined,
+      passportNo: encryptField(optionalText(input, 'passportNo', 40)),
+      passportExpiry: optionalDate(input, 'passportExpiry'),
+      residencyType: optionalText(input, 'residencyType', 60),
+      residencyNo: optionalText(input, 'residencyNo', 60),
+      residencyExpiry: optionalDate(input, 'residencyExpiry'),
     };
     const before = await selectOne<Record<string, unknown>>(
       `SELECT ${Object.entries(PROFILE_COLUMNS).map(([field, column]) => `${column} AS "${field}"`).join(', ')}
@@ -186,7 +200,7 @@ export class EmployeeFileController {
       }
       const changed = Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined));
       await recordAudit(req, tx, 'employee.profile_updated', 'employee', employee.id, {
-        changes: diffFields(before || {}, changed, ['nationalIdNo', 'bankAccountNo']),
+        changes: diffFields(before || {}, changed, ['nationalIdNo', 'bankAccountNo', 'passportNo']),
       });
     });
     res.json({ data: { employeeId: employee.id } });
@@ -518,7 +532,16 @@ export class EmployeeFileController {
         { days, ...scope.params },
       ),
     ]);
-    res.json({ data: { documents, contracts } });
+    // Foreign employees: passports within six months, residencies (visas) within sixty days.
+    const residency = await select(
+      `SELECT e.id AS "employeeId", e.full_name AS "employeeName", e.employee_no AS "employeeNo", x.kind, x.due AS "dueDate", (x.due - CURRENT_DATE) AS "daysLeft"
+       FROM employee_profiles p JOIN employees e ON e.id = p.employee_id
+       CROSS JOIN LATERAL (VALUES ('passport', p.passport_expiry, INTERVAL '6 months'), ('residency', p.residency_expiry, INTERVAL '60 days')) AS x(kind, due, window_)
+       WHERE p.residency_status = 'foreign' AND x.due IS NOT NULL AND x.due <= CURRENT_DATE + x.window_ AND e.employment_status <> 'inactive'${scope.sql}
+       ORDER BY x.due`,
+      scope.params,
+    );
+    res.json({ data: { documents, contracts, residency } });
   }
 }
 

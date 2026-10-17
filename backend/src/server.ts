@@ -7,6 +7,7 @@ import { registerJob, startBackgroundJobs } from './jobs';
 import { processJournalQueue } from './services/finance';
 import { sapConfigured } from './services/sapB1';
 import { runSecurityGuard } from './services/security';
+import { runHrReminders } from './services/hrReminders';
 import { processOutbox } from './services/messaging';
 
 function validateEnvironment(): void {
@@ -67,6 +68,8 @@ async function start(): Promise<void> {
   // The security guard makes a round every two minutes; queued messages go out every half minute.
   registerJob({ name: 'security-guard', everyMs: 120000, run: async () => { await runSecurityGuard(); } });
   registerJob({ name: 'message-outbox', everyMs: 30000, run: async () => { await processOutbox(); } });
+  // HR reminders (passports, residencies, birthdays, probation, anniversaries, contracts, advances, holidays); each goes out once.
+  registerJob({ name: 'hr-reminders', everyMs: 3600000, run: async () => { await runHrReminders(); } });
   startBackgroundJobs();
 }
 

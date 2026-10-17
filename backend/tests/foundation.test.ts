@@ -5,7 +5,7 @@ import { api, makeBranch, makeEmployee, makeUser } from './helpers';
 
 describe('foundation', () => {
   it('serves health and rejects anonymous calls', async () => {
-    await api().get('/api/health').expect(200, { status: 'ok' });
+    await api().get('/api/health').expect(200).expect((res) => { if (res.body.status !== 'ok' || !/^\d+\.\d+\.\d+$/.test(res.body.version)) throw new Error('health'); });
     await api().get('/api/employees').expect(401);
   });
 

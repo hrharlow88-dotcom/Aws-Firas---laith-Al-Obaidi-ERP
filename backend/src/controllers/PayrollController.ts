@@ -132,6 +132,16 @@ async function approveRun(req: Request, run: RunRow, inside?: (tx: Transaction) 
       { id: run.id, start: run.startsOn, end: run.endsOn },
       tx,
     );
+    // Advances repaid in full by this run close; direct-deduction advances are archived at once.
+    await execute(
+      `UPDATE employee_loans l SET status = 'closed', closed_at = now(), updated_at = now(),
+         archived_at = CASE WHEN l.kind = 'direct' THEN now() ELSE l.archived_at END
+       WHERE l.status = 'active' AND l.id IN (SELECT loan_id FROM loan_repayments WHERE run_id = :id)
+         AND l.principal - l.paid_before - COALESCE((SELECT SUM(x.amount) FROM loan_repayments x JOIN payroll_runs r ON r.id = x.run_id
+                                                     WHERE x.loan_id = l.id AND r.status IN ('approved','posted')), 0) <= 0.004`,
+      { id: run.id },
+      tx,
+    );
     if (inside) await inside(tx);
     await recordAudit(req, tx, 'payroll.run_approved', 'payroll_run', run.id, { period: run.period });
   });
@@ -141,6 +151,7 @@ export class PayrollController {
   static async listRuns(_req: Request, res: Response): Promise<void> {
     const rows = await select(
       `SELECT r.id, r.period, r.status, r.currency, r.branch_id AS "branchId", b.name AS "branchName",
+              r.governorate_id AS "governorateId", COALESCE(g.name_ar, bg.name_ar) AS "governorateName",
               r.employee_count AS "employeeCount", r.total_earnings::float AS "totalEarnings",
               r.total_deductions::float AS "totalDeductions", r.total_net::float AS "totalNet", r.warning_count AS "warningCount",
               r.calculated_at AS "calculatedAt", r.approved_at AS "approvedAt", r.posted_at AS "postedAt",
@@ -149,6 +160,8 @@ export class PayrollController {
               COALESCE((SELECT array_agg(s.step::text) FROM payroll_run_signoffs s WHERE s.run_id = r.id AND s.voided_at IS NULL), '{}') AS "signedSteps"
        FROM payroll_runs r
        LEFT JOIN branches b ON b.id = r.branch_id
+       LEFT JOIN governorates g ON g.id = r.governorate_id
+       LEFT JOIN governorates bg ON bg.id = b.governorate_id
        JOIN users cu ON cu.id = r.created_by
        LEFT JOIN users ca ON ca.id = r.calculated_by
        LEFT JOIN users ap ON ap.id = r.approved_by
@@ -160,7 +173,7 @@ export class PayrollController {
 
   static async createRun(req: Request, res: Response): Promise<void> {
     const input = body(req);
-    assertOnlyKeys(input, ['period', 'branchId', 'currency', 'notes']);
+    assertOnlyKeys(input, ['period', 'branchId', 'governorateId', 'currency', 'notes']);
     const period = requiredText(input, 'period', 7, 'الشهر');
     const { start, end } = periodBounds(period);
     const settings = await getSettings();
@@ -171,28 +184,42 @@ export class PayrollController {
     const currency = (optionalText(input, 'currency', 3) || settings.payrollRules.baseCurrency).toUpperCase();
     if (!/^[A-Z]{3}$/.test(currency)) throw badRequest('رمز العملة غير صالح.');
     const branchId = input.branchId ? String(input.branchId) : null;
-    if (branchId && (!isUuid(branchId) || !(await selectOne('SELECT 1 FROM branches WHERE id = :id', { id: branchId })))) {
-      throw badRequest('الفرع غير موجود.');
+    const branch = branchId && isUuid(branchId)
+      ? await selectOne<{ governorateId: string | null }>('SELECT governorate_id AS "governorateId" FROM branches WHERE id = :id', { id: branchId })
+      : null;
+    if (branchId && !branch) throw badRequest('الفرع غير موجود.');
+    // Each governorate (Baghdad, Mosul, Erbil) has its own payroll file; a branch run belongs to its governorate.
+    const governorateId = branchId ? null : (input.governorateId ? String(input.governorateId) : null);
+    if (governorateId && (!isUuid(governorateId) || !(await selectOne('SELECT 1 FROM governorates WHERE id = :id', { id: governorateId })))) {
+      throw badRequest('المحافظة غير موجودة.');
     }
-    // A company-wide run and a branch run of the same month would overlap.
-    const overlapping = await selectOne<{ branchName: string | null }>(
-      `SELECT b.name AS "branchName" FROM payroll_runs r LEFT JOIN branches b ON b.id = r.branch_id
+    // Runs of one month and currency must not cover the same employees.
+    const overlapping = await selectOne<{ label: string | null }>(
+      `SELECT COALESCE(b.name, g.name_ar) AS label FROM payroll_runs r
+       LEFT JOIN branches b ON b.id = r.branch_id LEFT JOIN governorates g ON g.id = r.governorate_id
        WHERE r.period = :period AND r.currency = :currency AND r.status <> 'cancelled'
-         AND (r.branch_id IS NULL OR :branchId::uuid IS NULL OR r.branch_id = :branchId::uuid) LIMIT 1`,
-      { period, currency, branchId },
+         AND (
+           (r.branch_id IS NULL AND r.governorate_id IS NULL)
+           OR (:branchId::uuid IS NULL AND :governorateId::uuid IS NULL)
+           OR r.branch_id = :branchId::uuid
+           OR r.governorate_id = :governorateId::uuid
+           OR (r.governorate_id IS NOT NULL AND r.governorate_id = :branchGovernorate::uuid)
+           OR (r.branch_id IS NOT NULL AND b.governorate_id = :governorateId::uuid)
+         ) LIMIT 1`,
+      { period, currency, branchId, governorateId, branchGovernorate: branch?.governorateId ?? null },
     );
     if (overlapping) {
-      throw conflict(`يوجد مسير ${overlapping.branchName ? `لفرع ${overlapping.branchName}` : 'لكل الفروع'} لهذا الشهر بنفس العملة.`);
+      throw conflict(`يوجد مسير ${overlapping.label ? `لـ ${overlapping.label}` : 'لكل الفروع'} لهذا الشهر بنفس العملة.`);
     }
     const id = randomUUID();
     await transaction(async (tx) => {
       await execute(
-        `INSERT INTO payroll_runs (id, period, starts_on, ends_on, branch_id, currency, notes, created_by)
-         VALUES (:id, :period, :start, :end, :branchId, :currency, :notes, :userId)`,
-        { id, period, start, end, branchId, currency, notes: optionalText(input, 'notes', 1000) ?? null, userId: req.user!.id },
+        `INSERT INTO payroll_runs (id, period, starts_on, ends_on, branch_id, governorate_id, currency, notes, created_by)
+         VALUES (:id, :period, :start, :end, :branchId, :governorateId, :currency, :notes, :userId)`,
+        { id, period, start, end, branchId, governorateId, currency, notes: optionalText(input, 'notes', 1000) ?? null, userId: req.user!.id },
         tx,
       );
-      await recordAudit(req, tx, 'payroll.run_created', 'payroll_run', id, { period, branchId, currency });
+      await recordAudit(req, tx, 'payroll.run_created', 'payroll_run', id, { period, branchId, governorateId, currency });
     });
     res.status(201).json({ data: { id } });
   }
@@ -207,9 +234,12 @@ export class PayrollController {
               r.notes, r.cancelled_reason AS "cancelledReason", r.created_by AS "createdBy", r.calculated_by AS "calculatedBy",
               r.calculated_at AS "calculatedAt", r.approved_at AS "approvedAt", r.posted_at AS "postedAt",
               cu.name AS "createdByName", ca.name AS "calculatedByName", ap.name AS "approvedByName",
-              je.id AS "journalId", je.status AS "journalStatus"
+              je.id AS "journalId", je.status AS "journalStatus",
+              r.governorate_id AS "governorateId", COALESCE(g.name_ar, bg.name_ar) AS "governorateName"
        FROM payroll_runs r
        LEFT JOIN branches b ON b.id = r.branch_id
+       LEFT JOIN governorates g ON g.id = r.governorate_id
+       LEFT JOIN governorates bg ON bg.id = b.governorate_id
        JOIN users cu ON cu.id = r.created_by
        LEFT JOIN users ca ON ca.id = r.calculated_by
        LEFT JOIN users ap ON ap.id = r.approved_by
@@ -219,7 +249,8 @@ export class PayrollController {
     );
     const lines = await select(
       `SELECT l.employee_id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
-              b.name AS "branchName", COALESCE(d.name, e.department) AS "department",
+              b.name AS "branchName", COALESCE(d.name, e.department) AS "department", l.department_id AS "departmentId",
+              l.branch_id AS "branchId", gv.name_ar AS "governorateName",
               l.gross_salary::float AS "grossSalary", l.employed_days AS "employedDays", l.present_days AS "presentDays",
               l.payable_days::float AS "payableDays",
               l.absent_days AS "absentDays", l.unpaid_leave_days AS "unpaidLeaveDays", l.late_minutes AS "lateMinutes",
@@ -230,6 +261,7 @@ export class PayrollController {
        FROM payroll_lines l
        JOIN employees e ON e.id = l.employee_id
        JOIN branches b ON b.id = l.branch_id
+       LEFT JOIN governorates gv ON gv.id = b.governorate_id
        LEFT JOIN departments d ON d.id = l.department_id
        WHERE l.run_id = :id ORDER BY e.employee_no`,
       { id: run.id },
@@ -366,6 +398,12 @@ export class PayrollController {
         { id: run.id }, tx);
       await voidSignoffs(run.id, `أُعيد فتح المسير: ${reason}`, tx);
       await execute('UPDATE attendance_days SET payroll_run_id = NULL WHERE payroll_run_id = :id', { id: run.id }, tx);
+      // Advances this run had closed are open again until it is approved once more.
+      await execute(
+        `UPDATE employee_loans SET status = 'active', closed_at = NULL, archived_at = NULL, updated_at = now()
+         WHERE status = 'closed' AND closed_at IS NOT NULL AND id IN (SELECT loan_id FROM loan_repayments WHERE run_id = :id)`,
+        { id: run.id }, tx,
+      );
       await recordAudit(req, tx, 'payroll.run_reopened', 'payroll_run', run.id, { reason });
     });
     res.json({ data: { id: run.id } });

@@ -22,8 +22,14 @@ function toSafeUser(user: User) {
     isActive: user.isActive,
     lockedUntil: user.lockedUntil && user.lockedUntil > new Date() ? user.lockedUntil : null,
     lastLoginAt: user.lastLoginAt,
+    appAccess: user.appAccess,
+    notifyEmail: user.notifyEmail,
+    personalEmail: user.personalEmail,
   };
 }
+
+const APP_ID = /^[a-z-]{2,30}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Someone who manages accounts but is not the system owner can only hand out
@@ -50,6 +56,41 @@ async function validateEmployeeLink(employeeId: unknown, userId?: string): Promi
 }
 
 export class UserController {
+  /** The owner chooses which apps an account sees (null = everything its role allows). */
+  static async setApps(req: Request, res: Response): Promise<void> {
+    const user = await User.findByPk(req.params.id);
+    if (!user) { res.status(404).json({ message: 'الحساب غير موجود.' }); return; }
+    const apps = req.body?.apps;
+    if (apps !== null && !(Array.isArray(apps) && apps.length <= 60 && apps.every((app) => typeof app === 'string' && APP_ID.test(app)))) {
+      res.status(400).json({ message: 'قائمة التطبيقات غير صالحة.' });
+      return;
+    }
+    const before = user.appAccess;
+    user.appAccess = apps === null ? null : [...new Set(apps as string[])];
+    await user.save();
+    await recordAudit(req, null, 'user.apps_set', 'user', user.id, { before, after: user.appAccess });
+    res.json({ data: toSafeUser(user) });
+  }
+
+  /** E-mail copies of notifications and approvals, to the work or a personal address. */
+  static async setNotifications(req: Request, res: Response): Promise<void> {
+    const self = !req.params.id || req.params.id === 'me';
+    const user = await User.findByPk(self ? req.user!.id : req.params.id);
+    if (!user) { res.status(404).json({ message: 'الحساب غير موجود.' }); return; }
+    if (!self && req.user!.role !== 'super_admin') { res.status(403).json({ message: 'ليس لديك صلاحية لتنفيذ هذا الإجراء.' }); return; }
+    const { notifyEmail, personalEmail } = req.body ?? {};
+    if (typeof notifyEmail !== 'boolean' || (personalEmail !== null && personalEmail !== undefined && personalEmail !== '' &&
+      !(typeof personalEmail === 'string' && personalEmail.length <= 254 && EMAIL.test(personalEmail)))) {
+      res.status(400).json({ message: 'تحقق من البريد.' });
+      return;
+    }
+    user.notifyEmail = notifyEmail;
+    user.personalEmail = personalEmail ? String(personalEmail).trim().toLowerCase() : null;
+    await user.save();
+    await recordAudit(req, null, 'user.notifications_set', 'user', user.id, { notifyEmail, personalEmail: Boolean(user.personalEmail) });
+    res.json({ data: toSafeUser(user) });
+  }
+
   static async list(_req: Request, res: Response): Promise<void> {
     const users = await User.findAll({ order: [['name', 'ASC']] });
     const employees = new Map((await Employee.findAll({

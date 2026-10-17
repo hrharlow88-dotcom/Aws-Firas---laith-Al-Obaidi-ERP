@@ -186,7 +186,42 @@ export interface InterfaceSettings {
   moduleManagers: Record<string, string[]>;
   /** Texts the owner rewrote: system name, login page lines, and any app or menu label (keyed by its original Arabic). */
   texts: Record<string, TextOverride>;
+  /** App ids in the order the owner arranged them on the home screen (missing ones follow in the default order). */
+  appOrder: string[];
 }
+
+/** Who approves a request, step by step. */
+export interface ApprovalStepRule { type: 'manager' | 'role' | 'user'; role?: UserRole; userId?: string }
+
+export interface HrSettings {
+  /** Documents every employee should have on file, by local or foreign, and agreed exceptions. */
+  documentRules: {
+    local: string[];
+    foreign: string[];
+    exempt: Array<{ employeeId: string; docType: string }>;
+    /** Employees whose files are completed first. */
+    priority: string[];
+  };
+  /** Expense reports: approvers in order, and the categories employees choose from. */
+  expenseSteps: ApprovalStepRule[];
+  expenseCategories: string[];
+  /** The AI assistant (an Anthropic API key set by the owner turns it on). */
+  ai: { enabled: boolean; model: string };
+}
+
+export const COMP_LEAVE_TYPE_ID = '40000000-0000-4000-8000-0000000000c1';
+
+export const DEFAULT_HR: HrSettings = {
+  documentRules: {
+    local: ['national_id', 'residence_card', 'contract', 'photo'],
+    foreign: ['passport', 'residency_permit', 'contract', 'photo'],
+    exempt: [],
+    priority: [],
+  },
+  expenseSteps: [{ type: 'manager' }, { type: 'role', role: 'finance' }],
+  expenseCategories: ['وقود ونقل', 'ضيافة', 'سفر وإقامة', 'قرطاسية ومستلزمات', 'صيانة', 'اتصالات', 'أخرى'],
+  ai: { enabled: false, model: 'claude-sonnet-5-5' },
+};
 
 export interface PayrollRulesSetting {
   baseCurrency: string;
@@ -226,6 +261,7 @@ export interface SystemSettings {
   attendanceRules: AttendanceRulesSetting;
   security: SecuritySettings;
   ui: InterfaceSettings;
+  hr: HrSettings;
   knownPermissions: Permission[];
   leaveRules: {
     workingDays: number[];
@@ -236,6 +272,8 @@ export interface SystemSettings {
     lowBalanceThreshold: number;
     /** First month the monthly accrual may be posted for (YYYY-MM); earlier months are already in the opening balances. */
     accrualStartPeriod?: string | null;
+    /** Compensatory leave days earned for working on an official holiday (outside the annual balance). */
+    compLeaveDaysPerHoliday?: number;
   };
 }
 
@@ -338,7 +376,7 @@ export const DEFAULT_BRANDS: InterfaceSettings['brands'] = [
   { id: 'multibrand', name: 'MULTI-BRAND', logoKey: null },
 ];
 
-export const DEFAULT_UI: InterfaceSettings = { hiddenApps: [], brands: DEFAULT_BRANDS, moduleManagers: {}, texts: {} };
+export const DEFAULT_UI: InterfaceSettings = { hiddenApps: [], brands: DEFAULT_BRANDS, moduleManagers: {}, texts: {}, appOrder: [] };
 
 export const DEFAULT_PAYROLL_RULES: PayrollRulesSetting = {
   baseCurrency: 'IQD',
@@ -381,6 +419,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   attendanceRules: DEFAULT_ATTENDANCE_RULES,
   security: DEFAULT_SECURITY,
   ui: DEFAULT_UI,
+  hr: DEFAULT_HR,
   knownPermissions: [...PERMISSIONS],
   leaveRules: {
     workingDays: [0, 1, 2, 3, 4, 6],
@@ -392,8 +431,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   },
 };
 
-export function normalizeSystemSettings(value: SystemSettings | null | undefined): SystemSettings {
-  if (!value) return DEFAULT_SYSTEM_SETTINGS;
+export function normalizeSystemSettings(saved: SystemSettings | null | undefined): SystemSettings {
+  const value = saved ?? DEFAULT_SYSTEM_SETTINGS;
   return {
     ...DEFAULT_SYSTEM_SETTINGS,
     ...value,
@@ -424,7 +463,21 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
       brands: value.ui?.brands ?? DEFAULT_BRANDS,
       moduleManagers: value.ui?.moduleManagers ?? {},
       texts: value.ui?.texts ?? {},
+      appOrder: value.ui?.appOrder ?? [],
     },
+    hr: {
+      ...DEFAULT_HR,
+      ...value.hr,
+      documentRules: { ...DEFAULT_HR.documentRules, ...value.hr?.documentRules },
+      ai: { ...DEFAULT_HR.ai, ...value.hr?.ai },
+    },
+    // The compensatory leave type always exists; its balance stays apart from annual leave.
+    leaveTypes: (value.leaveTypes ?? []).some((type) => type.id === COMP_LEAVE_TYPE_ID)
+      ? value.leaveTypes
+      : [...(value.leaveTypes ?? []), {
+        id: COMP_LEAVE_TYPE_ID, name: 'إجازة تعويضية', unit: 'days', paid: true, active: true, annualEntitlement: null,
+        carryForwardLimit: null, deductsBalance: true, dayCountBasis: 'working',
+      }],
     payrollRules: {
       ...DEFAULT_PAYROLL_RULES,
       ...value.payrollRules,
@@ -438,6 +491,7 @@ export function normalizeSystemSettings(value: SystemSettings | null | undefined
       hourlyMonthlyUsageLimit: value.leaveRules?.hourlyMonthlyUsageLimit ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.hourlyMonthlyUsageLimit,
       lowBalanceThreshold: value.leaveRules?.lowBalanceThreshold ?? DEFAULT_SYSTEM_SETTINGS.leaveRules.lowBalanceThreshold,
       accrualStartPeriod: value.leaveRules?.accrualStartPeriod ?? null,
+      compLeaveDaysPerHoliday: value.leaveRules?.compLeaveDaysPerHoliday ?? 1,
     },
   };
 }

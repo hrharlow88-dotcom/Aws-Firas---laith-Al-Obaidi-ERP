@@ -17,6 +17,7 @@ import * as m0013 from './migrations/0013-employee-portal';
 import * as m0014 from './migrations/0014-register-tickets-recruitment';
 import * as m0015 from './migrations/0015-security-notifications-archives';
 import * as m0016 from './migrations/0016-chat-companies-firewall-demo';
+import * as m0017 from './migrations/0017-governorates-foreign-expenses-ai';
 
 export interface MigrationContext {
   queryInterface: QueryInterface;
@@ -48,6 +49,7 @@ const MIGRATIONS: Array<[string, MigrationModule]> = [
   ['0014-register-tickets-recruitment', m0014],
   ['0015-security-notifications-archives', m0015],
   ['0016-chat-companies-firewall-demo', m0016],
+  ['0017-governorates-foreign-expenses-ai', m0017],
 ];
 
 export function createMigrator(sequelize: Sequelize) {

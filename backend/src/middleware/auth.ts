@@ -9,6 +9,27 @@ import { execute } from '../db/query';
 
 /** last_seen_at is written at most this often per account. */
 const SEEN_WRITE_MS = 30000;
+/** API areas of each app; an account limited to some apps is refused the others. */
+export const APP_API: Record<string, RegExp> = {
+  communication: /^\/(announcements|messages)(\/|\?|$)/,
+  requests: /^\/requests(\/|\?|$)/,
+  register: /^\/discipline(\/|\?|$)/,
+  recruitment: /^\/recruitment(\/|\?|$)/,
+  helpdesk: /^\/tickets(\/|\?|$)(?!mine)/,
+  attendance: /^\/attendance(\/|\?|$)/,
+  leaves: /^\/leaves(\/|\?|$)/,
+  payroll: /^\/payroll(\/|\?|$)/,
+  performance: /^\/job-profiles(\/|\?|$)/,
+  archive: /^\/archive(\/|\?|$)/,
+  finance: /^\/finance(\/|\?|$)/,
+  audit: /^\/(audit(\/|\?|$)|activity(?!\/visit)(\/|\?|$))/,
+  integrations: /^\/integrations(\/|\?|$)/,
+  chat: /^\/chat(\/|\?|$)/,
+  calendar: /^\/calendar(\/|\?|$)/,
+  expenses: /^\/expenses(\/|\?|$)/,
+  'approval-requests': /^\/approval-(requests|categories)(\/|\?|$)/,
+};
+
 /** What a demo guest may never change. */
 const DEMO_LOCKED = /^\/(users|settings|owner|security|invites|portal\/accounts|messages\/(channels|templates)|integrations|companies|org\/import|auth\/change-password)(\/|\?|$)/;
 
@@ -52,6 +73,15 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         res.status(403).json({ message: 'الحساب التجريبي للاطلاع والتجربة؛ منح الحسابات والصلاحيات والإعدادات لمالك النظام فقط.' });
         return;
       }
+      // The owner may limit an account to some apps; the rest are refused here, not only hidden.
+      if (user.appAccess && user.role !== 'super_admin') {
+        const path = req.originalUrl.replace(/^\/api/, '');
+        const blocked = Object.entries(APP_API).find(([app, pattern]) => pattern.test(path) && !user.appAccess!.includes(app));
+        if (blocked) {
+          res.status(403).json({ message: 'هذا التطبيق غير متاح لحسابك. يمنحه مالك النظام.' });
+          return;
+        }
+      }
       if (req.header('x-background') !== '1' && now - lastSeen > SEEN_WRITE_MS) {
         await execute('UPDATE users SET last_seen_at = now() WHERE id = :id', { id: user.id });
       }
@@ -63,6 +93,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
         branchId: user.branchId,
         employeeId: user.employeeId,
         isDemo: user.isDemo,
+        appAccess: user.appAccess,
       };
       next();
     }).catch(next);

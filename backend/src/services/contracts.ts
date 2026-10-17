@@ -41,6 +41,16 @@ export const CONTRACT_FIELDS: ContractField[] = [
   { key: 'contract_date', alias: 'تاريخ_العقد', label: 'تاريخ تحرير العقد' },
   { key: 'contract_day', alias: 'يوم_العقد', label: 'يوم تحرير العقد (الأحد…)' },
   { key: 'company', alias: 'اسم_الشركة', label: 'اسم الشركة القانوني' },
+  // Advance (salary loan) forms.
+  { key: 'loan_no', alias: 'رقم_السلفة', label: 'رقم السلفة / المرجع' },
+  { key: 'loan_kind', alias: 'نوع_السلفة', label: 'نوع السلفة (أقساط / استقطاع مباشر)' },
+  { key: 'loan_amount', alias: 'مبلغ_السلفة', label: 'مبلغ السلفة' },
+  { key: 'loan_months', alias: 'عدد_الأشهر', label: 'عدد أشهر الاستقطاع' },
+  { key: 'loan_installment', alias: 'القسط_الشهري', label: 'القسط الشهري' },
+  { key: 'loan_start', alias: 'شهر_بداية_الاستقطاع', label: 'شهر بداية الاستقطاع' },
+  { key: 'loan_end', alias: 'شهر_آخر_استقطاع', label: 'شهر آخر استقطاع' },
+  { key: 'loan_schedule', alias: 'جدول_الاستقطاع', label: 'جدول الاستقطاع شهراً بشهر' },
+  { key: 'loan_remaining', alias: 'المتبقي', label: 'المتبقي من السلفة' },
 ];
 
 const BY_NAME = new Map<string, string>(CONTRACT_FIELDS.flatMap((field) => [[field.key, field.key], [field.alias, field.key]]));

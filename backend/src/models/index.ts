@@ -19,9 +19,10 @@ interface BranchAttributes {
   phone: string | null;
   isActive: boolean;
   companyId: string | null;
+  governorateId: string | null;
 }
 
-type BranchCreationAttributes = Optional<BranchAttributes, 'id' | 'address' | 'phone' | 'isActive' | 'companyId'>;
+type BranchCreationAttributes = Optional<BranchAttributes, 'id' | 'address' | 'phone' | 'isActive' | 'companyId' | 'governorateId'>;
 
 export class Branch extends Model<BranchAttributes, BranchCreationAttributes> implements BranchAttributes {
   declare id: string;
@@ -32,6 +33,7 @@ export class Branch extends Model<BranchAttributes, BranchCreationAttributes> im
   declare phone: string | null;
   declare isActive: boolean;
   declare companyId: string | null;
+  declare governorateId: string | null;
 }
 
 Branch.init(
@@ -44,6 +46,7 @@ Branch.init(
     phone: { type: DataTypes.STRING(40), allowNull: true },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true, field: 'is_active' },
     companyId: { type: DataTypes.UUID, allowNull: true, field: 'company_id' },
+    governorateId: { type: DataTypes.UUID, allowNull: true, field: 'governorate_id' },
   },
   { sequelize, tableName: 'branches', underscored: true },
 );
@@ -64,10 +67,13 @@ interface UserAttributes {
   lastSeenAt: Date | null;
   isDemo: boolean;
   demoExpiresAt: Date | null;
+  appAccess: string[] | null;
+  notifyEmail: boolean;
+  personalEmail: string | null;
 }
 
 type UserCreationAttributes = Optional<UserAttributes,
-  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt' | 'lastSeenAt' | 'isDemo' | 'demoExpiresAt'>;
+  'id' | 'branchId' | 'isActive' | 'tokenVersion' | 'employeeId' | 'failedLogins' | 'lockedUntil' | 'lastLoginAt' | 'lastSeenAt' | 'isDemo' | 'demoExpiresAt' | 'appAccess' | 'notifyEmail' | 'personalEmail'>;
 
 export class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   declare id: string;
@@ -85,6 +91,9 @@ export class User extends Model<UserAttributes, UserCreationAttributes> implemen
   declare lastSeenAt: Date | null;
   declare isDemo: boolean;
   declare demoExpiresAt: Date | null;
+  declare appAccess: string[] | null;
+  declare notifyEmail: boolean;
+  declare personalEmail: string | null;
 }
 
 User.init(
@@ -104,6 +113,9 @@ User.init(
     lastSeenAt: { type: DataTypes.DATE, allowNull: true, field: 'last_seen_at' },
     isDemo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'is_demo' },
     demoExpiresAt: { type: DataTypes.DATE, allowNull: true, field: 'demo_expires_at' },
+    appAccess: { type: DataTypes.ARRAY(DataTypes.TEXT), allowNull: true, field: 'app_access' },
+    notifyEmail: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false, field: 'notify_email' },
+    personalEmail: { type: DataTypes.STRING(254), allowNull: true, field: 'personal_email' },
   },
   { sequelize, tableName: 'users', underscored: true },
 );

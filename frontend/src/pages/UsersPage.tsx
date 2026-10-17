@@ -1,5 +1,6 @@
 import { FormEvent, useState } from 'react';
-import { KeyRound, LockOpen, Pencil, Plus, Send, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { KeyRound, LayoutGrid, LockOpen, Pencil, Plus, Send, ShieldCheck, UserRoundCog } from 'lucide-react';
+import { APPS } from '../lib/apps';
 import { InviteDialog, InviteTarget } from '../components/InviteDialog';
 import { Dialog, Empty, Loading, Tone } from '../components/ui';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
@@ -9,7 +10,7 @@ import type { UserRole } from '../SettingsPage';
 
 interface Account {
   id: string; name: string; email: string; role: UserRole; branchId: string | null; employeeId: string | null;
-  isActive: boolean; lockedUntil: string | null; lastLoginAt: string | null;
+  isActive: boolean; lockedUntil: string | null; lastLoginAt: string | null; appAccess?: string[] | null;
   employee: { employeeNo: string; fullName: string } | null;
 }
 
@@ -31,6 +32,7 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
   const [employee, setEmployee] = useState<PickedEmployee | null>(null);
   const [busy, setBusy] = useState(false);
   const [invite, setInvite] = useState<InviteTarget | null>(null);
+  const [appsOf, setAppsOf] = useState<Account | null>(null);
   async function sendInvite(account: Account) {
     try {
       const result = await session.call<{ data: { path: string; login: string; name: string } }>(`/users/${account.id}/invite`, { method: 'POST' });
@@ -113,6 +115,7 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
               <td className="row-actions">
                 {locked && <button className="text-button" onClick={() => void patch(account, { unlock: true }, 'فُتح الحساب.')}><LockOpen size={14} />فتح القفل</button>}
                 <button className="icon-link" aria-label="تعديل" onClick={() => open(account)}><Pencil size={14} /></button>
+                {isAdmin && account.role !== 'super_admin' && <button className="text-button" title="التطبيقات التي تظهر لهذا المستخدم" onClick={() => setAppsOf(account)}><LayoutGrid size={14} />{account.appAccess ? `${account.appAccess.length} تطبيق` : 'التطبيقات'}</button>}
                 {account.isActive && <button className="text-button" title="دعوة بواتساب أو رسالة نصية أو بريد" onClick={() => void sendInvite(account)}><Send size={14} />دعوة</button>}
                 {account.id !== session.user.id && <button className="text-button" onClick={() => void patch(account, { isActive: !account.isActive }, account.isActive ? 'عُطّل الحساب.' : 'فُعّل الحساب.')}>{account.isActive ? 'تعطيل' : 'تفعيل'}</button>}
               </td>
@@ -121,6 +124,9 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
         </table></div> : <Empty icon={<UserRoundCog size={22} />} title="لا توجد حسابات" text="أضف حساباً لكل مستخدم بدل مشاركة حساب المدير." />}
       </section>
       <InviteDialog target={invite} onClose={() => setInvite(null)} />
+      <Dialog open={Boolean(appsOf)} title="التطبيقات الظاهرة لهذا المستخدم · App access" subtitle={appsOf?.name} onClose={() => setAppsOf(null)}>
+        {appsOf && <AppAccessForm account={appsOf} onDone={() => { setAppsOf(null); users.reload(); }} />}
+      </Dialog>
 
       <Dialog open={editing !== null} title={current ? 'تعديل الحساب' : 'حساب جديد'} subtitle={current?.email} onClose={() => setEditing(null)}>
         <form onSubmit={save} key={current?.id ?? 'new'}>
@@ -138,4 +144,39 @@ export function UsersPage({ roleNames, branches }: { roleNames: Record<UserRole,
       </Dialog>
     </section>
   );
+}
+
+const ALWAYS_OPEN = ['me', 'approvals', 'chat', 'calendar', 'settings'];
+
+/**
+ * The owner picks which apps an account sees. "All its role allows" clears the
+ * list; otherwise the server refuses calls to any app not ticked.
+ */
+function AppAccessForm({ account, onDone }: { account: Account; onDone: () => void }) {
+  const session = useSession();
+  const choosable = APPS.filter((app) => !ALWAYS_OPEN.includes(app.id) && app.id !== 'owner');
+  const [all, setAll] = useState(!account.appAccess);
+  const [picked, setPicked] = useState<string[]>(account.appAccess ?? choosable.map((app) => app.id));
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await session.call(`/users/${account.id}/apps`, { method: 'PUT', body: { apps: all ? null : picked } });
+      session.notify('حُفظت التطبيقات الظاهرة للمستخدم.');
+      onDone();
+    } catch (error) { session.fail(error, 'تعذر الحفظ.'); } finally { setBusy(false); }
+  }
+  return <div>
+    <label className="settings-check"><input type="checkbox" checked={all} onChange={(event) => setAll(event.target.checked)} />كل ما يسمح به دوره (بلا تقييد)</label>
+    <p className="muted-note">خدمتي، الاعتمادات، المحادثات، التقويم والإعدادات الشخصية تظهر للجميع دائماً. التقييد يُطبق في الخادم أيضاً لا في الواجهة فقط.</p>
+    <div className="app-access-grid">{choosable.map((app) => {
+      const Icon = app.icon;
+      return <label key={app.id} className={`app-access-item ${all ? 'is-disabled' : ''}`}>
+        <input type="checkbox" disabled={all} checked={all || picked.includes(app.id)}
+          onChange={(event) => setPicked(event.target.checked ? [...picked, app.id] : picked.filter((id) => id !== app.id))} />
+        <span className="app-access-icon" style={{ background: `linear-gradient(135deg, ${app.colors[0]}, ${app.colors[1]})` }}><Icon size={14} /></span>{app.label}
+      </label>;
+    })}</div>
+    <div className="dialog-actions"><button className="button button-primary" disabled={busy} onClick={() => void save()}>حفظ</button><button className="button button-quiet" onClick={onDone}>إلغاء</button></div>
+  </div>;
 }

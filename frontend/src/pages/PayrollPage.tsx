@@ -1,3 +1,5 @@
+import { useGovernorates } from './PayrollRegisterPage';
+import { RateBulletin } from '../components/RateBulletin';
 import { FormEvent, Fragment, useRef, useState } from 'react';
 import { exportWord } from '../components/DocumentFrame';
 import { DEVELOPER, SYSTEM_NAME } from '../components/Brand';
@@ -18,7 +20,7 @@ import { useLoad, useSession } from '../lib/session';
 
 interface RunSummary {
   signedSteps?: string[]; paidAt?: string | null;
-  id: string; period: string; status: string; currency: string; branchId: string | null; branchName: string | null;
+  id: string; period: string; status: string; currency: string; branchId: string | null; branchName: string | null; governorateId?: string | null; governorateName?: string | null;
   employeeCount: number; totalEarnings: number; totalDeductions: number; totalNet: number; warningCount: number;
   calculatedAt: string | null; approvedAt: string | null; postedAt: string | null; createdByName: string;
   calculatedByName: string | null; approvedByName: string | null; journalStatus: string | null;
@@ -53,7 +55,8 @@ export function PayrollPage({ runId, branches }: { runId?: string; branches: Arr
   if (runId) return <RunView runId={runId} />;
   return (
     <section className="screen">
-      <div className="screen-heading"><div><h2>الرواتب</h2><p>مسير شهري لكل فرع وعملة. يُعد ويحتسب من الموارد البشرية، ويعتمده شخص آخر، ثم يُرحّل قيده إلى SAP.</p></div></div>
+      <div className="screen-heading"><div><h2>الرواتب</h2><p>ملف رواتب لكل محافظة (بغداد، الموصل، أربيل) أو فرع، بالدينار أو بالدولار. يُعد ويحتسب من الموارد البشرية، ويعتمده شخص آخر، ثم يُرحّل قيده إلى SAP.</p></div></div>
+      <RateBulletin />
       <Tabs<Tab> value={tab} onChange={setTab} items={[{ id: 'runs', label: 'المسيرات' }, { id: 'inputs', label: 'المبالغ المتغيرة' }]} />
       {tab === 'runs' && <RunsList branches={branches} />}
       {tab === 'inputs' && <InputsView />}
@@ -64,14 +67,21 @@ export function PayrollPage({ runId, branches }: { runId?: string; branches: Arr
 function RunsList({ branches }: { branches: Array<{ id: string; name: string }> }) {
   const session = useSession();
   const runs = useLoad<RunSummary[]>('/payroll/runs', []);
+  const governorates = useGovernorates();
   const [creating, setCreating] = useState(false);
+  const [scope, setScope] = useState('');
+  const [governorateFilter, setGovernorateFilter] = useState('');
+  const shown = runs.data.filter((run) => !governorateFilter || (run.governorateName ?? '') === governorateFilter);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
       const result = await session.call<{ data: { id: string } }>('/payroll/runs', {
-        body: { period: form.get('period'), branchId: form.get('branchId') || null, currency: form.get('currency'), notes: String(form.get('notes') || '') || null },
+        body: {
+          period: form.get('period'), currency: form.get('currency'), notes: String(form.get('notes') || '') || null,
+          ...(scope.startsWith('g:') ? { governorateId: scope.slice(2) } : scope.startsWith('b:') ? { branchId: scope.slice(2) } : {}),
+        },
       });
       session.notify('أُنشئ المسير. احسبه الآن لمراجعة الرواتب.');
       navigate('payroll', result.data.id);
@@ -83,14 +93,17 @@ function RunsList({ branches }: { branches: Array<{ id: string; name: string }> 
   return (
     <section className="panel">
       <div className="panel-head"><div><h3>أرشيف المسيرات · Payroll archive</h3><p>{runs.data.length} مسير، كل شهر بسجله وتواقيعه</p></div>
-        {session.can('payroll.prepare') && <button className="button button-primary" onClick={() => setCreating(true)}><Plus size={16} />مسير جديد</button>}</div>
-      {runs.loading ? <Loading /> : runs.data.length ? <div className="table-scroll"><table>
+        <div className="row-actions">
+          <select value={governorateFilter} onChange={(event) => setGovernorateFilter(event.target.value)} aria-label="المحافظة">
+            <option value="">كل المحافظات</option>{governorates.data.governorates.map((item) => <option key={item.id} value={item.nameAr}>{item.nameAr}</option>)}</select>
+          {session.can('payroll.prepare') && <button className="button button-primary" onClick={() => setCreating(true)}><Plus size={16} />مسير جديد</button>}</div></div>
+      {runs.loading ? <Loading /> : shown.length ? <div className="table-scroll"><table>
         <thead><tr><th>الشهر</th><th>النطاق</th><th>الحالة</th><th>الاعتماد</th><th>الموظفون</th><th>الإجمالي</th><th>الصافي</th><th>المالية</th><th /></tr></thead>
-        <tbody>{runs.data.map((run, index) => <Fragment key={run.id}>{(index === 0 || runs.data[index - 1].period.slice(0, 4) !== run.period.slice(0, 4)) &&
+        <tbody>{shown.map((run, index) => <Fragment key={run.id}>{(index === 0 || shown[index - 1].period.slice(0, 4) !== run.period.slice(0, 4)) &&
           <tr key={`y-${run.period.slice(0, 4)}`} className="year-row"><td colSpan={9}>{run.period.slice(0, 4)}</td></tr>}
           <tr key={run.id} className={run.status === 'cancelled' ? 'row-muted' : ''}>
           <td><strong>{monthLabel(run.period)}</strong><small className="table-sub">{run.currency}</small></td>
-          <td>{run.branchName ?? 'كل الفروع'}</td>
+          <td>{run.branchName ?? (run.governorateName ? `محافظة ${run.governorateName}` : 'كل الفروع')}{run.branchName && run.governorateName && <small className="table-sub">{run.governorateName}</small>}</td>
           <td><StatusTag map={RUN_STATUS} value={run.status} />{run.warningCount > 0 && run.status === 'calculated' && <small className="table-sub warn-text">{run.warningCount} تنبيه</small>}</td>
           <td><span className="chain-mini" title="الموارد البشرية · التدقيق · المدير التنفيذي · المالية">{CHAIN.map((item) => <i key={item.step} className={run.signedSteps?.includes(item.step) ? 'is-done' : ''} title={item.ar} />)}</span>{run.paidAt && <small className="table-sub">صُرف</small>}</td>
           <td>{formatNumber(run.employeeCount)}</td>
@@ -105,7 +118,13 @@ function RunsList({ branches }: { branches: Array<{ id: string; name: string }> 
           <div className="form-grid form-grid-2">
             <label className="field"><span>الشهر *</span><input name="period" type="month" required defaultValue={previousPeriod()} max={currentPeriod()} /></label>
             <label className="field"><span>العملة</span><select name="currency" defaultValue={session.settings.payrollRules.baseCurrency}><option value="IQD">دينار عراقي</option><option value="USD">دولار أمريكي</option></select></label>
-            <label className="field"><span>الفرع</span><select name="branchId" defaultValue=""><option value="">كل الفروع</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
+            <label className="field"><span>النطاق (ملف رواتب المحافظة أو فرع)</span><select value={scope} onChange={(event) => setScope(event.target.value)}>
+              <option value="">كل المحافظات والفروع</option>
+              {governorates.data.governorates.map((item) => <optgroup key={item.id} label={item.nameAr}>
+                <option value={`g:${item.id}`}>محافظة {item.nameAr} (كل فروعها)</option>
+                {item.branches.map((branch) => <option key={branch.id} value={`b:${branch.id}`}>{branch.name}</option>)}</optgroup>)}
+              {branches.filter((branch) => !governorates.data.governorates.some((item) => item.branches.some((own) => own.id === branch.id))).map((branch) => <option key={branch.id} value={`b:${branch.id}`}>{branch.name}</option>)}
+            </select></label>
             <label className="field"><span>ملاحظة</span><input name="notes" maxLength={1000} /></label>
           </div>
           <div className="dialog-actions"><button className="button button-primary">إنشاء</button><button type="button" className="button button-quiet" onClick={() => setCreating(false)}>إلغاء</button></div>
@@ -169,7 +188,7 @@ function RunView({ runId }: { runId: string }) {
   return (
     <section className="screen">
       <div className="screen-heading">
-        <div><h2>رواتب {monthLabel(data.period)} {data.branchName ? `— ${data.branchName}` : '— كل الفروع'}</h2>
+        <div><h2>رواتب {monthLabel(data.period)} {data.branchName ? `— ${data.branchName}` : data.governorateName ? `— محافظة ${data.governorateName}` : '— كل الفروع'}</h2>
           <p><StatusTag map={RUN_STATUS} value={data.status} /> · {data.currency} · أعده {data.createdByName}{data.calculatedByName ? ` · احتسبه ${data.calculatedByName} ${formatDateTime(data.calculatedAt)}` : ''}{data.approvedByName ? ` · اعتمده ${data.approvedByName}` : ''}</p></div>
         <div className="heading-actions">
           {['draft', 'calculated'].includes(data.status) && session.can('payroll.prepare') && <button className="button button-quiet" disabled={Boolean(busy)} onClick={() => void act('calculate', 'تم احتساب المسير.')}><Calculator size={16} />{busy === 'calculate' ? 'جارٍ الاحتساب…' : data.status === 'draft' ? 'احتساب' : 'إعادة احتساب'}</button>}

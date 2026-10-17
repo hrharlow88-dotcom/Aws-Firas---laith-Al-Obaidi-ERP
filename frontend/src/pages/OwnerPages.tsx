@@ -7,7 +7,7 @@ import { EDITABLE_TEXTS } from '../lib/texts';
 import { DemoAccounts } from './DemoAccounts';
 import { Dialog, Empty, Loading, Stat, Tabs, Tone, useReasonPrompt } from '../components/ui';
 import { downloadFile } from '../lib/api';
-import { APPS, en } from '../lib/apps';
+import { APPS, en, orderedApps } from '../lib/apps';
 import { formatDateTime, formatNumber } from '../lib/format';
 import { useLoad, useSession } from '../lib/session';
 import { FirewallPanel, RadarPanel, ScanPanel } from './SecurityRadar';
@@ -290,6 +290,14 @@ export function OwnerPage() {
     } catch (error) { session.fail(error, 'تعذر تطبيق القالب.'); }
   }
   const setSecurity = (patch: Partial<SecuritySettings>) => setDraft({ ...draft, security: { ...security, ...patch } });
+  const appList = orderedApps(ui.appOrder);
+  const moveApp = (index: number, step: number) => {
+    const ids = appList.map((app) => app.id);
+    const target = index + step;
+    if (target < 0 || target >= ids.length) return;
+    [ids[index], ids[target]] = [ids[target], ids[index]];
+    setDraft({ ...draft, ui: { ...ui, appOrder: ids } });
+  };
   const toggleApp = (id: string) => setDraft({ ...draft, ui: { ...ui, hiddenApps: ui.hiddenApps.includes(id) ? ui.hiddenApps.filter((app) => app !== id) : [...ui.hiddenApps, id] } });
 
   return (
@@ -302,11 +310,16 @@ export function OwnerPage() {
         { id: 'channels', label: 'القنوات · Channels' }, { id: 'managers', label: 'مسؤولو التطبيقات · App owners' }, { id: 'clone', label: 'استنساخ لشركة · Clone' },
       ]} />
       {tab === 'interface' && <section className="panel">
-        <div className="panel-head"><div><h3>التطبيقات الظاهرة للمستخدمين</h3><p>المخفي لا يظهر لأحد غيرك (ويبقى يعمل في الخلفية). الصلاحيات ما زالت تُطبق على الخادم.</p></div></div>
-        <div className="app-toggles">{APPS.map((app) => { const Icon = app.icon; const hiddenNow = ui.hiddenApps.includes(app.id); return <label key={app.id} className={`app-toggle ${hiddenNow ? 'is-hidden' : ''}`}>
+        <div className="panel-head"><div><h3>التطبيقات وترتيبها · Apps and their order</h3><p>رتّب التطبيقات بالأسهم كما تريدها في الشاشة الرئيسية للجميع، وأخفِ ما لا تحتاجه (المخفي لا يظهر لأحد غيرك). لتحديد تطبيقات مستخدم بعينه: الإعدادات ← المستخدمون ← «التطبيقات».</p></div>
+          {ui.appOrder?.length ? <button className="button button-quiet" onClick={() => setDraft({ ...draft, ui: { ...ui, appOrder: [] } })}>الترتيب الافتراضي</button> : null}</div>
+        <div className="app-toggles">{appList.map((app, index) => { const Icon = app.icon; const hiddenNow = ui.hiddenApps.includes(app.id); return <label key={app.id} className={`app-toggle ${hiddenNow ? 'is-hidden' : ''}`}>
           <input type="checkbox" checked={!hiddenNow} onChange={() => toggleApp(app.id)} />
           <span className="o-app-icon small" style={{ background: `linear-gradient(145deg, ${app.colors[0]}, ${app.colors[1]})` }}><Icon size={20} /></span>
           <span><strong>{app.label}</strong><small>{en(app.label)}</small></span>{hiddenNow && <EyeOff size={15} />}
+          <span className="app-order-buttons">
+            <button type="button" className="icon-button" title="إلى الأمام" disabled={index === 0} onClick={(event) => { event.preventDefault(); moveApp(index, -1); }}>→</button>
+            <button type="button" className="icon-button" title="إلى الخلف" disabled={index === appList.length - 1} onClick={(event) => { event.preventDefault(); moveApp(index, 1); }}>←</button>
+          </span>
         </label>; })}</div>
       </section>}
       {tab === 'brands' && <section className="panel">

@@ -26,6 +26,7 @@ import { api as request } from './lib/api';
 import { buildSession, SessionProvider, useLoad, useSession } from './lib/session';
 import { navigate, useRoute } from './lib/router';
 import { AppearanceControls, Bi, BrandStrip, CompanyStrip, DeveloperCredit, SYSTEM_NAME, usePublicBranding } from './components/Brand';
+import { UpdateBanner, VersionBadge } from './components/Version';
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
 import { MySignature } from './components/Signature';
 import { PortalAccountsPage, RequestsPage } from './pages/RequestsPage';
@@ -41,7 +42,7 @@ import { PayrollPage, PayslipPage } from './pages/PayrollPage';
 import { AuditPage, FinancePage, IntegrationsPage } from './pages/FinancePage';
 import { EmployeeCardPage, VerifyCardPage } from './pages/CardPages';
 import { RUN_STATUS } from './lib/format';
-import { APPS, appForPage, arLabel, en, hiddenFor, visibleMenus } from './lib/apps';
+import { APPS, appForPage, arLabel, en, hiddenFor, orderedApps, visibleMenus } from './lib/apps';
 import { setTextOverrides, tAr, tEn } from './lib/texts';
 import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
@@ -59,13 +60,19 @@ import { ArchivePage, FormerEmployeesPage, PayrollArchivePage } from './pages/Ar
 import { ActivityPage, GuardPage, OwnerPage, RecycleBinPage } from './pages/OwnerPages';
 import { ChatButton, ChatPage } from './pages/ChatPage';
 import { CompaniesPage } from './pages/CompaniesPage';
+import { PayrollRegisterPage } from './pages/PayrollRegisterPage';
+import { GovernorateBranches, NotificationPreferences } from './pages/AccountExtras';
+import { CompLeavePage, HolidaysPage } from './pages/HolidaysPages';
+import { AiAssistantPage, DocumentsCheckPage } from './pages/AiPages';
+import { ApprovalCategoriesPage, ApprovalRequestsPage, ExpensesPage } from './pages/ExpensesPages';
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
   | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings'
   | 'approvals' | 'calendar' | 'notices' | 'announcements' | 'messages' | 'archive' | 'former-employees' | 'payroll-archive'
-  | 'activity' | 'guard' | 'owner' | 'recycle-bin' | 'chat' | 'companies';
+  | 'activity' | 'guard' | 'owner' | 'recycle-bin' | 'chat' | 'companies'
+  | 'payroll-register' | 'comp-leave' | 'holidays' | 'documents-check' | 'expenses' | 'approval-requests' | 'approval-categories' | 'ai';
 
 interface User {
   id: string;
@@ -74,6 +81,7 @@ interface User {
   role: UserRole;
   branchId: string | null;
   isActive?: boolean;
+  appAccess?: string[] | null;
 }
 
 interface EmployeeSummary {
@@ -441,6 +449,7 @@ function Workspace() {
     <SessionProvider value={session}>
     <CrumbProvider>
     <div className="o-shell">
+      <UpdateBanner />
       <header className="o-navbar no-print">
         <button className={`o-apps-button ${page === 'home' ? 'is-home' : ''}`} onClick={() => go('home')} title="كل التطبيقات" aria-label="كل التطبيقات"><LayoutGrid size={20} /></button>
         {currentApp
@@ -479,8 +488,8 @@ function Workspace() {
             <button className="icon-button" aria-label="إغلاق التنبيه" onClick={() => { setError(''); setSuccess(''); }}><X size={16} /></button>
           </div>}
 
-          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} hiddenApps={systemSettings?.ui?.hiddenApps} />}
-          {currentApp && hiddenFor(currentApp, systemSettings?.ui?.hiddenApps, isAdmin) ? <p className="notice notice-error">هذا التطبيق مخفي من مالك النظام. · This app is hidden by the system owner.</p> : <>
+          {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} hiddenApps={systemSettings?.ui?.hiddenApps} appOrder={systemSettings?.ui?.appOrder} appAccess={user.appAccess} />}
+          {currentApp && hiddenFor(currentApp, systemSettings?.ui?.hiddenApps, isAdmin, user.appAccess) ? <p className="notice notice-error">هذا التطبيق مخفي من مالك النظام. · This app is hidden by the system owner.</p> : <>
           {(page === 'overview' || !KNOWN_PAGES.includes(page)) && <Dashboard
             employees={employees}
             branches={branches}
@@ -568,9 +577,17 @@ function Workspace() {
           {page === 'recycle-bin' && isAdmin && <RecycleBinPage />}
           {page === 'chat' && <ChatPage key="chat" channelId={route.params[0]} />}
           {page === 'companies' && <CompaniesPage />}
+          {page === 'payroll-register' && can('payroll.view') && <PayrollRegisterPage />}
+          {page === 'comp-leave' && can('leaves.view') && <CompLeavePage />}
+          {page === 'holidays' && <HolidaysPage />}
+          {page === 'documents-check' && can('employees.view_profile') && <DocumentsCheckPage />}
+          {page === 'expenses' && <ExpensesPage key={route.params[0] ?? 'list'} id={route.params[0]} />}
+          {page === 'approval-requests' && <ApprovalRequestsPage key={route.params[0] ?? 'list'} id={route.params[0]} />}
+          {page === 'approval-categories' && isAdmin && <ApprovalCategoriesPage />}
+          {page === 'ai' && isAdmin && <AiAssistantPage />}
           </>}
 
-          <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /></span><DeveloperCredit /></footer>
+          <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /><VersionBadge /></span><DeveloperCredit /></footer>
       </main>
     </div>
     </CrumbProvider>
@@ -582,6 +599,7 @@ const KNOWN_PAGES: string[] = [
   'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts', 'discipline', 'tickets', 'my-tickets', 'recruitment',
   'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
   'approvals', 'calendar', 'notices', 'announcements', 'messages', 'archive', 'former-employees', 'payroll-archive', 'activity', 'guard', 'owner', 'recycle-bin', 'chat', 'companies',
+  'payroll-register', 'comp-leave', 'holidays', 'documents-check', 'expenses', 'approval-requests', 'approval-categories', 'ai',
 ];
 
 function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {
@@ -615,12 +633,13 @@ function VisitTracker({ page, params, module }: { page: string; params: string[]
   return null;
 }
 
-function AppLauncher({ companyName, userName, can, isAdmin, selfOnly, hiddenApps }: {
+function AppLauncher({ companyName, userName, can, isAdmin, selfOnly, hiddenApps, appOrder, appAccess }: {
   companyName?: string; userName: string; can: (permission: Permission) => boolean; isAdmin: boolean; selfOnly: boolean; hiddenApps?: string[];
+  appOrder?: string[]; appAccess?: string[] | null;
 }) {
   const [query, setQuery] = useState('');
-  const apps = APPS.filter((app) => !(selfOnly && app.staffOnly))
-    .filter((app) => !hiddenFor(app, hiddenApps, isAdmin))
+  const apps = orderedApps(appOrder).filter((app) => !(selfOnly && app.staffOnly))
+    .filter((app) => !hiddenFor(app, hiddenApps, isAdmin, appAccess))
     .filter((app) => app.href || visibleMenus(app, can, isAdmin).length > 0)
     .filter((app) => !query.trim() || `${arLabel(app.label)} ${app.label} ${arLabel(app.description)} ${en(app.label)}`.toLowerCase().includes(query.trim().toLowerCase()));
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
@@ -727,6 +746,7 @@ function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormE
           <DeveloperCredit compact />
           <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : `${tAr('login.button', 'دخول آمن')} · ${tEn('login.button', 'Secure sign-in')}`}<ArrowLeft size={17} /></button>
           <div className="login-security"><ShieldCheck size={15} /><span>{tAr('login.security', 'الجلسة تنتهي تلقائياً عند عدم النشاط، ويُسجَّل وقت الدخول ومكانه لحمايتك.')}</span></div>
+          <VersionBadge className="login-version" />
         </form>
       </section>
     </main>
@@ -747,7 +767,7 @@ function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCr
   const today = useLoad<{ totals: { tracked: number; inside: number; late: number; onLeave: number; notArrived: number } } | null>(
     session.can('attendance.view') ? '/attendance/today' : null, null,
   );
-  const alerts = useLoad<{ documents: Array<{ id: string; employeeId: string; employeeName: string; docType: string; title: string; expiryDate: string; daysLeft: number }>; contracts: Array<{ id: string; employeeId: string; employeeName: string; kind: string; dueDate: string }> } | null>(
+  const alerts = useLoad<{ documents: Array<{ id: string; employeeId: string; employeeName: string; docType: string; title: string; expiryDate: string; daysLeft: number }>; contracts: Array<{ id: string; employeeId: string; employeeName: string; kind: string; dueDate: string }>; residency?: Array<{ employeeId: string; employeeName: string; kind: string; dueDate: string; daysLeft: number }> } | null>(
     session.can('employees.view_profile') ? '/hr/alerts?days=45' : null, null,
   );
   const runs = useLoad<Array<{ id: string; period: string; status: string; currency: string; branchName: string | null; totalNet: number; employeeCount: number }>>(
@@ -755,7 +775,7 @@ function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCr
   );
   const recent = [...employees].sort((a, b) => b.hireDate.localeCompare(a.hireDate)).slice(0, 5);
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Baghdad', hour: 'numeric', hour12: false }).format(new Date()));
-  const alertCount = (alerts.data?.documents.length ?? 0) + (alerts.data?.contracts.length ?? 0);
+  const alertCount = (alerts.data?.documents.length ?? 0) + (alerts.data?.contracts.length ?? 0) + (alerts.data?.residency?.length ?? 0);
   return (
     <section className="screen">
       <div className="screen-heading">
@@ -775,6 +795,7 @@ function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCr
             <div className="panel-head"><div><h3>يحتاج انتباهك</h3><p>مستمسكات وعقود وفترات تجربة تنتهي قريباً</p></div></div>
             <div className="table-scroll"><table><tbody>
               {alerts.data.contracts.map((item) => <tr key={`c-${item.id}`}><td><button className="text-button" onClick={() => navigate('employees', item.employeeId)}>{item.employeeName}</button></td><td>{item.kind === 'probation' ? 'نهاية فترة التجربة' : 'انتهاء العقد'}</td><td>{item.dueDate}</td></tr>)}
+              {(alerts.data.residency ?? []).map((item) => <tr key={`r-${item.employeeId}-${item.kind}`}><td><button className="text-button" onClick={() => navigate('employees', item.employeeId)}>{item.employeeName}</button></td><td>{item.kind === 'passport' ? 'انتهاء الجواز (أجنبي)' : 'انتهاء الإقامة / الفيزا (أجنبي)'}</td><td className={item.daysLeft < 0 ? 'num-bad' : 'num-warn'}>{item.daysLeft < 0 ? `منتهية منذ ${-item.daysLeft} يوم` : `${item.dueDate} (${item.daysLeft} يوم)`}</td></tr>)}
               {alerts.data.documents.map((item) => <tr key={`d-${item.id}`}><td><button className="text-button" onClick={() => navigate('employees', item.employeeId)}>{item.employeeName}</button></td><td>{DOCUMENT_TYPES[item.docType] ?? item.title}</td><td className={item.daysLeft < 0 ? 'num-bad' : 'num-warn'}>{item.daysLeft < 0 ? `منتهي منذ ${-item.daysLeft} يوم` : `${item.expiryDate} (${item.daysLeft} يوم)`}</td></tr>)}
             </tbody></table></div>
           </> : <>
@@ -906,6 +927,7 @@ function BranchesPage({ branches, canManage, onCreate, onSubmit, showForm }: {
       {branches.length ? <div className="branch-table-wrap panel"><div className="table-scroll"><table><thead><tr><th>الفرع</th><th>المدينة</th><th>رمز الموقع</th><th>عدد الموظفين</th><th>الحالة</th></tr></thead><tbody>
         {branches.map((branch) => <tr key={branch.id}><td><span className="branch-cell"><span className="branch-symbol"><Building2 size={17} /></span><span><strong>{branch.name}</strong><small>{branch.address || 'لا يوجد عنوان مسجل'}</small></span></span></td><td>{branch.city}</td><td><span className="code-tag">{branch.code}</span></td><td>{(branch.employeeCount || 0).toLocaleString('ar-IQ-u-nu-latn')}</td><td><span className={`state-pill ${branch.isActive ? 'state-active' : 'state-inactive'}`}><i />{branch.isActive ? 'نشط' : 'غير نشط'}</span></td></tr>)}
       </tbody></table></div></div> : <div className="panel"><EmptyState icon={<Building2 size={22} />} title="لا توجد فروع مسجلة" description="أضف أول موقع عمل لتنظيم السجلات حسب الفرع." action={canManage ? 'إضافة فرع' : undefined} onClick={onCreate} /></div>}
+      {branches.length > 0 && <GovernorateBranches branches={branches} />}
     </section>
   );
 }
@@ -923,6 +945,7 @@ function SecurityPage({ onSubmit }: { onSubmit: (event: FormEvent<HTMLFormElemen
         </div>
         <div className="form-actions"><button className="button button-primary" type="submit"><ShieldCheck size={16} />تحديث كلمة المرور</button></div>
       </form>
+      <NotificationPreferences />
       <MySignature />
     </section>
   );

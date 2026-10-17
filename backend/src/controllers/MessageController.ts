@@ -133,9 +133,14 @@ export class MessageController {
     const phone = normalizePhone(typeof input.phone === 'string' ? input.phone : null);
     const email = typeof input.email === 'string' && EMAIL.test(input.email) ? input.email : null;
     const template = MESSAGE_TEMPLATES.find((item) => item.id === (input.kind === 'staff' ? 'staff_invite' : input.kind === 'demo' ? 'demo_invite' : 'portal_invite'))!;
-    const values = { name, link, employeeNo: login, login };
+    // The sign-in page (the company portal when configured, else this server) goes in the text too.
+    const loginUrl = (process.env.LOGIN_URL || process.env.PUBLIC_URL || link.replace(/\/#\/set-password\/.*$/, '')).replace(/\/$/, '');
+    const values = { name, link, employeeNo: login, login, loginUrl };
     const subject = fillTemplate(template.subject, values);
-    const text = fillTemplate(template.body, values);
+    // The sender may edit the text before it goes out; the one-time link must stay in it.
+    const custom = typeof input.customBody === 'string' ? input.customBody.trim() : '';
+    if (custom && (!custom.includes(link) || custom.length > 4000)) throw badRequest('النص المعدّل يجب أن يبقى فيه رابط تعيين كلمة المرور (وبحد 4000 محرف).');
+    const text = custom || fillTemplate(template.body, values);
     const channels = (Array.isArray(input.channels) ? input.channels : []).filter((item): item is Channel => CHANNELS.includes(item as Channel));
     const enabled = new Set((await channelStates()).filter((state) => state.enabled).map((state) => state.channel));
     const queued: Array<Record<string, unknown>> = [];
@@ -154,7 +159,7 @@ export class MessageController {
     await recordAudit(req, null, 'messages.invite_sent', 'outbound_message', null, { channels, queued: queued.length, phone: Boolean(phone), email: Boolean(email) });
     res.json({
       data: {
-        queued: queued.length, body: text,
+        queued: queued.length, body: text, subject, loginUrl,
         links: {
           whatsapp: phone ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}` : null,
           sms: phone ? `sms:+${phone}?body=${encodeURIComponent(text)}` : null,

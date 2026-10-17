@@ -84,6 +84,12 @@ export class PayrollArchiveController {
     const input = body(req);
     const label = optionalText(input, 'label', 120) || `رواتب ${prepared.period}`;
     const branchId = isUuid(input.branchId) ? String(input.branchId) : null;
+    // Each governorate keeps its own payroll file per month (Baghdad, Mosul, Erbil).
+    let governorateId = isUuid(input.governorateId) ? String(input.governorateId) : null;
+    if (branchId) {
+      governorateId = (await selectOne<{ id: string | null }>('SELECT governorate_id AS id FROM branches WHERE id = :id', { id: branchId }))?.id ?? governorateId;
+    }
+    if (governorateId && !(await selectOne('SELECT 1 FROM governorates WHERE id = :id', { id: governorateId }))) throw badRequest('المحافظة غير موجودة.');
     const id = randomUUID();
     const storageKey = await storeFile('payroll-archive', req.file!.buffer, 'xlsx');
     await transaction(async (tx) => {
@@ -91,10 +97,10 @@ export class PayrollArchiveController {
         { period: prepared.period, hash: prepared.hash }, tx);
       if (duplicate) throw conflict('هذا الملف مؤرشف مسبقاً لنفس الشهر.');
       await execute(
-        `INSERT INTO payroll_archive_months (id, period, label, branch_id, storage_key, original_name, sha256, employee_count, totals, notes, uploaded_by)
-         VALUES (:id, :period, :label, :branchId, :storageKey, :name, :hash, :count, :totals, :notes, :userId)`,
+        `INSERT INTO payroll_archive_months (id, period, label, branch_id, governorate_id, storage_key, original_name, sha256, employee_count, totals, notes, uploaded_by)
+         VALUES (:id, :period, :label, :branchId, :governorateId, :storageKey, :name, :hash, :count, :totals, :notes, :userId)`,
         {
-          id, period: prepared.period, label, branchId, storageKey, name: uploadedName(req.file!, 'payroll.xlsx'), hash: prepared.hash,
+          id, period: prepared.period, label, branchId, governorateId, storageKey, name: uploadedName(req.file!, 'payroll.xlsx'), hash: prepared.hash,
           count: prepared.parsed.lines.length, totals: JSON.stringify(prepared.totals), notes: optionalText(input, 'notes', 500) ?? null,
           userId: req.user!.id,
         },
@@ -112,7 +118,7 @@ export class PayrollArchiveController {
         );
       }
       await recordAudit(req, tx, 'payroll_archive.saved', 'payroll_archive_month', id, {
-        period: prepared.period, lines: rows.length, totals: prepared.totals,
+        period: prepared.period, lines: rows.length, totals: prepared.totals, governorateId,
       });
     });
     res.status(201).json({ data: { id } });
@@ -124,8 +130,10 @@ export class PayrollArchiveController {
     const rows = await select(
       `SELECT m.id, m.period, m.label, m.original_name AS "originalName", m.employee_count AS "employeeCount", m.totals, m.notes,
               m.created_at AS "createdAt", u.name AS "uploadedByName", b.name AS "branchName",
+              m.governorate_id AS "governorateId", g.name_ar AS "governorateName",
               (SELECT count(*) FROM payroll_archive_lines l WHERE l.month_id = m.id AND l.employee_id IS NULL) AS unmatched
        FROM payroll_archive_months m JOIN users u ON u.id = m.uploaded_by LEFT JOIN branches b ON b.id = m.branch_id
+       LEFT JOIN governorates g ON g.id = m.governorate_id
        WHERE m.withdrawn_at IS NULL ORDER BY m.period DESC, m.created_at`,
     );
     res.json({ data: { months: rows, launchPeriod: settings.payrollRules.launchPeriod ?? null } });

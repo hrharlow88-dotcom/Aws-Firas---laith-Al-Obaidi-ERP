@@ -1,11 +1,17 @@
 import express, { NextFunction, Request, Response } from 'express';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 import helmet from 'helmet';
 import routes from './routes';
 import { asyncRoute, HttpError } from './utils/http';
 import DevicePushController from './controllers/DevicePushController';
 import { trackActivity } from './services/activity';
 import { firewall } from './services/firewall';
+
+/** The release this server runs (package.json), so open tabs can offer a reload after an update. */
+export const APP_VERSION: string = (() => {
+  try { return String(JSON.parse(readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).version); } catch { return '0.0.0'; }
+})();
 
 export function createApp() {
   const app = express();
@@ -35,7 +41,7 @@ export function createApp() {
   app.use('/api', firewall);
   // Who did what and when, for every signed-in request.
   app.use('/api', trackActivity);
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: APP_VERSION }));
   app.use('/api', routes);
 
   const frontendDist = path.resolve(__dirname, '../../frontend/dist');

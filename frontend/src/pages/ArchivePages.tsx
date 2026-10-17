@@ -1,3 +1,4 @@
+import { useGovernorates } from './PayrollRegisterPage';
 import { FormEvent, useState } from 'react';
 import { Archive, Download, Eye, FileArchive, FileUp, Lock, RotateCcw, Search, Trash2, UserMinus } from 'lucide-react';
 import { Bi } from '../components/Brand';
@@ -202,6 +203,7 @@ export function FormerEmployeesPage() {
 interface ArchiveMonth {
   id: string; period: string; label: string; originalName: string; employeeCount: number; totals: Record<string, { employees: number; net: number; gross: number }>;
   notes: string | null; createdAt: string; uploadedByName: string; branchName: string | null; unmatched: string;
+  governorateId: string | null; governorateName: string | null;
 }
 interface Preview {
   format: string; sheet: string; period: string; duplicate: boolean; lines: number; skipped: number; matched: number;
@@ -218,13 +220,19 @@ export function PayrollArchivePage({ monthId }: { monthId?: string }) {
   const [label, setLabel] = useState('');
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [governorateId, setGovernorateId] = useState('');
+  const governorates = useGovernorates();
   if (monthId) return <ArchiveMonthView id={monthId} />;
   const launch = months.data.launchPeriod;
   const byPeriod = months.data.months.reduce<Record<string, ArchiveMonth[]>>((groups, month) => { (groups[month.period] ??= []).push(month); return groups; }, {});
   const year = (launch ?? new Date().toISOString().slice(0, 7)).slice(0, 4);
   const timeline = Array.from({ length: 12 }, (_, index) => `${year}-${String(index + 1).padStart(2, '0')}`);
 
-  const form = () => { const body = new FormData(); body.set('file', file!); if (period) body.set('period', period); if (label) body.set('label', label); return body; };
+  const form = () => {
+    const body = new FormData(); body.set('file', file!); if (period) body.set('period', period); if (label) body.set('label', label);
+    if (governorateId) body.set('governorateId', governorateId);
+    return body;
+  };
   async function check() {
     if (!file) return;
     setBusy(true);
@@ -246,24 +254,30 @@ export function PayrollArchivePage({ monthId }: { monthId?: string }) {
         <p>ارفع ملف رواتب كل شهر من بداية 2026 حتى شهر الانطلاق{launch ? ` (${monthLabel(launch)})` : ''}. يُحفظ الملف الأصلي ويُوزّع صافي كل موظف على شهره الحقيقي، فيظهر في سجل رواتبه مع مسيرات النظام بعد الانطلاق.</p></div></div>
       <section className="panel">
         <div className="panel-head"><div><h3>أشهر {year} · {year} months</h3><p>الأخضر مؤرشف، والبرتقالي شهر الانطلاق، وما بعده يُحتسب بمسيرات النظام.</p></div></div>
-        <div className="month-strip">{timeline.map((month) => {
-          const done = byPeriod[month];
-          const after = launch && month > launch;
-          return <div key={month} className={`month-cell ${done ? 'is-done' : ''} ${launch === month ? 'is-launch' : ''} ${after ? 'is-system' : ''}`}>
-            <strong>{monthLabel(month)}</strong>
-            <span>{done ? `${done.length} ملف · ${formatNumber(done.reduce((sum, item) => sum + item.employeeCount, 0))} موظف` : after ? 'مسيرات النظام' : 'لم يُرفع'}</span>
-          </div>;
-        })}</div>
+        <div className="table-scroll"><table className="archive-matrix"><thead><tr><th>المحافظة</th>{timeline.map((month) => <th key={month} className={launch === month ? 'is-launch' : ''}>{monthLabel(month).split(' ')[0]}</th>)}</tr></thead>
+          <tbody>{[...governorates.data.governorates.map((item) => ({ id: item.id, name: item.nameAr })), { id: '', name: 'بلا محافظة' }].map((row) => {
+            const files = months.data.months.filter((month) => (month.governorateId ?? '') === row.id);
+            if (!row.id && !files.length) return null;
+            return <tr key={row.id || 'none'}><th>{row.name}</th>{timeline.map((month) => {
+              const done = files.filter((item) => item.period === month);
+              const after = launch && month > launch;
+              return <td key={month} className={`month-cell ${done.length ? 'is-done' : ''} ${launch === month ? 'is-launch' : ''} ${after ? 'is-system' : ''}`}
+                title={done.map((item) => `${item.label} — ${item.employeeCount} موظف`).join('\n')}>
+                {done.length ? `✓ ${formatNumber(done.reduce((sum, item) => sum + item.employeeCount, 0))}` : after ? 'النظام' : '—'}</td>;
+            })}</tr>;
+          })}</tbody></table></div>
       </section>
       {session.can('payroll.prepare') && <section className="panel">
         <div className="panel-head"><div><h3>رفع شهر · Upload a month</h3><p>ملف Excel للفرع أو للشركة. يُقرأ شهر الرواتب من لوحة الملف إن وُجد، وإلا اختره.</p></div></div>
         <div className="form-grid">
           <label className="field"><span>الملف (xlsx) *</span><input type="file" accept=".xlsx" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); }} /></label>
           <label className="field"><span>الشهر</span><input type="month" value={period} max={launch ?? undefined} onChange={(event) => setPeriod(event.target.value)} /></label>
-          <label className="field"><span>الوصف (مثل: فرع أربيل)</span><input value={label} maxLength={120} onChange={(event) => setLabel(event.target.value)} /></label>
+          <label className="field"><span>المحافظة *</span><select value={governorateId} onChange={(event) => setGovernorateId(event.target.value)}>
+            <option value="">اختر المحافظة</option>{governorates.data.governorates.map((item) => <option key={item.id} value={item.id}>{item.nameAr} · {item.nameEn}</option>)}</select></label>
+          <label className="field"><span>الوصف (مثل: رواتب أربيل)</span><input value={label} maxLength={120} onChange={(event) => setLabel(event.target.value)} /></label>
         </div>
         <div className="dialog-actions"><button className="button button-quiet" disabled={!file || busy} onClick={() => void check()}>معاينة · Preview</button>
-          {preview && !preview.duplicate && <button className="button button-primary" disabled={busy} onClick={() => void save()}>أرشفة {monthLabel(preview.period)}</button>}</div>
+          {preview && !preview.duplicate && <button className="button button-primary" disabled={busy || !governorateId} title={governorateId ? undefined : 'اختر المحافظة'} onClick={() => void save()}>أرشفة {monthLabel(preview.period)}</button>}</div>
         {preview && <div className="archive-preview">
           {preview.duplicate && <p className="form-error">هذا الملف مؤرشف مسبقاً لنفس الشهر.</p>}
           <div className="stat-row"><Stat label="الشهر" value={monthLabel(preview.period)} /><Stat label="الموظفون" value={formatNumber(preview.lines)} />
@@ -278,7 +292,7 @@ export function PayrollArchivePage({ monthId }: { monthId?: string }) {
         {months.loading ? <Loading /> : !months.data.months.length ? <Empty icon={<FileArchive size={22} />} title="لا توجد أشهر مؤرشفة" text="ارفع ملف أول شهر." />
           : <div className="table-scroll"><table className="dense"><thead><tr><th>الشهر</th><th>الملف</th><th>الموظفون</th><th>الصافي</th><th>رفعه</th></tr></thead>
             <tbody>{months.data.months.map((month) => <tr key={month.id} className="row-link" onClick={() => navigate('payroll-archive', month.id)}>
-              <td><strong>{monthLabel(month.period)}</strong><small className="table-sub">{month.label}</small></td>
+              <td><strong>{monthLabel(month.period)}</strong><small className="table-sub">{month.governorateName ? `${month.governorateName} · ` : ''}{month.label}</small></td>
               <td>{month.originalName}</td>
               <td>{formatNumber(month.employeeCount)}{Number(month.unmatched) > 0 && <small className="table-sub">{month.unmatched} بلا ملف</small>}</td>
               <td>{Object.entries(month.totals).map(([currency, total]) => <div key={currency}>{formatMoney(total.net, currency)}</div>)}</td>

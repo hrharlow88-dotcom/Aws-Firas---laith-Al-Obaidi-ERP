@@ -4,6 +4,10 @@ import { audited } from '../utils/audit';
 import { selectOne } from '../db/query';
 import { isUuid } from '../utils/validation';
 
+async function governorateExists(id: unknown): Promise<boolean> {
+  return isUuid(id) && Boolean(await selectOne('SELECT 1 FROM governorates WHERE id = :id', { id }));
+}
+
 async function companyExists(id: unknown): Promise<boolean> {
   return isUuid(id) && Boolean(await selectOne('SELECT 1 FROM companies WHERE id = :id', { id }));
 }
@@ -29,7 +33,11 @@ export class BranchController {
 
   static async create(req: Request, res: Response): Promise<void> {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const { code, name, city, address, phone, companyId } = body;
+    const { code, name, city, address, phone, companyId, governorateId } = body;
+    if (governorateId !== undefined && governorateId !== null && !(await governorateExists(governorateId))) {
+      res.status(400).json({ message: 'المحافظة غير موجودة.' });
+      return;
+    }
     if (companyId !== undefined && companyId !== null && !(await companyExists(companyId))) {
       res.status(400).json({ message: 'الشركة غير موجودة.' });
       return;
@@ -45,6 +53,7 @@ export class BranchController {
       address: typeof address === 'string' ? address.trim() || null : null,
       phone: typeof phone === 'string' ? phone.trim() || null : null,
       companyId: typeof companyId === 'string' ? companyId : null,
+      governorateId: typeof governorateId === 'string' ? governorateId : null,
     }, { transaction }));
     res.status(201).json({ data: branch });
   }
@@ -56,8 +65,8 @@ export class BranchController {
       return;
     }
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const { code, name, city, address, phone, isActive, companyId } = body;
-    if (Object.keys(body).some((field) => !['code', 'name', 'city', 'address', 'phone', 'isActive', 'companyId'].includes(field))) {
+    const { code, name, city, address, phone, isActive, companyId, governorateId } = body;
+    if (Object.keys(body).some((field) => !['code', 'name', 'city', 'address', 'phone', 'isActive', 'companyId', 'governorateId'].includes(field))) {
       res.status(400).json({ message: 'يتضمن الطلب حقلاً غير قابل للتعديل.' });
       return;
     }
@@ -68,11 +77,15 @@ export class BranchController {
       res.status(400).json({ message: 'تحقق من رمز الفرع والاسم والمدينة والحالة.' });
       return;
     }
+    if (governorateId !== undefined && governorateId !== null && !(await governorateExists(governorateId))) {
+      res.status(400).json({ message: 'المحافظة غير موجودة.' });
+      return;
+    }
     if (companyId !== undefined && companyId !== null && !(await companyExists(companyId))) {
       res.status(400).json({ message: 'الشركة غير موجودة.' });
       return;
     }
-    if (!['code', 'name', 'city', 'address', 'phone', 'isActive', 'companyId'].some((field) => field in body)) {
+    if (!['code', 'name', 'city', 'address', 'phone', 'isActive', 'companyId', 'governorateId'].some((field) => field in body)) {
       res.status(400).json({ message: 'أرسل حقلاً واحداً على الأقل لتحديثه.' });
       return;
     }
@@ -84,6 +97,7 @@ export class BranchController {
       ...(typeof phone === 'string' ? { phone: phone.trim() || null } : {}),
       ...(typeof isActive === 'boolean' ? { isActive } : {}),
       ...(companyId !== undefined ? { companyId: companyId === null ? null : String(companyId) } : {}),
+      ...(governorateId !== undefined ? { governorateId: governorateId === null ? null : String(governorateId) } : {}),
     }, { transaction }));
     res.json({ data: updatedBranch });
   }

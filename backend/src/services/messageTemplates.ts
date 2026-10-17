@@ -31,6 +31,7 @@ export const MESSAGE_TEMPLATES: MessageTemplate[] = [
 يسرّ إدارة الموارد البشرية دعوتكم إلى تفعيل حسابكم في بوابة الموظف ضمن نظام ERP مجموعة الليث العبيدي للسيارات، حيث يمكنكم من خلالها الاطلاع على بطاقتكم الوظيفية وسجل الحضور والانصراف، وتقديم طلبات الإجازات والإجازات الزمنية والسلف وتكاليف العمل ومتابعتها.
 
 رقمكم الوظيفي لتسجيل الدخول: {employeeNo}
+رابط الدخول إلى النظام: {loginUrl}
 لتعيين كلمة المرور الخاصة بكم يُرجى فتح الرابط التالي (صالح لمدة سبعة أيام ولمرة واحدة):
 {link}
 
@@ -41,6 +42,7 @@ Dear {name},
 Human Resources is pleased to invite you to activate your account on the Employee Portal of the Al-Laith Al-Obaidi Automotive Group ERP. Through the portal you can view your employee card and attendance record, and submit and follow up leave, hourly leave, salary advance and work-expense requests.
 
 Your employee number for signing in: {employeeNo}
+Sign-in page: {loginUrl}
 To set your password, please open the link below (valid once, for seven days):
 {link}
 
@@ -60,6 +62,7 @@ ${SIGNATURE}`,
 {link}
 
 اسم الدخول: {login}
+رابط الدخول إلى النظام: {loginUrl}
 
 Dear {name},
 
@@ -67,6 +70,7 @@ You have been added as a user of the Al-Laith Al-Obaidi Automotive Group ERP. To
 {link}
 
 Sign-in: {login}
+Sign-in page: {loginUrl}
 
 ${SIGNATURE}`,
   },
@@ -82,6 +86,7 @@ ${SIGNATURE}`,
 {link}
 
 اسم الدخول: {login}
+رابط الدخول إلى النظام: {loginUrl}
 
 Dear {name},
 
@@ -89,6 +94,7 @@ You are invited to try the Al-Laith Al-Obaidi Automotive Group ERP on its demo c
 {link}
 
 Sign-in: {login}
+Sign-in page: {loginUrl}
 
 ${SIGNATURE}`,
   },

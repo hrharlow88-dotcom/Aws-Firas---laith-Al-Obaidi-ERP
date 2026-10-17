@@ -8,6 +8,7 @@ export interface SessionUser {
   email: string;
   role: UserRole;
   branchId: string | null;
+  appAccess?: string[] | null;
 }
 
 export interface Session {

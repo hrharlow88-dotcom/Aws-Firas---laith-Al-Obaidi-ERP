@@ -7,7 +7,7 @@ import { useLoad, useSession } from '../lib/session';
 
 interface Template {
   id: string; name: string; contractType: string | null; description: string | null; originalName: string;
-  fields: string[]; isActive: boolean; createdAt: string; uploadedByName: string; usedCount: number;
+  fields: string[]; isActive: boolean; kind?: 'contract' | 'advance'; createdAt: string; uploadedByName: string; usedCount: number;
 }
 interface Field { key: string; alias: string; label: string }
 
@@ -64,7 +64,7 @@ export function ContractTemplatesPage() {
             {templates.data.map((template) => <article key={template.id} className={`template-card ${template.isActive ? '' : 'is-off'}`}>
               <span className="template-icon"><FileSignature size={22} /></span>
               <div className="template-body">
-                <div className="template-title"><strong>{template.name}</strong>{template.contractType && <Tone tone="info">{EMPLOYMENT_TYPES[template.contractType] ?? template.contractType}</Tone>}{!template.isActive && <Tone tone="muted">موقوف</Tone>}</div>
+                <div className="template-title"><strong>{template.name}</strong>{template.kind === 'advance' && <Tone tone="warn">استمارة سلفة</Tone>}{template.contractType && <Tone tone="info">{EMPLOYMENT_TYPES[template.contractType] ?? template.contractType}</Tone>}{!template.isActive && <Tone tone="muted">موقوف</Tone>}</div>
                 <small>{template.originalName} · رفعه {template.uploadedByName} في {formatDate(template.createdAt)} · استُخدم {formatNumber(template.usedCount)} مرة</small>
                 <div className="chips">{template.fields.map((key) => <span key={key} className="chip">{label(key)}</span>)}</div>
               </div>
@@ -90,6 +90,7 @@ export function ContractTemplatesPage() {
         <form onSubmit={upload}>
           <div className="form-grid form-grid-2">
             <label className="field settings-wide"><span>اسم القالب *</span><input name="name" required maxLength={120} placeholder="عقد عمل - عراقي (عربي/إنكليزي)" /></label>
+            <label className="field"><span>نوع القالب</span><select name="kind" defaultValue="contract"><option value="contract">عقد عمل</option><option value="advance">استمارة سلفة (من شاشة السلف)</option></select></label>
             <label className="field"><span>نوع العقد</span><select name="contractType" defaultValue="fixed_term"><option value="">—</option>{Object.entries(EMPLOYMENT_TYPES).map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select></label>
             <label className="field"><span>ملف Word *</span><input name="file" type="file" required accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /></label>
             <label className="field settings-wide"><span>وصف</span><input name="description" maxLength={500} /></label>

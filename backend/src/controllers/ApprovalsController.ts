@@ -101,6 +101,26 @@ export class ApprovalsController {
           items: notices.map((row) => ({ id: row.id, title: `${row.ref} — ${row.title}`, at: row.at })) });
       }
     }
+    // Approval requests and expense reports whose current step waits for this person.
+    const waiting = await select<{ id: string; number: string; title: string; kind: string; amount: number | null; currency: string | null; at: string; requester: string }>(
+      `SELECT r.id, r.number, r.title, r.entity_type AS kind, r.amount::float AS amount, r.currency, r.created_at AS at, u.name AS requester
+       FROM approval_requests r JOIN users u ON u.id = r.requester_id
+       WHERE r.status = 'pending' AND jsonb_exists(r.steps -> r.current_step -> 'approvers', :userId) ORDER BY r.created_at LIMIT 50`,
+      { userId: req.user!.id },
+    );
+    for (const kind of ['approval', 'expense']) {
+      const items = waiting.filter((row) => row.kind === kind);
+      if (!items.length) continue;
+      groups.push({
+        id: kind === 'expense' ? 'expense-reports' : 'approval-requests', module: kind === 'expense' ? 'expenses' : 'approval-requests',
+        title: kind === 'expense' ? 'تقارير مصاريف بانتظار موافقتك' : 'طلبات موافقة بانتظارك',
+        link: kind === 'expense' ? '/expenses' : '/approval-requests',
+        items: items.map((row) => ({
+          id: row.id, title: `${row.number} — ${row.title}`, detail: `${row.requester}${row.amount ? ` · ${row.amount} ${row.currency}` : ''}`, at: row.at,
+          link: kind === 'expense' ? `/expenses/${row.id}` : `/approval-requests/${row.id}`,
+        })),
+      });
+    }
     const total = groups.reduce((sum, group) => sum + group.items.length, 0);
     res.json({ data: { groups, total } });
   }

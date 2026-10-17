@@ -16,7 +16,7 @@ export interface NoticeInput {
 /**
  * In-app notifications. They are written in the same transaction as the
  * change they describe, so a rolled-back action never leaves a notice behind.
- * Nothing is sent outside the system (no e-mail, SMS or WhatsApp).
+ * Accounts that opted in also receive an e-mail copy (see queueNoticeEmails).
  */
 export async function notifyUsers(userIds: Array<string | null | undefined>, notice: NoticeInput, tx?: Transaction | null): Promise<number> {
   const ids = [...new Set(userIds.filter((id): id is string => Boolean(id)))];
@@ -33,7 +33,41 @@ export async function notifyUsers(userIds: Array<string | null | undefined>, not
     { rows: JSON.stringify(rows) },
     tx,
   );
+  await queueNoticeEmails(ids, notice, tx);
   return rows.length;
+}
+
+/**
+ * Accounts that asked for it also get the notice by e-mail (their personal
+ * address if they gave one), in Arabic and English with a link into the
+ * system. Queued only while the owner has the e-mail channel switched on.
+ */
+async function queueNoticeEmails(userIds: string[], notice: NoticeInput, tx?: Transaction | null): Promise<void> {
+  const channel = await select<{ enabled: boolean }>("SELECT enabled FROM message_channels WHERE channel = 'email'", {}, tx);
+  if (!channel[0]?.enabled) return;
+  const recipients = await select<{ id: string; name: string; to: string }>(
+    `SELECT id, name, COALESCE(personal_email, email) AS "to" FROM users
+     WHERE id IN (:ids) AND is_active AND notify_email AND COALESCE(personal_email, email) NOT LIKE '%@portal.local'`,
+    { ids: userIds }, tx,
+  );
+  if (!recipients.length) return;
+  const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
+  const link = base ? `${base}/#${notice.link || '/'}` : '';
+  const rows = recipients.map((user) => ({
+    id: randomUUID(), channel: 'email', recipient: user.to,
+    subject: `${notice.title} | ERP مجموعة الليث العبيدي`.slice(0, 250),
+    body: [
+      `السيد/السيدة ${user.name} المحترم/ة،`, '', notice.title, notice.body ?? '', link ? `للاطلاع واتخاذ الإجراء: ${link}` : '', '',
+      `Dear ${user.name},`, '', `You have a new notification in the Group ERP: ${notice.title}`, link ? `Open: ${link}` : '', '',
+      'نظام ERP مجموعة الليث العبيدي للسيارات — Al-Laith Al-Obaidi Automotive Group ERP',
+    ].filter((line, index, all) => line !== '' || all[index - 1] !== '').join('\n'),
+  }));
+  await execute(
+    `INSERT INTO outbound_messages (id, channel, recipient, subject, body, related_kind)
+     SELECT x.id, x.channel, x.recipient, x.subject, x.body, 'notice'
+     FROM jsonb_to_recordset(:rows::jsonb) AS x(id uuid, channel varchar, recipient varchar, subject varchar, body text)`,
+    { rows: JSON.stringify(rows) }, tx,
+  );
 }
 
 /** Notifies the accounts linked to these employee files (employees without an account are skipped). */

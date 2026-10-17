@@ -13,7 +13,7 @@ import { isUuid } from '../utils/validation';
 const LOAN_COLUMNS = `
   l.id, l.employee_id AS "employeeId", e.employee_no AS "employeeNo", e.full_name AS "employeeName",
   l.currency, l.principal::float AS principal, l.installment::float AS installment, l.paid_before::float AS "paidBefore",
-  l.start_period AS "startPeriod", l.status, l.installments_total AS "installmentsTotal",
+  l.start_period AS "startPeriod", l.status, l.kind, l.closed_at AS "closedAt", l.archived_at AS "archivedAt", l.installments_total AS "installmentsTotal",
   l.installments_paid_before + COALESCE(rp.count, 0) AS "installmentsPaid", l.reference, l.notes, l.created_at AS "createdAt",
   COALESCE(rp.repaid, 0)::float AS "repaidByPayroll",
   COALESCE(rp.pending, 0)::float AS "pendingDeduction",
@@ -33,10 +33,44 @@ const LOAN_FROM = `
     WHERE x.loan_id = l.id AND r.status <> 'cancelled'
   ) rp ON true`;
 
-function nextPeriod(period: string, months = 1): string {
+export function nextPeriod(period: string, months = 1): string {
   const [y, m] = period.split('-').map(Number);
   const date = new Date(Date.UTC(y, m - 1 + months, 1));
   return date.toISOString().slice(0, 7);
+}
+
+export interface LoanPlanInput { principal: number; installment: number; paidBefore: number; installmentsPaidBefore: number; installmentsTotal: number | null; startPeriod: string; status: string }
+export type LoanPlanRow = { period: string | null; amount: number; kind: 'before' | 'deducted' | 'pending' | 'planned'; balanceAfter: number; runId?: string };
+
+/** The advance month by month: before the system, deducted, pending, and the plan for what remains. */
+export function planLoan(loan: LoanPlanInput, taken: Array<{ period: string; amount: number; runStatus: string; runId: string }>): LoanPlanRow[] {
+    const rows: LoanPlanRow[] = [];
+    let balance = loan.principal;
+    if (loan.paidBefore > 0) {
+      balance -= loan.paidBefore;
+      rows.push({ period: null, amount: loan.paidBefore, kind: 'before', balanceAfter: Math.round(balance * 100) / 100 });
+    }
+    for (const item of taken) {
+      balance -= item.amount;
+      rows.push({
+        period: item.period, amount: item.amount, kind: ['approved', 'posted'].includes(item.runStatus) ? 'deducted' : 'pending',
+        balanceAfter: Math.round(balance * 100) / 100, runId: item.runId,
+      });
+    }
+    let period = taken.length ? nextPeriod(taken[taken.length - 1].period) : loan.startPeriod;
+    let count = loan.installmentsPaidBefore + taken.length;
+    let guard = 0;
+    while (loan.status === 'active' && balance > 0.004 && guard < 240) {
+      count += 1;
+      // Same rule as payroll: the agreed last instalment clears a balance under two instalments.
+      const last = loan.installmentsTotal !== null && count >= loan.installmentsTotal && balance < 2 * loan.installment;
+      const take = Math.round((last ? balance : Math.min(loan.installment, balance)) * 100) / 100;
+      balance = Math.round((balance - take) * 100) / 100;
+      rows.push({ period, amount: take, kind: 'planned', balanceAfter: balance });
+      period = nextPeriod(period);
+      guard += 1;
+    }
+    return rows;
 }
 
 /** Instalment loans and salary advances, repaid through payroll. */
@@ -66,32 +100,7 @@ export class LoanController {
        WHERE x.loan_id = :id AND r.status <> 'cancelled' ORDER BY x.period`,
       { id: loan.id },
     );
-    const rows: Array<{ period: string | null; amount: number; kind: 'before' | 'deducted' | 'pending' | 'planned'; balanceAfter: number; runId?: string }> = [];
-    let balance = loan.principal;
-    if (loan.paidBefore > 0) {
-      balance -= loan.paidBefore;
-      rows.push({ period: null, amount: loan.paidBefore, kind: 'before', balanceAfter: Math.round(balance * 100) / 100 });
-    }
-    for (const item of taken) {
-      balance -= item.amount;
-      rows.push({
-        period: item.period, amount: item.amount, kind: ['approved', 'posted'].includes(item.runStatus) ? 'deducted' : 'pending',
-        balanceAfter: Math.round(balance * 100) / 100, runId: item.runId,
-      });
-    }
-    let period = taken.length ? nextPeriod(taken[taken.length - 1].period) : loan.startPeriod;
-    let count = loan.installmentsPaidBefore + taken.length;
-    let guard = 0;
-    while (loan.status === 'active' && balance > 0.004 && guard < 240) {
-      count += 1;
-      // Same rule as payroll: the agreed last instalment clears a balance under two instalments.
-      const last = loan.installmentsTotal !== null && count >= loan.installmentsTotal && balance < 2 * loan.installment;
-      const take = Math.round((last ? balance : Math.min(loan.installment, balance)) * 100) / 100;
-      balance = Math.round((balance - take) * 100) / 100;
-      rows.push({ period, amount: take, kind: 'planned', balanceAfter: balance });
-      period = nextPeriod(period);
-      guard += 1;
-    }
+    const rows = planLoan(loan, taken);
     res.json({ data: { loan, rows } });
   }
 
@@ -126,6 +135,7 @@ export class LoanController {
     const rows = await select(
       `SELECT ${LOAN_COLUMNS} ${LOAN_FROM}
        WHERE true${scope.sql} ${employeeId ? 'AND l.employee_id = :employeeId' : ''}
+         ${req.query.archived === 'true' ? 'AND l.archived_at IS NOT NULL' : 'AND l.archived_at IS NULL'}
          ${status ? 'AND l.status = :status' : ''}
        ORDER BY l.status, e.employee_no, l.start_period`,
       { ...scope.params, employeeId, status },
@@ -136,8 +146,18 @@ export class LoanController {
   static async create(req: Request, res: Response): Promise<void> {
     const input = body(req);
     assertOnlyKeys(input, [
-      'employeeId', 'currency', 'principal', 'installment', 'installmentsTotal', 'paidBefore', 'startPeriod', 'reference', 'notes',
+      'employeeId', 'currency', 'principal', 'installment', 'installmentsTotal', 'paidBefore', 'startPeriod', 'reference', 'notes', 'kind', 'months',
     ]);
+    // A direct deduction is taken whole from one month's salary, then closed and archived.
+    const kind = input.kind === 'direct' ? 'direct' : 'installment';
+    if (kind === 'direct') { input.installment = input.principal; input.installmentsTotal = 1; }
+    // Spread over a number of months: the instalment is worked out (the last one takes the rounding).
+    if (kind === 'installment' && input.months !== undefined && input.installment === undefined) {
+      const months = Number(input.months);
+      if (!Number.isInteger(months) || months < 1 || months > 120) throw badRequest('عدد الأشهر غير صالح.');
+      input.installment = Math.ceil(Number(input.principal) / months);
+      input.installmentsTotal = months;
+    }
     const employee = await employeeInScope(req, input.employeeId);
     const principal = optionalNumber(input, 'principal', { min: 0.01, max: 1e12 });
     const installment = optionalNumber(input, 'installment', { min: 0.01, max: 1e12 });
@@ -160,11 +180,11 @@ export class LoanController {
     await transaction(async (tx) => {
       await execute(
         `INSERT INTO employee_loans (id, employee_id, currency, principal, installment, installments_total, paid_before, start_period,
-           reference, notes, created_by)
+           reference, notes, created_by, kind)
          VALUES (:id, :employeeId, :currency, :principal, :installment, :installmentsTotal, :paidBefore, :startPeriod,
-           :reference, :notes, :userId)`,
+           :reference, :notes, :userId, :kind)`,
         {
-          id, employeeId: employee.id, currency: loanCurrency, principal, installment, installmentsTotal, paidBefore, startPeriod,
+          id, kind, employeeId: employee.id, currency: loanCurrency, principal, installment, installmentsTotal, paidBefore, startPeriod,
           reference: optionalText(input, 'reference', 60) ?? null, notes: optionalText(input, 'notes', 1000) ?? null,
           userId: req.user!.id,
         },

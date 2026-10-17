@@ -222,6 +222,8 @@ interface Profile {
   emergencyContactRelation: string | null; educationLevel: string | null; educationMajor: string | null; bloodType: string | null;
   socialSecurityNo: string | null; paymentMethod: string | null; bankName: string | null; bankAccountNo: string | null;
   walletProvider: string | null; updatedAt?: string; updatedByName?: string;
+  residencyStatus?: 'local' | 'foreign' | null; passportNo?: string | null; passportExpiry?: string | null;
+  residencyType?: string | null; residencyNo?: string | null; residencyExpiry?: string | null;
 }
 
 const GOVERNORATES = ['بغداد', 'البصرة', 'نينوى', 'أربيل', 'السليمانية', 'دهوك', 'كركوك', 'الأنبار', 'بابل', 'كربلاء', 'النجف', 'واسط', 'ديالى', 'صلاح الدين', 'ذي قار', 'ميسان', 'المثنى', 'القادسية', 'حلبجة'];
@@ -246,6 +248,8 @@ function PersonalTab({ employeeId }: { employeeId: string }) {
       emergencyContactName: text('emergencyContactName'), emergencyContactPhone: text('emergencyContactPhone'),
       emergencyContactRelation: text('emergencyContactRelation'), educationLevel: text('educationLevel'),
       educationMajor: text('educationMajor'), bloodType: text('bloodType'), socialSecurityNo: text('socialSecurityNo'),
+      residencyStatus: text('residencyStatus') ?? 'local', passportNo: text('passportNo'), passportExpiry: text('passportExpiry'),
+      residencyType: text('residencyType'), residencyNo: text('residencyNo'), residencyExpiry: text('residencyExpiry'),
     };
     if (canPay) {
       Object.assign(body, {
@@ -286,6 +290,16 @@ function PersonalTab({ employeeId }: { employeeId: string }) {
           <label className="field"><span>عدد المعالين</span><input name="dependentsCount" type="number" min={0} max={30} defaultValue={value?.dependentsCount ?? ''} /></label>
           <label className="field"><span>فصيلة الدم</span><select name="bloodType" defaultValue={value?.bloodType ?? ''}><option value="">—</option>{['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
           <label className="field"><span>رقم الضمان الاجتماعي</span><input name="socialSecurityNo" dir="ltr" maxLength={40} defaultValue={value?.socialSecurityNo ?? ''} /></label>
+        </div>
+        <h4 className="form-section">محلي / أجنبي · Local / Foreign</h4>
+        <p className="muted-note">للموظف الأجنبي: يصل تذكير له وللمالك قبل انتهاء الإقامة (الفيزا) بـ 60 يوماً وقبل انتهاء الجواز بـ 6 أشهر. رقم الجواز مشفّر.</p>
+        <div className="form-grid">
+          <label className="field"><span>نوع الموظف</span><select name="residencyStatus" defaultValue={value?.residencyStatus ?? 'local'}><option value="local">محلي (عراقي)</option><option value="foreign">أجنبي</option></select></label>
+          <label className="field"><span>رقم الجواز</span><input name="passportNo" dir="ltr" maxLength={40} defaultValue={value?.passportNo ?? ''} /></label>
+          <label className="field"><span>انتهاء الجواز</span><input name="passportExpiry" type="date" defaultValue={value?.passportExpiry ?? ''} /></label>
+          <label className="field"><span>نوع الإقامة</span><select name="residencyType" defaultValue={value?.residencyType ?? ''}><option value="">—</option>{['إقامة عمل', 'فيزا عمل', 'إقامة دائمة', 'إقامة إقليم كردستان', 'زيارة'].map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label className="field"><span>رقم الإقامة / الفيزا</span><input name="residencyNo" dir="ltr" maxLength={60} defaultValue={value?.residencyNo ?? ''} /></label>
+          <label className="field"><span>انتهاء الإقامة</span><input name="residencyExpiry" type="date" defaultValue={value?.residencyExpiry ?? ''} /></label>
         </div>
         <h4 className="form-section">السكن والطوارئ</h4>
         <div className="form-grid">
@@ -388,7 +402,7 @@ function DocumentsTab({ employeeId }: { employeeId: string }) {
       <Dialog open={open} title="رفع مستند" onClose={() => setOpen(false)}>
         <form onSubmit={upload}>
           <div className="form-grid form-grid-2">
-            <label className="field"><span>نوع المستند *</span><select name="docType" required defaultValue="">{[<option key="" value="" disabled>اختر</option>, ...Object.entries(DOCUMENT_TYPES).map(([value, label]) => <option key={value} value={value}>{label}</option>)]}</select></label>
+            <label className="field"><span>نوع المستند *</span><select name="docType" required defaultValue="">{[<option key="" value="" disabled>اختر</option>, ...Object.entries(DOCUMENT_TYPES).filter(([value]) => value !== 'photo').map(([value, label]) => <option key={value} value={value}>{label}</option>)]}</select></label>
             <label className="field"><span>العنوان *</span><input name="title" required maxLength={160} placeholder="مثال: البطاقة الوطنية - الوجهان" /></label>
             <label className="field"><span>رقم المستند</span><input name="docNumber" dir="ltr" maxLength={80} /></label>
             <label className="field"><span>تاريخ الإصدار</span><input name="issueDate" type="date" /></label>
@@ -407,7 +421,7 @@ interface ContractRow {
   probationEndsOn: string | null; status: string; notes: string | null; documentId: string | null;
 }
 
-interface ContractTemplate { id: string; name: string; contractType: string | null; fields: string[]; isActive: boolean }
+interface ContractTemplate { id: string; name: string; contractType: string | null; fields: string[]; isActive: boolean; kind?: string }
 interface FieldValue { key: string; alias: string; label: string; value: string }
 
 /** The day before the same date `months` later (a one-year contract, a three-month probation). */
@@ -422,7 +436,7 @@ function GenerateContract({ employeeId, onDone, onClose }: { employeeId: string;
   const session = useSession();
   const templates = useLoad<ContractTemplate[]>('/contracts/templates', []);
   const preview = useLoad<FieldValue[]>(`/employees/${employeeId}/contracts/preview`, []);
-  const active = templates.data.filter((item) => item.isActive);
+  const active = templates.data.filter((item) => item.isActive && item.kind !== 'advance');
   const [templateId, setTemplateId] = useState('');
   const [startsOn, setStartsOn] = useState(today());
   const [busy, setBusy] = useState(false);

@@ -14,50 +14,76 @@ export function InviteDialog({ target, onClose }: { target: InviteTarget | null;
   const session = useSession();
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [result, setResult] = useState<{ body: string; queued: number; disabledChannels: string[]; links: { whatsapp: string | null; sms: string | null; email: string | null } } | null>(null);
+  const [channel, setChannel] = useState<'whatsapp' | 'sms' | 'email'>('whatsapp');
+  const [text, setText] = useState('');
+  const [original, setOriginal] = useState('');
+  const [subject, setSubject] = useState('');
+  const [result, setResult] = useState<Delivery | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { setPhone(target?.phone ?? ''); setEmail(target?.email && !target.email.endsWith('@portal.local') ? target.email : ''); setResult(null); }, [target]);
 
-  async function prepare(channels: string[]) {
+  async function deliver(channels: string[], customBody?: string): Promise<Delivery | null> {
     if (!target) return null;
     setBusy(true);
     try {
-      const response = await session.call<{ data: NonNullable<typeof result> }>('/invites/deliver', { method: 'POST', body: {
+      const response = await session.call<{ data: Delivery }>('/invites/deliver', { method: 'POST', body: {
         link: target.url, name: target.name, login: target.login, kind: target.kind, phone: phone || null, email: email || null, channels,
+        ...(customBody ? { customBody } : {}),
       } });
-      setResult(response.data);
       return response.data;
     } catch (error) { session.fail(error, 'تعذر تجهيز الدعوة.'); return null; } finally { setBusy(false); }
   }
-  async function open(channel: 'whatsapp' | 'sms' | 'email') {
-    const prepared = await prepare([channel]);
-    if (!prepared) return;
-    if (prepared.queued) { session.notify('أُرسلت الدعوة تلقائياً عبر القناة المفعّلة.'); return; }
-    const link = prepared.links[channel];
+
+  useEffect(() => {
+    const goodEmail = target?.email && !target.email.endsWith('@portal.local') ? target.email : '';
+    setPhone(target?.phone ?? ''); setEmail(goodEmail); setResult(null); setText(''); setOriginal('');
+    setChannel(target?.phone ? 'whatsapp' : goodEmail ? 'email' : 'whatsapp');
+    if (!target) return;
+    // The ready text (Arabic and English, with the sign-in page and the one-time link), for the sender to read and edit.
+    void deliver([]).then((preview) => { if (preview) { setText(preview.body); setOriginal(preview.body); setSubject(preview.subject ?? ''); } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  const to = channel === 'email' ? email : phone;
+  const linkMissing = Boolean(target && text && !text.includes(target.url));
+
+  async function send() {
+    if (!to) { session.notify(channel === 'email' ? 'أدخل البريد الإلكتروني.' : 'أدخل رقم الهاتف.', true); return; }
+    const sent = await deliver([channel], text.trim() !== original.trim() ? text.trim() : undefined);
+    if (!sent) return;
+    setResult(sent);
+    if (sent.queued) { session.notify('أُرسلت الدعوة تلقائياً عبر القناة المفعّلة.'); return; }
+    const link = sent.links[channel];
     if (link) window.open(link, channel === 'whatsapp' ? '_blank' : '_self');
-    else session.notify(channel === 'email' ? 'أدخل البريد الإلكتروني.' : 'أدخل رقم الهاتف.', true);
   }
 
+  const CHANNEL_LABEL = { whatsapp: 'واتساب · WhatsApp', sms: 'رسالة نصية · SMS', email: 'بريد · E-mail' } as const;
   return (
     <Dialog open={Boolean(target)} title={target?.kind === 'staff' ? 'دعوة مستخدم · Invite user' : target?.kind === 'demo' ? 'دعوة لتجربة النظام · Demo invitation' : 'دعوة لبوابة الموظف · Portal invitation'}
       subtitle={target ? `${target.name} · يدخل بـ ${target.login} · الرابط صالح 7 أيام ولمرة واحدة` : ''} onClose={onClose}>
       {target && <div className="invite-link">
+        <div className="field"><span>طريقة الإرسال · Send by</span><div className="segmented">
+          {(['whatsapp', 'sms', 'email'] as const).map((item) => <button key={item} type="button" aria-pressed={channel === item} onClick={() => setChannel(item)}>
+            {item === 'whatsapp' ? <MessageCircle size={14} /> : item === 'sms' ? <Smartphone size={14} /> : <Mail size={14} />}{CHANNEL_LABEL[item]}</button>)}
+        </div></div>
         <div className="form-grid">
-          <label className="field"><span>رقم الهاتف (واتساب / رسالة نصية)</span><input dir="ltr" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="07XX XXX XXXX" /></label>
-          <label className="field"><span>البريد الإلكتروني</span><input dir="ltr" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
+          {channel === 'email'
+            ? <label className="field"><span>البريد الإلكتروني</span><input dir="ltr" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
+            : <label className="field"><span>رقم الهاتف</span><input dir="ltr" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="07XX XXX XXXX" /></label>}
+          {channel === 'email' && subject && <label className="field"><span>الموضوع</span><input readOnly value={subject} /></label>}
         </div>
+        <label className="field"><span>نص الرسالة — اقرأه وعدّله قبل الإرسال (فيه رابط الدخول ورابط تعيين كلمة المرور)</span>
+          <textarea rows={10} value={text} onChange={(event) => setText(event.target.value)} placeholder={busy ? 'يُجهَّز النص…' : ''} /></label>
+        {linkMissing && <p className="bad-text small">يجب أن يبقى رابط تعيين كلمة المرور في النص كما هو.</p>}
         <div className="invite-actions">
-          <button className="button invite-whatsapp" disabled={busy || !phone} onClick={() => void open('whatsapp')}><MessageCircle size={16} />واتساب · WhatsApp</button>
-          <button className="button button-quiet" disabled={busy || !phone} onClick={() => void open('sms')}><Smartphone size={16} />رسالة نصية · SMS</button>
-          <button className="button button-quiet" disabled={busy || !email} onClick={() => void open('email')}><Mail size={16} />بريد · E-mail</button>
-          <button className="button button-quiet" disabled={busy} onClick={async () => { const prepared = result ?? await prepare([]); if (prepared) { await navigator.clipboard.writeText(prepared.body); session.notify('نُسخت الرسالة.'); } }}><Copy size={16} />نسخ</button>
+          <button className={`button ${channel === 'whatsapp' ? 'invite-whatsapp' : 'button-primary'}`} disabled={busy || !text || linkMissing || !to} onClick={() => void send()}><Send size={16} />إرسال عبر {CHANNEL_LABEL[channel]}</button>
+          {text !== original && <button className="button button-quiet" disabled={busy} onClick={() => setText(original)}>استرجاع النص الأصلي</button>}
+          <button className="button button-quiet" disabled={!text} onClick={async () => { await navigator.clipboard.writeText(text); session.notify('نُسخت الرسالة.'); }}><Copy size={16} />نسخ</button>
         </div>
-        {result && <>
-          <textarea readOnly rows={8} value={result.body} />
-          {result.queued > 0 ? <p className="good-text"><Send size={13} /> أُرسلت تلقائياً.</p>
-            : result.disabledChannels.length > 0 && <p className="muted small">الإرسال التلقائي لهذه القناة غير مفعّل؛ فُتح التطبيق على جهازك والرسالة جاهزة، اضغط إرسال. يفعّله مالك النظام من «لوحة المالك ← القنوات».</p>}
-        </>}
+        {result && (result.queued > 0 ? <p className="good-text"><Send size={13} /> أُرسلت تلقائياً.</p>
+          : result.disabledChannels.length > 0 && <p className="muted small">الإرسال التلقائي لهذه القناة غير مفعّل؛ فُتح التطبيق على جهازك والرسالة جاهزة، اضغط إرسال. يفعّله مالك النظام من «لوحة المالك ← القنوات».</p>)}
       </div>}
     </Dialog>
   );
 }
+
+interface Delivery { body: string; subject?: string; queued: number; disabledChannels: string[]; links: { whatsapp: string | null; sms: string | null; email: string | null } }

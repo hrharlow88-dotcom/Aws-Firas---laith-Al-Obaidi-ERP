@@ -21,6 +21,7 @@ export interface RunRow {
   startsOn: string;
   endsOn: string;
   branchId: string | null;
+  governorateId: string | null;
   status: 'draft' | 'calculated' | 'approved' | 'posted' | 'cancelled';
   currency: string;
   createdBy: string;
@@ -31,7 +32,7 @@ export interface RunRow {
 export async function loadRun(id: string, transaction?: Transaction, lock = false): Promise<RunRow | null> {
   return selectOne<RunRow>(
     `SELECT id, period, to_char(starts_on, 'YYYY-MM-DD') AS "startsOn", to_char(ends_on, 'YYYY-MM-DD') AS "endsOn",
-            branch_id AS "branchId", status, currency, created_by AS "createdBy",
+            branch_id AS "branchId", governorate_id AS "governorateId", status, currency, created_by AS "createdBy",
             calculated_by AS "calculatedBy", approved_by AS "approvedBy"
      FROM payroll_runs WHERE id = :id${lock ? ' FOR UPDATE' : ''}`,
     { id },
@@ -91,6 +92,7 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
        AND e.employment_status <> 'suspended'
        ${settings.payrollRules.terminatedPaidBySettlement ? 'AND (e.termination_date IS NULL OR e.termination_date > :end)' : ''}
        ${run.branchId ? 'AND e.branch_id = :branchId' : ''}
+       ${run.governorateId ? 'AND e.branch_id IN (SELECT gb.id FROM branches gb WHERE gb.governorate_id = :governorateId)' : ''}
        AND NOT EXISTS (
          SELECT 1 FROM payroll_lines l JOIN payroll_runs r ON r.id = l.run_id
          WHERE l.employee_id = e.id AND r.period = :period AND r.currency = :currency
@@ -100,7 +102,7 @@ export async function buildRunLines(run: RunRow, transaction?: Transaction): Pro
          SELECT 1 FROM employee_compensation c WHERE c.employee_id = e.id AND c.currency = :currency AND c.effective_from <= :end
        )
      ORDER BY e.employee_no`,
-    { start: run.startsOn, end: run.endsOn, branchId: run.branchId, period: run.period, currency: run.currency, runId: run.id },
+    { start: run.startsOn, end: run.endsOn, branchId: run.branchId, governorateId: run.governorateId, period: run.period, currency: run.currency, runId: run.id },
     transaction,
   );
   if (!employees.length) return [];

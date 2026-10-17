@@ -25,6 +25,8 @@ export interface AuthenticatedUser {
   employeeId: string | null;
   /** A demo account (demo copy of the system only). */
   isDemo?: boolean;
+  /** Apps this account may open; null = whatever the role allows. */
+  appAccess?: string[] | null;
 }
 
 declare global {

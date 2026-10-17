@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Archive, MessagesSquare, Building, CalendarRange, ClipboardCheck, Crown, Megaphone, ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
+  Archive, MessagesSquare, Receipt, Stamp, Building, CalendarRange, ClipboardCheck, Crown, Megaphone, ClipboardList, ShieldAlert, LifeBuoy, Briefcase, BookOpenCheck, CalendarDays, CircleUserRound, Target, Fingerprint, History, Landmark, LayoutDashboard, PlugZap, Settings, Users, Wallet,
 } from 'lucide-react';
 import type { Permission } from '../SettingsPage';
 import { tAr, tEn } from './texts';
@@ -49,7 +49,7 @@ export const APPS: AppDefinition[] = [
   },
   {
     id: 'calendar', label: 'التقويم', description: 'المواعيد والإجازات والعطل', icon: CalendarRange,
-    colors: ['#e2574c', '#a8322a'], menus: [{ page: 'calendar', label: 'التقويم' }],
+    colors: ['#e2574c', '#a8322a'], menus: [{ page: 'calendar', label: 'التقويم' }, { page: 'holidays', label: 'العطل الرسمية' }],
   },
   {
     id: 'communication', label: 'الإعلانات والرسائل', description: 'التعاميم والدعوات', icon: Megaphone,
@@ -72,6 +72,7 @@ export const APPS: AppDefinition[] = [
       { page: 'companies', label: 'شركات المجموعة' },
       { page: 'branches', label: 'الفروع' },
       { page: 'contract-templates', label: 'قوالب العقود', permission: 'employees.manage_profile' },
+      { page: 'documents-check', label: 'اكتمال الوثائق', permission: 'employees.view_profile' },
     ],
     extraPages: ['card'],
     staffOnly: true,
@@ -107,6 +108,7 @@ export const APPS: AppDefinition[] = [
     colors: ['#5b8def', '#2f5fc4'], menus: [
       { page: 'leaves', label: 'الإجازات والأرصدة', permission: 'leaves.view' },
       { page: 'leave-accrual', label: 'الاستحقاق الشهري', permission: 'leaves.manage_balances' },
+      { page: 'comp-leave', label: 'الإجازة التعويضية', permission: 'leaves.view' },
     ],
   },
   {
@@ -114,11 +116,23 @@ export const APPS: AppDefinition[] = [
     colors: ['#9b6bd6', '#6c3fb0'],
     menus: [
       { page: 'payroll', label: 'المسيرات', permission: 'payroll.view' },
+      { page: 'payroll-register', label: 'الرواتب حسب المحافظة', permission: 'payroll.view' },
       { page: 'payroll-days', label: 'أيام الاستحقاق', permission: 'payroll.view' },
       { page: 'loans', label: 'السلف', permission: 'payroll.view' },
       { page: 'payroll-archive', label: 'أرشيف المسيرات', permission: 'payroll.view' },
     ],
     extraPages: ['payslip'],
+  },
+  {
+    id: 'expenses', label: 'التكاليف', description: 'تقارير المصاريف والاسترداد', icon: Receipt,
+    colors: ['#2e9d6b', '#1b6e48'], menus: [{ page: 'expenses', label: 'تقارير المصاريف' }],
+  },
+  {
+    id: 'approval-requests', label: 'الموافقات', description: 'طلبات الشراء والسفر والعهد وغيرها', icon: Stamp,
+    colors: ['#c47b2a', '#8e5113'], menus: [
+      { page: 'approval-requests', label: 'طلبات الموافقة' },
+      { page: 'approval-categories', label: 'أنواع الموافقات', adminOnly: true },
+    ],
   },
   {
     id: 'performance', label: 'الأداء', description: 'الأوصاف الوظيفية ومؤشرات الأداء', icon: Target,
@@ -157,6 +171,7 @@ export const APPS: AppDefinition[] = [
     colors: ['#2f2a33', '#0f0d11'], menus: [
       { page: 'guard', label: 'الحارس الأمني', adminOnly: true },
       { page: 'owner', label: 'تحكم المالك', adminOnly: true },
+      { page: 'ai', label: 'المساعد الذكي', adminOnly: true },
       { page: 'recycle-bin', label: 'سلة المحذوفات', adminOnly: true },
       { page: 'activity', label: 'حركات النظام', adminOnly: true },
     ],
@@ -178,9 +193,19 @@ export function appForPage(page: string): AppDefinition | undefined {
   return APPS.find((app) => app.menus.some((menu) => menu.page === page) || app.extraPages?.includes(page));
 }
 
-/** Apps the owner hid from everyone else. */
-export function hiddenFor(app: AppDefinition, hiddenApps: string[] | undefined, isOwner: boolean): boolean {
-  return !isOwner && Boolean(hiddenApps?.includes(app.id));
+/** Apps the owner hid from everyone else, or kept away from this account. */
+export function hiddenFor(app: AppDefinition, hiddenApps: string[] | undefined, isOwner: boolean, appAccess?: string[] | null): boolean {
+  if (isOwner) return false;
+  if (hiddenApps?.includes(app.id)) return true;
+  // Apps always open to everyone: the personal portal, chat, approvals inbox and calendar.
+  return Boolean(appAccess) && !['me', 'approvals', 'chat', 'calendar', 'settings'].includes(app.id) && !appAccess!.includes(app.id);
+}
+
+/** The apps in the order the owner arranged them; any not placed keep their default position after those. */
+export function orderedApps(order: string[] | undefined): AppDefinition[] {
+  if (!order?.length) return APPS;
+  const rank = new Map(order.map((id, index) => [id, index]));
+  return [...APPS].sort((a, b) => (rank.get(a.id) ?? 1000 + APPS.indexOf(a)) - (rank.get(b.id) ?? 1000 + APPS.indexOf(b)));
 }
 
 export function visibleMenus(app: AppDefinition, can: (permission: Permission) => boolean, isAdmin: boolean): AppMenu[] {
@@ -217,6 +242,10 @@ export const EN: Record<string, string> = {
   'تحكم المالك': 'Owner Controls', 'سلة المحذوفات': 'Recycle Bin',
   'المحادثات': 'Discuss', 'القنوات والرسائل المباشرة': 'Channels and direct messages', 'شركات المجموعة': 'Group Companies',
   'الطلبات': 'Requests', 'طلبات الموظفين': 'Employee Requests', 'حسابات البوابة': 'Portal Accounts',
+  'التكاليف': 'Expenses', 'تقارير المصاريف والاسترداد': 'Expense reports and reimbursement', 'تقارير المصاريف': 'Expense Reports',
+  'الموافقات': 'Approvals', 'طلبات الشراء والسفر والعهد وغيرها': 'Purchases, trips, items and more', 'طلبات الموافقة': 'Approval Requests',
+  'أنواع الموافقات': 'Approval Types', 'المساعد الذكي': 'AI Assistant', 'اكتمال الوثائق': 'Document Completeness',
+  'العطل الرسمية': 'Official Holidays', 'الإجازة التعويضية': 'Compensatory Leave', 'الرواتب حسب المحافظة': 'Payroll by Governorate',
 };
 /** English label, with the owner's rename if any. */
 export const en = (label: string): string => tEn(label, EN[label] ?? '');

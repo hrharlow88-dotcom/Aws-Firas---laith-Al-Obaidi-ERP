@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react';
-import { CalendarClock, HandCoins, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CalendarClock, Download, FileText, HandCoins, Pencil, Plus, Trash2 } from 'lucide-react';
+import { DocumentFrame } from '../components/DocumentFrame';
+import { downloadFile } from '../lib/api';
 import { Dialog, Empty, Loading, Stat, Tabs, Tone, useReasonPrompt } from '../components/ui';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
 import { formatMoney, formatNumber, monthLabel, previousPeriod } from '../lib/format';
@@ -11,7 +13,7 @@ interface Loan {
   installment: number; paidBefore: number; installmentsTotal: number | null; installmentsPaid: number; startPeriod: string;
   status: 'active' | 'suspended' | 'closed'; reference: string | null; notes: string | null; repaidByPayroll: number;
   pendingDeduction: number;
-  remaining: number; lastPeriod: string | null;
+  remaining: number; lastPeriod: string | null; kind?: 'installment' | 'direct'; closedAt?: string | null; archivedAt?: string | null;
 }
 
 const LOAN_STATUS: Record<Loan['status'], { label: string; tone: string }> = {
@@ -23,8 +25,10 @@ const LOAN_STATUS: Record<Loan['status'], { label: string; tone: string }> = {
 /** Instalment loans: what was lent, what payroll has taken back, what is left. */
 export function LoansPage() {
   const session = useSession();
-  const [status, setStatus] = useState<'active' | 'all' | 'months'>('active');
-  const loans = useLoad<Loan[]>(status === 'months' ? null : `/payroll/loans${status === 'active' ? '?status=active' : ''}`, []);
+  const [status, setStatus] = useState<'active' | 'all' | 'archived' | 'months'>('active');
+  const loans = useLoad<Loan[]>(status === 'months' ? null : `/payroll/loans${status === 'active' ? '?status=active' : status === 'archived' ? '?archived=true' : ''}`, []);
+  const [kind, setKind] = useState<'installment' | 'direct'>('installment');
+  const [formOf, setFormOf] = useState<Loan | null>(null);
   const [scheduleOf, setScheduleOf] = useState<Loan | null>(null);
   const [draft, setDraft] = useState({ principal: 0, months: 0, start: previousPeriod() });
   const [creating, setCreating] = useState(false);
@@ -46,13 +50,13 @@ export function LoansPage() {
     try {
       await session.call('/payroll/loans', {
         body: {
-          employeeId: employee.id, currency: form.get('currency') || undefined, principal: number('principal'),
-          installment: number('installment'), installmentsTotal: number('installmentsTotal'), paidBefore: number('paidBefore') ?? 0,
+          employeeId: employee.id, currency: form.get('currency') || undefined, principal: number('principal'), kind,
+          ...(kind === 'direct' ? {} : { installment: number('installment'), installmentsTotal: number('installmentsTotal') }), paidBefore: number('paidBefore') ?? 0,
           startPeriod: form.get('startPeriod'), reference: String(form.get('reference') || '') || null,
           notes: String(form.get('notes') || '') || null,
         },
       });
-      session.notify('سُجلت السلفة وستُستقطع أقساطها من المسيرات.');
+      session.notify(kind === 'direct' ? 'سُجلت السلفة وستُستقطع كاملة من راتب الشهر، ثم تُغلق وتُؤرشف.' : 'سُجلت السلفة وستُستقطع أقساطها من المسيرات.');
       setCreating(false);
       setEmployee(null);
       loans.reload();
@@ -86,7 +90,7 @@ export function LoansPage() {
         <Stat label="المتبقي بالدولار" value={formatMoney(owed('USD'), 'USD')} foot={`قسط الشهر ${formatMoney(monthly('USD'), 'USD')}`} />
       </div>
       <section className="panel">
-        <div className="panel-head"><Tabs<'active' | 'all' | 'months'> value={status} onChange={setStatus} items={[{ id: 'active', label: 'قيد الاستقطاع · Active' }, { id: 'all', label: 'كل السلف · All' }, { id: 'months', label: 'أرشيف الاستقطاع الشهري · Monthly archive' }]} /></div>
+        <div className="panel-head"><Tabs<'active' | 'all' | 'archived' | 'months'> value={status} onChange={setStatus} items={[{ id: 'active', label: 'قيد الاستقطاع · Active' }, { id: 'all', label: 'كل السلف · All' }, { id: 'archived', label: 'المؤرشفة · Archived' }, { id: 'months', label: 'أرشيف الاستقطاع الشهري · Monthly archive' }]} /></div>
         {status === 'months' ? <MonthlyDeductions /> : loans.loading ? <Loading /> : loans.data.length ? <div className="table-scroll"><table className="dense">
           <thead><tr><th>الموظف</th><th>مبلغ السلفة</th><th>القسط</th><th>الأقساط</th><th>المسدد</th><th>المتبقي</th><th>آخر استقطاع</th><th>الحالة</th>{canEdit && <th />}</tr></thead>
           <tbody>{loans.data.map((loan) => {
@@ -94,14 +98,14 @@ export function LoansPage() {
             const progress = Math.min(100, Math.round((paid / loan.principal) * 100));
             return <tr key={loan.id}>
               <td><button className="text-button" onClick={() => navigate('employees', loan.employeeId)}><strong>{loan.employeeName}</strong></button><small className="table-sub">{loan.employeeNo}{loan.notes ? ` · ${loan.notes.slice(0, 60)}` : ''}</small></td>
-              <td><button className="text-button" onClick={() => setScheduleOf(loan)}><strong>{formatMoney(loan.principal, loan.currency)}</strong></button><small className="table-sub">من {monthLabel(loan.startPeriod)} · <button className="link-inline" onClick={() => setScheduleOf(loan)}>جدول الأشهر</button></small></td>
+              <td><button className="text-button" onClick={() => setScheduleOf(loan)}><strong>{formatMoney(loan.principal, loan.currency)}</strong></button><small className="table-sub">{loan.kind === 'direct' ? 'استقطاع مباشر · ' : ''}من {monthLabel(loan.startPeriod)} · <button className="link-inline" onClick={() => setScheduleOf(loan)}>جدول الأشهر</button></small></td>
               <td>{formatMoney(loan.installment, loan.currency)}</td>
               <td>{loan.installmentsTotal ? `${formatNumber(loan.installmentsPaid)} من ${formatNumber(loan.installmentsTotal)}` : formatNumber(loan.installmentsPaid)}</td>
               <td><span className="progress" aria-label={`${progress}%`}><i style={{ width: `${progress}%` }} /></span><small className="table-sub">{formatMoney(paid, loan.currency)}</small></td>
               <td><strong className={loan.remaining > 0 ? 'num-warn' : ''}>{formatMoney(Math.max(0, loan.remaining), loan.currency)}</strong>{loan.pendingDeduction > 0 && <small className="table-sub">يُستقطع {formatMoney(loan.pendingDeduction, loan.currency)} بمسير غير معتمد</small>}</td>
               <td>{loan.lastPeriod ? monthLabel(loan.lastPeriod) : '—'}</td>
               <td>{loan.status === 'active' && loan.remaining <= 0.004 ? <Tone tone="good">مسددة</Tone> : <Tone tone={LOAN_STATUS[loan.status].tone}>{LOAN_STATUS[loan.status].label}</Tone>}</td>
-              {canEdit && <td><button className="icon-link" aria-label="تعديل" onClick={() => setEditing(loan)}><Pencil size={14} /></button></td>}
+              {canEdit && <td className="row-actions"><button className="icon-link" aria-label="استمارة السلفة" title="استمارة السلفة" onClick={() => setFormOf(loan)}><FileText size={14} /></button>{!loan.archivedAt && <button className="icon-link" aria-label="تعديل" onClick={() => setEditing(loan)}><Pencil size={14} /></button>}</td>}
             </tr>;
           })}</tbody>
         </table></div> : <Empty icon={<HandCoins size={22} />} title="لا توجد سلف" text="سجّل السلفة هنا وستُستقطع أقساطها من مسيرات الرواتب." />}
@@ -110,18 +114,22 @@ export function LoansPage() {
       <Dialog open={creating} title="سلفة جديدة" subtitle="تبدأ الأقساط من الشهر المحدد. للسلف القديمة أدخل ما سُدد قبل النظام." onClose={() => setCreating(false)}>
         <form onSubmit={create}>
           <div className="form-grid">
+            <div className="field field-wide"><span>طريقة الاسترداد</span><div className="segmented">
+              <button type="button" aria-pressed={kind === 'installment'} onClick={() => setKind('installment')}>أقساط شهرية · Instalments</button>
+              <button type="button" aria-pressed={kind === 'direct'} onClick={() => setKind('direct')}>استقطاع مباشر من الراتب · Direct</button></div>
+              <small>{kind === 'direct' ? 'تُستقطع كاملة من راتب أول شهر، وعند اعتماد المسير تُغلق وتُؤرشف ولا تظهر في السلف القائمة.' : 'تُقسّم على الأشهر، ويصل تذكير كل شهر بالقسط والمتبقي وآخر استقطاع.'}</small></div>
             <EmployeePicker label="الموظف *" value={employee} onChange={setEmployee} />
             <label className="field"><span>العملة</span><select name="currency" defaultValue=""><option value="">عملة راتب الموظف</option><option value="IQD">دينار عراقي</option><option value="USD">دولار أمريكي</option></select></label>
             <label className="field"><span>مبلغ السلفة *</span><input name="principal" type="number" min={0.01} step="0.01" required onChange={(event) => setDraft({ ...draft, principal: Number(event.target.value) })} /></label>
-            <label className="field"><span>عدد الأشهر (الأقساط)</span><input name="installmentsTotal" type="number" min={1} max={240} step={1} onChange={(event) => setDraft({ ...draft, months: Number(event.target.value) })} /></label>
+            {kind === 'installment' && <><label className="field"><span>عدد الأشهر (الأقساط)</span><input name="installmentsTotal" type="number" min={1} max={240} step={1} onChange={(event) => setDraft({ ...draft, months: Number(event.target.value) })} /></label>
             <label className="field"><span>القسط الشهري *</span><input name="installment" type="number" min={0.01} step="0.01" required key={`${draft.principal}-${draft.months}`}
-              defaultValue={draft.principal && draft.months ? Math.floor(draft.principal / draft.months) : undefined} /><small>يُحسب من المبلغ ÷ الأشهر، والقسط الأخير يأخذ الباقي.</small></label>
-            <label className="field"><span>أول شهر استقطاع *</span><input name="startPeriod" type="month" required defaultValue={previousPeriod()} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label>
+              defaultValue={draft.principal && draft.months ? Math.floor(draft.principal / draft.months) : undefined} /><small>يُحسب من المبلغ ÷ الأشهر، والقسط الأخير يأخذ الباقي.</small></label></>}
+            <label className="field"><span>{kind === 'direct' ? 'شهر الاستقطاع *' : 'أول شهر استقطاع *'}</span><input name="startPeriod" type="month" required defaultValue={previousPeriod()} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label>
             <label className="field"><span>مسدد سابقاً</span><input name="paidBefore" type="number" min={0} step="0.01" defaultValue={0} /></label>
             <label className="field"><span>رقم المستند</span><input name="reference" maxLength={60} /></label>
             <label className="field field-wide"><span>ملاحظات</span><input name="notes" maxLength={1000} /></label>
           </div>
-          {draft.principal > 0 && draft.months > 0 && <SplitPreview principal={draft.principal} months={draft.months} start={draft.start} />}
+          {kind === 'installment' && draft.principal > 0 && draft.months > 0 && <SplitPreview principal={draft.principal} months={draft.months} start={draft.start} />}
           <div className="dialog-actions"><button className="button button-primary" disabled={!employee}>حفظ</button><button type="button" className="button button-quiet" onClick={() => setCreating(false)}>إلغاء</button></div>
         </form>
       </Dialog>
@@ -142,9 +150,63 @@ export function LoansPage() {
       <Dialog open={Boolean(scheduleOf)} title="جدول السلفة شهراً بشهر · Loan schedule" subtitle={scheduleOf ? `${scheduleOf.employeeName} · ${formatMoney(scheduleOf.principal, scheduleOf.currency)}` : ''} onClose={() => setScheduleOf(null)}>
         {scheduleOf && <LoanSchedule loan={scheduleOf} />}
       </Dialog>
+      <Dialog open={Boolean(formOf)} title="استمارة السلفة · Advance form" subtitle={formOf ? `${formOf.employeeName} · ${formatMoney(formOf.principal, formOf.currency)}` : ''} onClose={() => setFormOf(null)}>
+        {formOf && <AdvanceForm loan={formOf} />}
+      </Dialog>
       {reason.element}
     </section>
   );
+}
+
+/**
+ * The advance form: filled from the company's own Word template (uploaded in
+ * contract templates as an "advance form") and saved in the employee's file,
+ * or the built-in printable form with the month-by-month split.
+ */
+function AdvanceForm({ loan }: { loan: Loan }) {
+  const session = useSession();
+  const templates = useLoad<Array<{ id: string; name: string; kind?: string; isActive?: boolean; active?: boolean }>>('/contracts/templates', []);
+  const schedule = useLoad<{ rows: Array<{ period: string | null; amount: number; kind: string; balanceAfter: number }> } | null>(`/payroll/loans/${loan.id}/schedule`, null);
+  const advance = templates.data.filter((item) => item.kind === 'advance' && item.isActive !== false && item.active !== false);
+  const [templateId, setTemplateId] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function generate() {
+    const chosen = templateId || advance[0]?.id;
+    if (!chosen) return;
+    setBusy(true);
+    try {
+      const result = await session.call<{ data: { documentId: string } }>(`/payroll/loans/${loan.id}/form`, { body: { templateId: chosen } });
+      session.notify('أُنشئت الاستمارة وحُفظت في مستمسكات الموظف.');
+      await downloadFile(`/documents/${result.data.documentId}/file`, session.token, `استمارة سلفة ${loan.employeeNo}.docx`);
+    } catch (error) {
+      session.fail(error, 'تعذر إنشاء الاستمارة.');
+    } finally { setBusy(false); }
+  }
+  const rows = (schedule.data?.rows ?? []).filter((row) => row.period);
+  const last = rows[rows.length - 1];
+  return <div>
+    <div className="toolbar no-print">
+      {advance.length ? <>
+        <label className="field"><span>قالب الشركة (Word)</span><select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>{advance.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <button className="button button-primary toolbar-action" disabled={busy} onClick={() => void generate()}><Download size={15} />إنشاء من القالب</button>
+      </> : <p className="muted-note">لرفع استمارة الشركة: الموظفون ← قوالب العقود ← رفع قالب، واختر النوع «استمارة سلفة». الحقول: {'{{loan_amount}} {{loan_months}} {{loan_installment}} {{loan_start}} {{loan_end}} {{loan_schedule}} {{loan_remaining}}'}</p>}
+    </div>
+    {!schedule.data ? <Loading /> : <DocumentFrame title="استمارة سلفة" titleEn="Salary advance form" reference={loan.reference} fileName={`advance-${loan.employeeNo}`} preparedBy={session.user.name}>
+      <div className="detail-grid">
+        <span><small>الموظف</small><b>{loan.employeeName} ({loan.employeeNo})</b></span>
+        <span><small>مبلغ السلفة</small><b>{formatMoney(loan.principal, loan.currency)}</b></span>
+        <span><small>طريقة الاسترداد</small><b>{loan.kind === 'direct' ? 'استقطاع مباشر من الراتب' : `أقساط شهرية (${loan.installmentsTotal ?? rows.length} شهر)`}</b></span>
+        <span><small>القسط</small><b>{formatMoney(loan.installment, loan.currency)}</b></span>
+        <span><small>أول استقطاع</small><b>{monthLabel(loan.startPeriod)}</b></span>
+        <span><small>آخر استقطاع</small><b>{last?.period ? monthLabel(last.period) : '—'}</b></span>
+        <span><small>المستقطع حتى الآن</small><b>{formatMoney(loan.paidBefore + loan.repaidByPayroll, loan.currency)}</b></span>
+        <span><small>المتبقي</small><b>{formatMoney(Math.max(0, loan.remaining), loan.currency)}</b></span>
+      </div>
+      <table className="dense"><thead><tr><th>#</th><th>الشهر</th><th>القسط</th><th>الحالة</th><th>المتبقي بعده</th></tr></thead>
+        <tbody>{rows.map((row, index) => <tr key={`${row.period}-${index}`}><td>{index + 1}</td><td>{monthLabel(row.period!)}{index === rows.length - 1 ? ' (الأخير)' : ''}</td><td>{formatMoney(row.amount, loan.currency)}</td><td>{KIND[row.kind]?.label}</td><td>{formatMoney(row.balanceAfter, loan.currency)}</td></tr>)}</tbody></table>
+      <div className="signature-row"><span>توقيع الموظف</span><span>الموارد البشرية</span><span>المالية</span></div>
+    </DocumentFrame>}
+  </div>;
 }
 
 interface Adjustment {

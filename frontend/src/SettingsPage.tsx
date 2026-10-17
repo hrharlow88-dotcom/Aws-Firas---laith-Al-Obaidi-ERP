@@ -83,6 +83,7 @@ export interface InterfaceSettings {
   brands: Array<{ id: string; name: string; logoKey: string | null }>;
   moduleManagers: Record<string, string[]>;
   texts?: Record<string, { ar: string; en?: string }>;
+  appOrder?: string[];
 }
 
 export interface SystemSettings {
@@ -132,6 +133,7 @@ export interface SystemSettings {
   attendanceRules: AttendanceRules;
   security?: SecuritySettings;
   ui?: InterfaceSettings;
+  hr?: HrSettings;
   knownPermissions?: Permission[];
   leaveRules: {
     workingDays: number[];
@@ -141,7 +143,15 @@ export interface SystemSettings {
     hourlyMonthlyUsageLimit: number;
     lowBalanceThreshold: number;
     accrualStartPeriod?: string | null;
+    compLeaveDaysPerHoliday?: number;
   };
+}
+
+export interface HrSettings {
+  documentRules: { local: string[]; foreign: string[]; exempt: Array<{ employeeId: string; docType: string }>; priority: string[] };
+  expenseSteps: Array<{ type: 'manager' | 'role' | 'user'; role?: UserRole; userId?: string }>;
+  expenseCategories: string[];
+  ai: { enabled: boolean; model: string };
 }
 
 const roles: Array<{ id: UserRole; label: string }> = [
