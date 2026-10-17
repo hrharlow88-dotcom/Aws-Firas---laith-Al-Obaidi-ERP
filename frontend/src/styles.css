@@ -938,6 +938,22 @@ html[data-mode="dark"] .o-user-menu { background: var(--paper); border-color: va
 .portal-actions button { display: grid; justify-items: center; gap: 8px; padding: 18px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); font-size: 14px; font-weight: 700; }
 .portal-actions button svg { color: var(--brand); }
 .portal-actions button:hover { border-color: var(--brand); box-shadow: var(--shadow); transform: translateY(-1px); }
+.portal-action-note { color: var(--muted); font-size: 12px; font-weight: 500; }
+/* The owner's note at the top of every portal. */
+.portal-welcome { padding: 14px 18px; border-inline-start: 4px solid var(--brand); border-radius: 10px; background: var(--brass-wash); }
+.portal-welcome p { margin: 0; white-space: pre-line; line-height: 1.7; }
+.photo-picker { display: grid; justify-items: center; gap: 10px; padding: 18px 0 6px; }
+.photo-picker img, .photo-picker-empty { width: 132px; height: 160px; border-radius: 12px; object-fit: cover; border: 1px solid var(--line); }
+.photo-picker-empty { display: grid; place-items: center; background: var(--canvas); color: var(--muted); }
+/* Owner console: portal switches, grouped. */
+.portal-switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; padding: 0 18px 18px; }
+.portal-switch-group { display: grid; gap: 4px; align-content: start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.portal-switch-group h4 { margin: 0 0 6px; font-size: 14px; }
+.portal-switch { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; font-size: 14px; line-height: 1.5; cursor: pointer; }
+.portal-switch input { margin-top: 3px; flex: none; }
+.portal-switch small { display: block; color: var(--muted); font-size: 12.5px; }
+.portal-welcome-field { padding: 0 18px 18px; }
+.portal-welcome-field textarea { width: 100%; min-height: 84px; }
 .portal-note { display: flex; gap: 6px; align-items: center; margin: 0; padding: 9px 11px; border-radius: 7px; background: var(--brass-wash); color: var(--ink); font-size: 13.5px; }
 .balance-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); gap: 10px; padding: 14px; }
 .balance-tiles div { display: grid; gap: 2px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
@@ -1486,3 +1502,33 @@ html[data-mode="dark"] .o-user-menu { background: var(--paper); border-color: va
 .release-list ul li > span:last-child { display: flex; flex-direction: column; }
 .release-list ul li .tone { flex: none; min-width: 64px; justify-content: center; }
 .update-banner { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 8px 16px; background: var(--ink); color: #fff; font-size: 14px; }
+
+/* Employees: photos waiting from the portal, and bulk upload progress. */
+.submission-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: 12px; padding: 0 18px 18px; }
+.submission-card { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px 12px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+.submission-card > div:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+.submission-card small { color: var(--muted); font-size: 12.5px; }
+.submission-card .row-actions { grid-column: 1 / -1; }
+.submission-photo { width: 72px; height: 88px; border-radius: 8px; object-fit: cover; border: 1px solid var(--line); }
+.submission-photo-empty { display: grid; place-items: center; background: var(--canvas); color: var(--muted); }
+.progress-line { height: 8px; border-radius: 999px; background: var(--canvas); overflow: hidden; }
+.progress-line span { display: block; height: 100%; background: var(--brand); transition: width .2s ease; }
+
+/* Attendance: the fingerprint system's three files. */
+.fp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 12px; padding: 0 18px 18px; }
+.fp-card { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); }
+.fp-card > .button { grid-column: 1 / -1; justify-self: start; }
+.fp-card h4 { margin: 0 0 4px; font-size: 15px; }
+.fp-card p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+.fp-card-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; background: var(--brass-wash); color: var(--brand); }
+.fp-dialog { display: grid; gap: 14px; }
+.fp-columns { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; background: var(--canvas); }
+.fp-columns summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; min-height: 32px; }
+.fp-columns .form-grid { padding: 12px 0 2px; }
+.fp-types h4 { margin: 0 0 8px; font-size: 14px; }
+.fp-types select { min-width: 200px; }
+.fp-default-type { max-width: 360px; margin-top: 10px; }
+.fp-rows { max-height: 52vh; overflow: auto; }
+.fp-warning { color: var(--amber, #a15c07); }
+.raw-import { padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.raw-import summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; min-height: 32px; }

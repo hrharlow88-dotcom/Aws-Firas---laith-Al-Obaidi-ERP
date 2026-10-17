@@ -3,7 +3,7 @@ import { Transaction } from 'sequelize';
 import { execute, select } from '../db/query';
 import { getSettings } from './settings';
 import {
-  addDays, computeDay, DayLeave, DayResult, eachDate, punchWindow, ShiftRule, toMinutes,
+  addDays, computeDay, DayLeave, DayResult, DayTask, eachDate, punchWindow, ShiftRule, toMinutes,
 } from './attendanceRules';
 
 export function localToday(timeZone: string): string {
@@ -109,6 +109,20 @@ export async function computeAttendance(scope: ComputeScope, transaction?: Trans
     { ids, from: scope.from, to },
     transaction,
   );
+  const tasks = await select<{ employeeId: string; date: string; startTime: string | null; endTime: string | null; title: string }>(
+    `SELECT employee_id AS "employeeId", to_char(work_date, 'YYYY-MM-DD') AS date,
+            to_char(start_time, 'HH24:MI') AS "startTime", to_char(end_time, 'HH24:MI') AS "endTime", title
+     FROM attendance_tasks
+     WHERE employee_id IN (:ids) AND voided_at IS NULL AND work_date BETWEEN :from AND :to
+     ORDER BY work_date, start_time NULLS FIRST`,
+    { ids, from: scope.from, to },
+    transaction,
+  );
+  const tasksByDay = new Map<string, DayTask[]>();
+  for (const task of tasks) {
+    const key = `${task.employeeId}|${task.date}`;
+    tasksByDay.set(key, [...(tasksByDay.get(key) ?? []), { title: task.title, startTime: task.startTime, endTime: task.endTime }]);
+  }
   const holidays = new Set(settings.leaveRules.officialHolidays);
   const rules = settings.attendanceRules;
 
@@ -136,6 +150,7 @@ export async function computeAttendance(scope: ComputeScope, transaction?: Trans
         shift,
         punches: dayPunches,
         leave,
+        tasks: tasksByDay.get(`${employee.id}|${date}`) ?? [],
         isHoliday: holidays.has(date),
         employed: date >= employee.hireDate && (!employee.terminationDate || date <= employee.terminationDate),
         isPast: date < today,
@@ -152,20 +167,21 @@ export async function computeAttendance(scope: ComputeScope, transaction?: Trans
     await execute(
       `INSERT INTO attendance_days (employee_id, work_date, shift_id, scheduled_minutes, first_in, last_out, punch_count,
          worked_minutes, late_minutes, early_leave_minutes, overtime_minutes, excused_minutes, status,
-         leave_request_id, leave_type_name, computed_at)
+         leave_request_id, leave_type_name, task_title, computed_at)
        SELECT x."employeeId", x."workDate", x."shiftId", x."scheduledMinutes", x."firstIn", x."lastOut", x."punchCount",
               x."workedMinutes", x."lateMinutes", x."earlyLeaveMinutes", x."overtimeMinutes", x."excusedMinutes", x.status,
-              x."leaveRequestId", x."leaveTypeName", now()
+              x."leaveRequestId", x."leaveTypeName", x."taskTitle", now()
        FROM jsonb_to_recordset(:rows::jsonb) AS x(
          "employeeId" uuid, "workDate" date, "shiftId" uuid, "scheduledMinutes" int, "firstIn" timestamp, "lastOut" timestamp,
          "punchCount" int, "workedMinutes" int, "lateMinutes" int, "earlyLeaveMinutes" int, "overtimeMinutes" int,
-         "excusedMinutes" int, status varchar, "leaveRequestId" uuid, "leaveTypeName" varchar)
+         "excusedMinutes" int, status varchar, "leaveRequestId" uuid, "leaveTypeName" varchar, "taskTitle" varchar)
        ON CONFLICT (employee_id, work_date) DO UPDATE SET
          shift_id = EXCLUDED.shift_id, scheduled_minutes = EXCLUDED.scheduled_minutes, first_in = EXCLUDED.first_in,
          last_out = EXCLUDED.last_out, punch_count = EXCLUDED.punch_count, worked_minutes = EXCLUDED.worked_minutes,
          late_minutes = EXCLUDED.late_minutes, early_leave_minutes = EXCLUDED.early_leave_minutes,
          overtime_minutes = EXCLUDED.overtime_minutes, excused_minutes = EXCLUDED.excused_minutes, status = EXCLUDED.status,
-         leave_request_id = EXCLUDED.leave_request_id, leave_type_name = EXCLUDED.leave_type_name, computed_at = now()
+         leave_request_id = EXCLUDED.leave_request_id, leave_type_name = EXCLUDED.leave_type_name,
+         task_title = EXCLUDED.task_title, computed_at = now()
        WHERE attendance_days.payroll_run_id IS NULL`,
       { rows: JSON.stringify(batch) },
       transaction,

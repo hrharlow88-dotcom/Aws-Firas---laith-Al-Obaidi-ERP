@@ -1,3 +1,4 @@
+import { getSettings } from '../services/settings';
 import { Request, Response } from 'express';
 import { select, selectOne } from '../db/query';
 import { loadRun } from '../services/payroll';
@@ -18,7 +19,7 @@ function ownEmployeeId(req: Request): string {
 export class SelfController {
   static async profile(req: Request, res: Response): Promise<void> {
     const employeeId = ownEmployeeId(req);
-    const row = await selectOne(
+    const row = await selectOne<Record<string, unknown>>(
       `SELECT e.id, e.employee_no AS "employeeNo", e.full_name AS "fullName", p.name_en AS "nameEn",
               b.name AS "branchName", COALESCE(d.name, e.department) AS department, COALESCE(j.name, e."position") AS position,
               m.full_name AS "managerName", to_char(e.hire_date, 'YYYY-MM-DD') AS "hireDate",
@@ -35,6 +36,9 @@ export class SelfController {
       { employeeId },
     );
     if (!row) throw notFound('ملف الموظف غير موجود.');
+    const portal = (await getSettings()).portal;
+    if (portal.showManager === false) row.managerName = null;
+    if (portal.showShift === false) row.shiftName = null;
     res.json({ data: row });
   }
 

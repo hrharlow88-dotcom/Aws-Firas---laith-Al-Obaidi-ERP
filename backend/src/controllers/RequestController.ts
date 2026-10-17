@@ -1,3 +1,4 @@
+import { assertPortal } from '../services/portal';
 import { randomUUID } from 'node:crypto';
 import { notifyEmployees, notifyPermission } from '../services/notify';
 import bcrypt from 'bcryptjs';
@@ -63,6 +64,7 @@ export class RequestController {
     assertOnlyKeys(input, ['kind', 'amount', 'currency', 'months', 'startPeriod', 'expenseDate', 'description']);
     const kind = input.kind === 'loan' || input.kind === 'expense' ? input.kind : null;
     if (!kind) throw badRequest('نوع الطلب غير صالح.');
+    await assertPortal(kind === 'loan' ? 'loanRequests' : 'expenseRequests');
     const amount = optionalNumber(input, 'amount', { min: 1, max: 1e11 });
     if (!amount) throw badRequest('أدخل المبلغ.');
     const currency = (optionalText(input, 'currency', 3) || (await getSettings()).payrollRules.baseCurrency).toUpperCase();
@@ -142,7 +144,7 @@ export class RequestController {
       `SELECT to_char(work_date, 'YYYY-MM-DD') AS date, COALESCE(override_status, status) AS status,
               to_char(first_in, 'HH24:MI') AS "firstIn", to_char(last_out, 'HH24:MI') AS "lastOut", punch_count AS "punchCount",
               worked_minutes AS "workedMinutes", COALESCE(override_late_minutes, late_minutes) AS "lateMinutes",
-              COALESCE(override_overtime_minutes, overtime_minutes) AS "overtimeMinutes", leave_type_name AS "leaveTypeName"
+              COALESCE(override_overtime_minutes, overtime_minutes) AS "overtimeMinutes", leave_type_name AS "leaveTypeName", task_title AS "taskTitle"
        FROM attendance_days WHERE employee_id = :employeeId AND work_date BETWEEN :start AND :end ORDER BY work_date`,
       { employeeId, start, end },
     );

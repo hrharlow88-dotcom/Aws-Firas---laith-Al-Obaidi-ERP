@@ -69,6 +69,7 @@ export const APPS: AppDefinition[] = [
     menus: [
       { page: 'employees', label: 'الموظفون' },
       { page: 'org', label: 'الأقسام والهيكل' },
+      { page: 'employees-import', label: 'استيراد وتحديث', permission: 'employees.update' },
       { page: 'companies', label: 'شركات المجموعة' },
       { page: 'branches', label: 'الفروع' },
       { page: 'contract-templates', label: 'قوالب العقود', permission: 'employees.manage_profile' },

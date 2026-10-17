@@ -1,3 +1,7 @@
+import { requirePortal } from '../services/portal';
+import { PhotoController } from '../controllers/PhotoController';
+import { EmployeeImportController } from '../controllers/EmployeeImportController';
+import { FingerprintFileController } from '../controllers/FingerprintFileController';
 import express, { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit } from 'express-rate-limit';
 import AuthController from '../controllers/AuthController';
@@ -251,19 +255,21 @@ router.put('/auth/signature', requireAuth, asyncRoute(SignatureController.save))
 router.post('/auth/change-password', requireAuth, passwordLimiter, asyncRoute(AuthController.changePassword));
 
 router.get('/me/profile', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.profile));
-router.get('/me/payslips', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.payslips));
+router.get('/me/photo', requireAuth, allowPermission('self.service'), asyncRoute(PhotoController.mine));
+router.post('/me/photo', requireAuth, allowPermission('self.service'), requirePortal('photoUpload'), uploadSingle('file'), asyncRoute(PhotoController.submit));
+router.get('/me/payslips', requireAuth, allowPermission('self.service'), requirePortal('payslips'), asyncRoute(SelfController.payslips));
 router.get('/me/requests', requireAuth, allowPermission('self.service'), asyncRoute(RequestController.mine));
 router.post('/me/requests', requireAuth, allowPermission('self.service'), asyncRoute(RequestController.create));
 router.post('/me/requests/:id/receipt', requireAuth, allowPermission('self.service'), validateUuidParam, uploadSingle('file'), asyncRoute(RequestController.uploadReceipt));
 router.post('/me/requests/:id/cancel', requireAuth, allowPermission('self.service'), validateUuidParam, asyncRoute(RequestController.cancelMine));
-router.get('/me/attendance', requireAuth, allowPermission('self.service'), asyncRoute(RequestController.myAttendance));
+router.get('/me/attendance', requireAuth, allowPermission('self.service'), requirePortal('attendance'), asyncRoute(RequestController.myAttendance));
 router.get('/requests', requireAuth, allowAnyPermission('requests.manage', 'payroll.disburse'), asyncRoute(RequestController.list));
 router.post('/requests/:id/decision', requireAuth, allowPermission('requests.manage'), validateUuidParam, asyncRoute(RequestController.decide));
 router.post('/requests/:id/paid', requireAuth, allowPermission('payroll.disburse'), validateUuidParam, asyncRoute(RequestController.markPaid));
 router.get('/requests/:id/receipt', requireAuth, validateUuidParam, asyncRoute(RequestController.receipt));
 router.get('/portal/accounts', requireAuth, allowPermission('users.manage'), asyncRoute(RequestController.portalAccounts));
 router.post('/portal/accounts/:employeeId/invite', requireAuth, allowPermission('users.manage'), asyncRoute(RequestController.invite));
-router.get('/me/discipline', requireAuth, allowPermission('self.service'), asyncRoute(DisciplineController.mine));
+router.get('/me/discipline', requireAuth, allowPermission('self.service'), requirePortal('notices'), asyncRoute(DisciplineController.mine));
 router.post('/me/discipline/:id/acknowledge', requireAuth, allowPermission('self.service'), validateUuidParam, asyncRoute(DisciplineController.acknowledge));
 router.get('/discipline', requireAuth, allowPermission('discipline.view'), asyncRoute(DisciplineController.list));
 router.post('/discipline', requireAuth, allowPermission('discipline.manage'), asyncRoute(DisciplineController.create));
@@ -284,7 +290,7 @@ router.patch('/recruitment/applicants/:id', requireAuth, allowPermission('recrui
 router.post('/recruitment/applicants/:id/cv', requireAuth, allowPermission('recruitment.manage'), validateUuidParam, uploadSingle('file'), asyncRoute(RecruitmentController.uploadCv));
 router.get('/recruitment/applicants/:id/cv', requireAuth, allowPermission('recruitment.view'), validateUuidParam, asyncRoute(RecruitmentController.cv));
 router.post('/recruitment/applicants/:id/hire', requireAuth, allowPermission('recruitment.manage'), validateUuidParam, asyncRoute(RecruitmentController.hire));
-router.get('/me/payslips/:runId', requireAuth, allowPermission('self.service'), asyncRoute(SelfController.payslip));
+router.get('/me/payslips/:runId', requireAuth, allowPermission('self.service'), requirePortal('payslips'), asyncRoute(SelfController.payslip));
 router.get('/branches', requireAuth, asyncRoute(BranchController.list));
 router.post('/branches', requireAuth, allowPermission('branches.manage'), asyncRoute(BranchController.create));
 router.put('/branches/:id', requireAuth, allowPermission('branches.manage'), validateUuidParam, asyncRoute(BranchController.update));
@@ -312,6 +318,16 @@ router.post('/leaves/:id/cancel', requireAuth, allowAnyPermission('leaves.reques
 
 router.get('/employees', requireAuth, asyncRoute(EmployeeController.list));
 router.get('/employees/summary', requireAuth, asyncRoute(EmployeeController.summary));
+// The employees' master sheet (names, fingerprint numbers, contacts, placement, salary).
+router.get('/employees/import/template.xlsx', requireAuth, allowAnyPermission('employees.update', 'employees.create'), asyncRoute(EmployeeImportController.template));
+router.post('/employees/import/preview', requireAuth, allowAnyPermission('employees.update', 'employees.create'), uploadSingle('file'), asyncRoute(EmployeeImportController.preview));
+router.post('/employees/import/apply', requireAuth, allowAnyPermission('employees.update', 'employees.create'), uploadSingle('file'), asyncRoute(EmployeeImportController.apply));
+// Photos: sent from the portal and taken in by HR, or uploaded in bulk named by employee number.
+router.get('/employees/photo-submissions', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(PhotoController.list));
+router.post('/employees/photo-submissions/accept', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(PhotoController.accept));
+router.get('/employees/photo-submissions/:id/file', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(PhotoController.file));
+router.post('/employees/photo-submissions/:id/reject', requireAuth, allowPermission('employees.manage_profile'), validateUuidParam, asyncRoute(PhotoController.reject));
+router.post('/employees/photos/match', requireAuth, allowPermission('employees.manage_profile'), asyncRoute(PhotoController.match));
 router.post(
   '/employees',
   requireAuth,
@@ -379,6 +395,9 @@ router.get('/attendance/devices', requireAuth, allowPermission('attendance.view'
 router.post('/attendance/devices', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.saveDevice));
 router.put('/attendance/devices/:id', requireAuth, allowPermission('attendance.manage'), validateUuidParam, asyncRoute(AttendanceController.saveDevice));
 router.post('/attendance/imports', requireAuth, allowPermission('attendance.manage'), uploadSingle('file'), asyncRoute(AttendanceController.importFile));
+// The fingerprint system's three exports (attendance, leave, app tasks): preview, then apply.
+router.post('/attendance/files/preview', requireAuth, allowPermission('attendance.manage'), uploadSingle('file'), asyncRoute(FingerprintFileController.preview));
+router.post('/attendance/files/apply', requireAuth, allowPermission('attendance.manage'), uploadSingle('file'), asyncRoute(FingerprintFileController.apply));
 router.get('/attendance/imports', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listImports));
 router.get('/attendance/punches', requireAuth, allowPermission('attendance.view'), asyncRoute(AttendanceController.listPunches));
 router.post('/attendance/punches', requireAuth, allowPermission('attendance.manage'), asyncRoute(AttendanceController.addPunch));

@@ -31,7 +31,7 @@ export const APP_API: Record<string, RegExp> = {
 };
 
 /** What a demo guest may never change. */
-const DEMO_LOCKED = /^\/(users|settings|owner|security|invites|portal\/accounts|messages\/(channels|templates)|integrations|companies|org\/import|auth\/change-password)(\/|\?|$)/;
+const DEMO_LOCKED = /^\/(users|settings|owner|security|invites|portal\/accounts|messages\/(channels|templates)|integrations|companies|org\/import|employees\/import\/apply|auth\/change-password)(\/|\?|$)/;
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const jwtSecret = process.env.JWT_SECRET;

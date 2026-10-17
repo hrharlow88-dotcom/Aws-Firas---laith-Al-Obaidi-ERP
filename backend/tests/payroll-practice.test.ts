@@ -64,8 +64,9 @@ describe('company payroll practice', () => {
   });
 
   it('uses payable and absence days set by HR, skips suspended staff and leavers paid by settlement', async () => {
-    const settings = await api().get('/api/settings').set(hr.auth).expect(200);
+    // Only the owner reads (and saves) the whole settings; others get what their screens need.
     const admin = await makeUser('super_admin');
+    const settings = await api().get('/api/settings').set(admin.auth).expect(200);
     await api().put('/api/settings').set(admin.auth).send({
       ...settings.body.data,
       payrollRules: { ...settings.body.data.payrollRules, terminatedPaidBySettlement: true },

@@ -1,3 +1,4 @@
+import { assertPortal } from '../services/portal';
 import { randomUUID } from 'node:crypto';
 import { notifyPermission, notifyUsers } from '../services/notify';
 import { Request, Response } from 'express';
@@ -75,6 +76,7 @@ export class TicketController {
   }
 
   static async create(req: Request, res: Response): Promise<void> {
+    if (req.user?.role === 'employee') await assertPortal('tickets');
     const input = body(req);
     assertOnlyKeys(input, ['category', 'subtype', 'title', 'description', 'priority', 'location', 'neededFrom', 'neededTo', 'destination', 'passengers', 'vehiclePlate']);
     const category = String(input.category);

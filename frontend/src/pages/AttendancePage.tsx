@@ -8,6 +8,7 @@ import {
 import { navigate } from '../lib/router';
 import { useLoad, useSession } from '../lib/session';
 import { AttendanceDaysTable } from './EmployeeProfilePage';
+import { FILE_KIND, FileKind, FingerprintFiles } from './attendance/FingerprintFiles';
 
 type Tab = 'today' | 'days' | 'summary' | 'import' | 'shifts' | 'devices';
 
@@ -46,7 +47,7 @@ function TodayBoard() {
   const board = useLoad<{
     date: string;
     totals: { tracked: number; inside: number; late: number; onLeave: number; notArrived: number };
-    rows: Array<{ employeeId: string; employeeName: string; employeeNo: string; branchName: string; firstIn: string | null; lastOut: string | null; status: string; lateMinutes: number; leaveTypeName: string | null }>;
+    rows: Array<{ employeeId: string; employeeName: string; employeeNo: string; branchName: string; firstIn: string | null; lastOut: string | null; status: string; lateMinutes: number; leaveTypeName: string | null; taskTitle?: string | null }>;
   } | null>('/attendance/today', null);
   if (board.loading && !board.data) return <section className="panel"><Loading /></section>;
   const data = board.data;
@@ -70,7 +71,7 @@ function TodayBoard() {
             <td>{row.branchName}</td>
             <td dir="ltr">{row.firstIn ?? '—'}</td>
             <td dir="ltr">{row.lastOut ?? '—'}</td>
-            <td>{row.status === 'incomplete' && !row.firstIn ? <Tone tone="bad">لم يبصم</Tone> : row.status === 'incomplete' ? <Tone tone="good">داخل الدوام</Tone> : <StatusTag map={DAY_STATUS} value={row.status} />}{row.leaveTypeName && <small className="table-sub">{row.leaveTypeName}</small>}</td>
+            <td>{row.status === 'incomplete' && !row.firstIn ? <Tone tone="bad">لم يبصم</Tone> : row.status === 'incomplete' ? <Tone tone="good">داخل الدوام</Tone> : <StatusTag map={DAY_STATUS} value={row.status} />}{row.leaveTypeName && <small className="table-sub">{row.leaveTypeName}</small>}{row.taskTitle && <small className="table-sub">مهمة: {row.taskTitle}</small>}</td>
             <td className={row.lateMinutes ? 'num-bad' : ''}>{formatMinutes(row.lateMinutes)}</td>
           </tr>)}</tbody>
         </table></div> : <Empty icon={<Sun size={22} />} title="لا يوجد موظفون خاضعون للبصمة" text="أسند دواماً للموظفين من تبويب الدوامات أو من ملف الموظف." />}
@@ -198,7 +199,7 @@ function ImportView() {
   const session = useSession();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ imported: number; duplicate: number; unmatched: number; invalid: number; from: string | null; to: string | null; format: string } | null>(null);
-  const imports = useLoad<Array<{ id: string; fileName: string | null; deviceName: string | null; source: string; rowsTotal: number; rowsImported: number; rowsDuplicate: number; rowsUnmatched: number; rowsInvalid: number; createdAt: string; createdByName: string | null }>>('/attendance/imports', []);
+  const imports = useLoad<Array<{ id: string; fileName: string | null; deviceName: string | null; source: string; kind?: FileKind; rowsTotal: number; rowsImported: number; rowsDuplicate: number; rowsUnmatched: number; rowsInvalid: number; createdAt: string; createdByName: string | null }>>('/attendance/imports', []);
   const unmatched = useLoad<Array<{ pin: string; punches: number; firstSeen: string; lastSeen: string }>>('/attendance/unmatched', []);
   const [assigning, setAssigning] = useState<string | null>(null);
   const [assignee, setAssignee] = useState<PickedEmployee | null>(null);
@@ -236,9 +237,12 @@ function ImportView() {
   }
 
   return (
+    <>
+    <FingerprintFiles onApplied={() => { imports.reload(); unmatched.reload(); }} />
     <div className="split">
       <section className="panel">
-        <div className="panel-head"><div><h3>استيراد ملف بصمات</h3><p>ملف ZKTeco (attlog.dat) أو تصدير CSV / Excel من برنامج البصمة. إعادة رفع الملف نفسه لا تكرر البصمات.</p></div></div>
+        <details className="raw-import">
+          <summary><strong>ملف الجهاز الخام (attlog.dat)</strong> <span className="muted">سحب مباشر من ذاكرة جهاز ZKTeco بلا عناوين أعمدة</span></summary>
         <form className="panel-pad" onSubmit={upload}>
           <div className="form-grid form-grid-2">
             <label className="field settings-wide"><span>الملف *</span><input type="file" name="file" required accept=".dat,.txt,.csv,.xlsx" /></label>
@@ -246,6 +250,7 @@ function ImportView() {
           </div>
           <div className="form-actions"><button className="button button-primary" disabled={busy}><FileUp size={16} />{busy ? 'جارٍ الاستيراد والاحتساب…' : 'استيراد'}</button></div>
         </form>
+        </details>
         {result && <div className="import-result">
           <Stat label="مستوردة" value={formatNumber(result.imported)} tone="good" />
           <Stat label="مكررة (موجودة)" value={formatNumber(result.duplicate)} />
@@ -256,7 +261,7 @@ function ImportView() {
         {imports.loading ? <Loading /> : imports.data.length ? <div className="table-scroll"><table className="dense">
           <thead><tr><th>المصدر</th><th>الوقت</th><th>مستوردة</th><th>مكررة</th><th>غير مربوطة</th><th>غير صالحة</th></tr></thead>
           <tbody>{imports.data.map((row) => <tr key={row.id}>
-            <td>{row.source === 'device' ? <><Cpu size={13} /> {row.deviceName}</> : row.fileName}<small className="table-sub">{row.createdByName ?? 'جهاز'}</small></td>
+            <td>{row.source === 'device' ? <><Cpu size={13} /> {row.deviceName}</> : row.fileName}<small className="table-sub">{row.source === 'file' && row.kind ? `${FILE_KIND[row.kind]?.title ?? ''} · ` : ''}{row.createdByName ?? 'جهاز'}</small></td>
             <td>{formatDateTime(row.createdAt)}</td><td>{row.rowsImported}</td><td>{row.rowsDuplicate}</td>
             <td className={row.rowsUnmatched ? 'num-warn' : ''}>{row.rowsUnmatched}</td><td className={row.rowsInvalid ? 'num-bad' : ''}>{row.rowsInvalid}</td>
           </tr>)}</tbody>
@@ -277,6 +282,7 @@ function ImportView() {
         <div className="dialog-actions"><button className="button button-primary" disabled={!assignee} onClick={() => void assign()}>ربط</button><button className="button button-quiet" onClick={() => setAssigning(null)}>إلغاء</button></div>
       </Dialog>
     </div>
+    </>
   );
 }
 

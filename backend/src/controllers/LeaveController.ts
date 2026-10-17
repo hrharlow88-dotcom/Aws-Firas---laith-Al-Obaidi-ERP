@@ -1,3 +1,4 @@
+import { PORTAL_REFUSED, selfServiceBlocked } from '../services/portal';
 import { employeeScopeWhere, inScope, isScoped } from '../services/access';
 import { managerUserOf, notifyEmployees, notifyPermission, notifyUsers } from '../services/notify';
 import { Request, Response } from 'express';
@@ -15,6 +16,7 @@ import {
 } from '../models';
 import { SystemSettings, normalizeSystemSettings, permissionsFor } from '../config/systemSettings';
 import { isDateOnly, isUuid } from '../utils/validation';
+import { calendarDayCount, workingDayCount } from '../services/leaveDays';
 
 const SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
 const ACTIVE_REQUEST_STATUSES = ['pending', 'approved'];
@@ -24,28 +26,10 @@ async function loadSettings(): Promise<SystemSettings> {
   return normalizeSystemSettings(record?.value);
 }
 
-function workingDayCount(start: string, end: string, settings: SystemSettings): number {
-  const workingDays = new Set(settings.leaveRules.workingDays);
-  const holidays = new Set(settings.leaveRules.officialHolidays);
-  let total = 0;
-  const cursor = new Date(`${start}T00:00:00.000Z`);
-  const last = new Date(`${end}T00:00:00.000Z`);
-  while (cursor <= last) {
-    const date = cursor.toISOString().slice(0, 10);
-    if (workingDays.has(cursor.getUTCDay()) && !holidays.has(date)) total += 1;
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return total;
-}
-
 function parseTime(value: unknown): number | null {
   if (typeof value !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
   const [hours, minutes] = value.split(':').map(Number);
   return hours * 60 + minutes;
-}
-
-function calendarDayCount(start: string, end: string): number {
-  return Math.floor((Date.parse(`${end}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 86400000) + 1;
 }
 
 function completeServiceYears(hireDate: string, today = new Date()): number {
@@ -147,6 +131,10 @@ export class LeaveController {
       res.status(404).json({ message: 'الموظف غير موجود ضمن نطاق فرعك.' });
       return;
     }
+    if (await selfServiceBlocked(req, employee.id, 'leaveBalances', 'leaves.manage_balances')) {
+      res.status(403).json({ message: PORTAL_REFUSED });
+      return;
+    }
     const settings = await loadSettings();
     const data = await Promise.all(settings.leaveTypes.filter((type) => type.active && type.deductsBalance !== false).map(async (type) => ({
       leaveTypeId: type.id,
@@ -208,6 +196,11 @@ export class LeaveController {
     const leaveType = settings.leaveTypes.find((item) => item.id === leaveTypeId && item.active);
     if (!leaveType) {
       res.status(400).json({ message: 'نوع الإجازة غير موجود أو غير مفعّل. راجع إعدادات النظام.' });
+      return;
+    }
+    // In the employee portal the owner decides whether leave (and hourly leave) is requested there.
+    if (await selfServiceBlocked(req, String(employeeId), leaveType.unit === 'hours' ? 'hourlyLeave' : 'leaveRequests', 'leaves.manage_balances')) {
+      res.status(403).json({ message: PORTAL_REFUSED });
       return;
     }
     if (leaveType.requiresMedicalCertificate &&

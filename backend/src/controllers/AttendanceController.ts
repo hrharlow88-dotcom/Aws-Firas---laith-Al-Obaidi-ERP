@@ -220,7 +220,7 @@ export class AttendanceController {
     const rows = await select(
       `SELECT i.id, i.source, i.file_name AS "fileName", d.name AS "deviceName", i.rows_total AS "rowsTotal",
               i.rows_imported AS "rowsImported", i.rows_duplicate AS "rowsDuplicate", i.rows_unmatched AS "rowsUnmatched",
-              i.rows_invalid AS "rowsInvalid", i.created_at AS "createdAt", u.name AS "createdByName"
+              i.rows_invalid AS "rowsInvalid", i.kind, i.summary, i.created_at AS "createdAt", u.name AS "createdByName"
        FROM attendance_imports i
        LEFT JOIN users u ON u.id = i.created_by
        LEFT JOIN attendance_devices d ON d.id = i.device_id
@@ -372,7 +372,7 @@ export class AttendanceController {
               to_char(d.first_in, 'HH24:MI') AS "firstIn", to_char(d.last_out, 'HH24:MI') AS "lastOut",
               d.punch_count AS "punchCount", d.worked_minutes AS "workedMinutes", d.excused_minutes AS "excusedMinutes",
               ${EFFECTIVE_DAY_COLUMNS},
-              d.status AS "computedStatus", d.leave_type_name AS "leaveTypeName",
+              d.status AS "computedStatus", d.leave_type_name AS "leaveTypeName", d.task_title AS "taskTitle",
               d.override_reason AS "overrideReason", d.override_status IS NOT NULL OR d.override_late_minutes IS NOT NULL
                 OR d.override_overtime_minutes IS NOT NULL AS "overridden",
               d.payroll_run_id IS NOT NULL AS "locked"
@@ -470,7 +470,7 @@ export class AttendanceController {
     const rows = await select<{ status: string; lateMinutes: number; firstIn: string | null }>(
       `SELECT e.id AS "employeeId", e.full_name AS "employeeName", e.employee_no AS "employeeNo", b.name AS "branchName",
               to_char(d.first_in, 'HH24:MI') AS "firstIn", to_char(d.last_out, 'HH24:MI') AS "lastOut",
-              ${EFFECTIVE_DAY_COLUMNS}, d.leave_type_name AS "leaveTypeName"
+              ${EFFECTIVE_DAY_COLUMNS}, d.leave_type_name AS "leaveTypeName", d.task_title AS "taskTitle"
        FROM attendance_days d JOIN employees e ON e.id = d.employee_id JOIN branches b ON b.id = e.branch_id
        WHERE d.work_date = :today${scope.sql}
        ORDER BY e.full_name`,

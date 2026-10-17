@@ -28,11 +28,23 @@ export interface DayLeave {
   endTime?: string | null;
 }
 
+/**
+ * External work from the fingerprint app's tasks export: the whole day, or a
+ * window of time away from the device (both times), or just a note on a
+ * punch made with the app (start time only).
+ */
+export interface DayTask {
+  title: string;
+  startTime: string | null;
+  endTime: string | null;
+}
+
 export interface DayInput {
   date: string; // YYYY-MM-DD
   shift: ShiftRule;
   punches: string[];
   leave: DayLeave | null;
+  tasks?: DayTask[];
   isHoliday: boolean;
   employed: boolean;
   isPast: boolean;
@@ -56,6 +68,7 @@ export interface DayResult {
   status: DayStatus;
   leaveRequestId: string | null;
   leaveTypeName: string | null;
+  taskTitle: string | null;
 }
 
 const MINUTE = 60000;
@@ -123,8 +136,22 @@ function overlap(aStart: number, aEnd: number, bStart: number, bEnd: number): nu
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
 }
 
+/** Minutes of [start, end] covered by any of the windows, each minute counted once. */
+function covered(start: number, end: number, windows: Array<[number, number]>): number {
+  const sorted = windows.map(([from, to]) => [Math.max(from, start), Math.min(to, end)] as [number, number])
+    .filter(([from, to]) => to > from).sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let cursor = start;
+  for (const [from, to] of sorted) {
+    const begin = Math.max(from, cursor);
+    if (to > begin) { total += to - begin; cursor = to; }
+  }
+  return total;
+}
+
 export function computeDay(input: DayInput): DayResult {
   const { shift, date } = input;
+  const tasks = input.tasks ?? [];
   const scheduled = scheduledMinutes(shift);
   const isWorkingDay = shift.workingDays.includes(weekday(date));
   const punches = dedupePunches(input.punches.map(toMinutes), input.duplicatePunchWindowMinutes);
@@ -143,9 +170,10 @@ export function computeDay(input: DayInput): DayResult {
     status: 'present',
     leaveRequestId: input.leave?.requestId ?? null,
     leaveTypeName: input.leave?.typeName ?? null,
+    taskTitle: tasks.length ? [...new Set(tasks.map((task) => task.title))].join('، ').slice(0, 200) : null,
   };
 
-  if (!input.employed) return { ...base, status: 'not_employed', leaveRequestId: null, leaveTypeName: null };
+  if (!input.employed) return { ...base, status: 'not_employed', leaveRequestId: null, leaveTypeName: null, taskTitle: null };
 
   const worked = punches.length > 1
     ? Math.max(0, punches[punches.length - 1] - punches[0] - shift.breakMinutes)
@@ -163,10 +191,34 @@ export function computeDay(input: DayInput): DayResult {
   }
 
   const { start, end } = shiftBounds(date, shift);
-  let excused = 0;
+  const midnight = toMinutes(`${date}T00:00:00`);
+  // Approved hourly leave and external-work windows excuse the time they cover.
+  const windows: Array<[number, number]> = [];
   if (input.leave && input.leave.startTime && input.leave.endTime) {
-    const midnight = toMinutes(`${date}T00:00:00`);
-    excused = overlap(start, end, midnight + clock(input.leave.startTime), midnight + clock(input.leave.endTime));
+    windows.push([midnight + clock(input.leave.startTime), midnight + clock(input.leave.endTime)]);
+  }
+  for (const task of tasks) {
+    if (task.startTime && task.endTime) {
+      const from = midnight + clock(task.startTime);
+      let to = midnight + clock(task.endTime);
+      if (to <= from) to += 24 * 60;
+      windows.push([from, to]);
+    }
+  }
+  const excused = windows.length ? covered(start, end, windows) : 0;
+
+  // A whole day of external work (or windows covering the whole shift) counts as present.
+  if (tasks.some((task) => !task.startTime && !task.endTime) || (excused && excused >= end - start)) {
+    const lastOut = punches.length > 1 ? punches[punches.length - 1] : null;
+    const after = lastOut === null ? 0 : lastOut - end;
+    return {
+      ...base,
+      scheduledMinutes: scheduled,
+      workedMinutes: Math.max(worked, scheduled),
+      excusedMinutes: scheduled,
+      overtimeMinutes: after >= input.overtimeMinimumMinutes ? after : 0,
+      status: 'present',
+    };
   }
 
   if (!punches.length) {

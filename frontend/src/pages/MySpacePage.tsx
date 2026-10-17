@@ -1,10 +1,11 @@
 import { FormEvent, useState } from 'react';
 import {
-  CalendarClock, CalendarDays, Clock3, FileText, Fingerprint, HandCoins, IdCard, MessageSquare, Paperclip, Receipt, Send, Wallet, X,
+  Camera, CalendarClock, CalendarDays, Clock3, FileText, Fingerprint, HandCoins, IdCard, MessageSquare, Paperclip, Receipt, Send, Wallet, X,
 } from 'lucide-react';
 import { Bi } from '../components/Brand';
 import { EmployeePhoto } from '../components/EmployeePhoto';
-import { Dialog, Empty, Loading, Stat, StatusTag, Tabs, Tone } from '../components/ui';
+import { Dialog, Empty, Loading, Stat, StatusTag, Tabs, Tone, Warning } from '../components/ui';
+import { DEFAULT_PORTAL } from '../lib/portal';
 import { DAY_STATUS, EMPLOYMENT_TYPES, currentPeriod, formatDate, formatDateTime, formatMinutes, formatMoney, formatNumber, monthLabel } from '../lib/format';
 import { navigate } from '../lib/router';
 import { useLoad, useSession } from '../lib/session';
@@ -17,7 +18,8 @@ interface MyProfile {
 }
 interface MyPayslip { runId: string; period: string; currency: string; totalEarnings: number; totalDeductions: number; netPay: number }
 interface Balance { leaveTypeId: string; leaveTypeName: string; unit: string; balance: number; pending: number; available: number }
-interface Day { date: string; status: string; firstIn: string | null; lastOut: string | null; punchCount: number; workedMinutes: number; lateMinutes: number; overtimeMinutes: number; leaveTypeName: string | null }
+interface Day { date: string; status: string; firstIn: string | null; lastOut: string | null; punchCount: number; workedMinutes: number; lateMinutes: number; overtimeMinutes: number; leaveTypeName: string | null; taskTitle?: string | null }
+interface PhotoState { id: string; status: 'pending' | 'accepted' | 'rejected'; submittedAt: string; decidedAt: string | null; decisionNote: string | null }
 interface MyRequest {
   id: string; kind: 'loan' | 'expense'; amount: number; currency: string; months: number | null; startPeriod: string | null;
   expenseDate: string | null; description: string; hasReceipt: boolean; status: string; decisionNote: string | null;
@@ -46,21 +48,33 @@ const LEAVE_STATUS: Record<string, { label: string; tone: string }> = {
 type Tab = 'attendance' | 'requests' | 'leaves' | 'payslips' | 'notices';
 type Form = null | 'leave' | 'hourly' | 'loan' | 'expense';
 
-/** The employee portal: my card, my attendance, and every request I can make. */
+/** The employee portal: my card, my attendance, and every request I can make — as far as the owner opened it. */
 export function MySpacePage() {
   const session = useSession();
+  const portal = { ...DEFAULT_PORTAL, ...session.settings.portal };
   const profile = useLoad<MyProfile | null>('/me/profile', null);
-  const payslips = useLoad<MyPayslip[]>('/me/payslips', []);
+  const payslips = useLoad<MyPayslip[]>(portal.payslips ? '/me/payslips' : null, []);
   const [period, setPeriod] = useState(currentPeriod());
-  const attendance = useLoad<{ days: Day[]; punches: Array<{ date: string; time: string }> } | null>(`/me/attendance?period=${period}`, null);
-  const requests = useLoad<MyRequest[]>('/me/requests', []);
-  const leaves = useLoad<LeaveItem[]>(session.can('leaves.view') ? '/leaves' : null, []);
+  const attendance = useLoad<{ days: Day[]; punches: Array<{ date: string; time: string }> } | null>(portal.attendance ? `/me/attendance?period=${period}` : null, null);
+  const requests = useLoad<MyRequest[]>(portal.loanRequests || portal.expenseRequests ? '/me/requests' : null, []);
+  const showLeaves = portal.leaveRequests || portal.hourlyLeave;
+  const leaves = useLoad<LeaveItem[]>(showLeaves && session.can('leaves.view') ? '/leaves' : null, []);
   const employeeId = profile.data?.id;
-  const balances = useLoad<{ balances: Balance[] } | null>(employeeId && session.can('leaves.view') ? `/leaves/balances?employeeId=${employeeId}` : null, null);
-  const [tab, setTab] = useState<Tab>('attendance');
-  const notices = useLoad<DisciplineRecord[]>('/me/discipline', []);
+  const balances = useLoad<{ balances: Balance[] } | null>(portal.leaveBalances && employeeId && session.can('leaves.view') ? `/leaves/balances?employeeId=${employeeId}` : null, null);
+  const tabs = ([
+    portal.attendance && { id: 'attendance', label: 'البصمة والحضور · Attendance' },
+    (portal.loanRequests || portal.expenseRequests) && { id: 'requests', label: 'طلباتي · Requests' },
+    showLeaves && { id: 'leaves', label: 'إجازاتي · Leave' },
+    portal.payslips && { id: 'payslips', label: 'قسائمي · Payslips' },
+    portal.notices && { id: 'notices', label: 'إشعاراتي · Notices' },
+  ].filter(Boolean) as Array<{ id: Tab; label: string }>);
+  const [chosenTab, setTab] = useState<Tab | null>(null);
+  const tab: Tab | null = chosenTab && tabs.some((item) => item.id === chosenTab) ? chosenTab : tabs[0]?.id ?? null;
+  const notices = useLoad<DisciplineRecord[]>(portal.notices ? '/me/discipline' : null, []);
   const [notice, setNotice] = useState<DisciplineRecord | null>(null);
   const [form, setForm] = useState<Form>(null);
+  const photo = useLoad<PhotoState | null>(portal.photoUpload ? '/me/photo' : null, null);
+  const [photoOpen, setPhotoOpen] = useState(false);
 
   if (profile.loading && !profile.data) return <section className="screen"><Loading /></section>;
   const me = profile.data;
@@ -74,9 +88,15 @@ export function MySpacePage() {
   const openRequests = requests.data.filter((item) => item.status === 'pending').length + leaves.data.filter((item) => item.status === 'pending').length;
   const refresh = () => { requests.reload(); leaves.reload(); balances.reload(); };
 
+  const badges: Partial<Record<Tab, number | undefined>> = {
+    requests: requests.data.length, leaves: leaves.data.length, payslips: payslips.data.length,
+    notices: notices.data.filter((item) => item.status === 'issued').length || undefined,
+  };
+  const canLeave = session.can('leaves.request');
   return (
     <section className="screen portal">
-      <header className="portal-card">
+      {portal.welcome.trim() && <div className="portal-welcome" role="note"><p>{portal.welcome}</p></div>}
+      {portal.card ? <header className="portal-card">
         <div className="portal-card-photo"><EmployeePhoto employeeId={me.id} hasPhoto={me.hasPhoto} name={me.fullName} size={96} /></div>
         <div className="portal-card-body">
           <span className="portal-card-company"><Bi ar={"مجموعة الليث العبيدي للسيارات"} en={"Al-Laith Al-Obaidi Automotive Group"} /></span>
@@ -88,42 +108,37 @@ export function MySpacePage() {
             <span><small><Bi ar={"الفرع"} en={"Branch"} /></small><strong>{me.branchName}</strong></span>
             <span><small><Bi ar={"المباشرة"} en={"Joined"} /></small><strong>{formatDate(me.hireDate)}</strong></span>
             <span><small><Bi ar={"التوظيف"} en={"Type"} /></small><strong>{EMPLOYMENT_TYPES[me.employmentType] ?? me.employmentType}</strong></span>
-            <span><small><Bi ar={"المدير المباشر"} en={"Manager"} /></small><strong>{me.managerName ?? '—'}</strong></span>
-            <span><small><Bi ar={"الدوام"} en={"Shift"} /></small><strong>{me.shiftName ?? '—'}</strong></span>
+            {portal.showManager && <span><small><Bi ar={"المدير المباشر"} en={"Manager"} /></small><strong>{me.managerName ?? '—'}</strong></span>}
+            {portal.showShift && <span><small><Bi ar={"الدوام"} en={"Shift"} /></small><strong>{me.shiftName ?? '—'}</strong></span>}
           </div>
         </div>
-      </header>
+      </header> : <div className="screen-heading"><div><h2>{me.fullName}</h2><p dir="ltr">{me.employeeNo}</p></div></div>}
 
       <div className="portal-actions">
-        {session.can('leaves.request') && <button onClick={() => setForm('leave')}><CalendarDays size={22} /><Bi ar="طلب إجازة" en="Leave request" block /></button>}
-        {session.can('leaves.request') && <button onClick={() => setForm('hourly')}><Clock3 size={22} /><Bi ar="إجازة زمنية" en="Hourly leave" block /></button>}
-        <button onClick={() => setForm('loan')}><HandCoins size={22} /><Bi ar="طلب سلفة" en="Loan request" block /></button>
-        <button onClick={() => setForm('expense')}><Receipt size={22} /><Bi ar="تكاليف عمل" en="Work expenses" block /></button>
-        <button onClick={() => navigate('my-tickets')}><MessageSquare size={22} /><Bi ar="تذكرة (تقنية، صيانة، سيارة)" en="Helpdesk ticket" block /></button>
+        {canLeave && portal.leaveRequests && <button onClick={() => setForm('leave')}><CalendarDays size={22} /><Bi ar="طلب إجازة" en="Leave request" block /></button>}
+        {canLeave && portal.hourlyLeave && <button onClick={() => setForm('hourly')}><Clock3 size={22} /><Bi ar="إجازة زمنية" en="Hourly leave" block /></button>}
+        {portal.loanRequests && <button onClick={() => setForm('loan')}><HandCoins size={22} /><Bi ar="طلب سلفة" en="Loan request" block /></button>}
+        {portal.expenseRequests && <button onClick={() => setForm('expense')}><Receipt size={22} /><Bi ar="تكاليف عمل" en="Work expenses" block /></button>}
+        {portal.tickets && <button onClick={() => navigate('my-tickets')}><MessageSquare size={22} /><Bi ar="تذكرة (تقنية، صيانة، سيارة)" en="Helpdesk ticket" block /></button>}
+        {portal.photoUpload && <button onClick={() => setPhotoOpen(true)}><Camera size={22} /><Bi ar={me.hasPhoto ? 'تحديث صورتي' : 'إرسال صورتي'} en="My photo" block />{photo.data?.status === 'pending' && <small className="portal-action-note">بانتظار الاعتماد</small>}</button>}
       </div>
 
       <div className="stat-row">
-        <Stat label={`حضوري · ${monthLabel(period)}`} value={`${formatNumber(present)} يوم`} foot={late ? `تأخير ${formatMinutes(late)}` : 'بلا تأخير'} />
-        <Stat label={annual ? `رصيد ${annual.leaveTypeName}` : 'رصيد الإجازة'} value={annual ? `${formatNumber(annual.available, 2)} يوم` : '—'} foot={annual?.pending ? `${formatNumber(annual.pending, 2)} بانتظار الموافقة` : undefined} />
-        <Stat label="آخر صافي راتب" value={last ? formatMoney(last.netPay, last.currency) : '—'} foot={last ? monthLabel(last.period) : 'لا توجد قسائم معتمدة'} />
+        {portal.attendance && <Stat label={`حضوري · ${monthLabel(period)}`} value={`${formatNumber(present)} يوم`} foot={late ? `تأخير ${formatMinutes(late)}` : 'بلا تأخير'} />}
+        {portal.leaveBalances && <Stat label={annual ? `رصيد ${annual.leaveTypeName}` : 'رصيد الإجازة'} value={annual ? `${formatNumber(annual.available, 2)} يوم` : '—'} foot={annual?.pending ? `${formatNumber(annual.pending, 2)} بانتظار الموافقة` : undefined} />}
+        {portal.payslips && <Stat label="آخر صافي راتب" value={last ? formatMoney(last.netPay, last.currency) : '—'} foot={last ? monthLabel(last.period) : 'لا توجد قسائم معتمدة'} />}
         <Stat label="طلبات مفتوحة" value={formatNumber(openRequests)} tone={openRequests ? 'warn' : undefined} />
       </div>
 
-      <section className="panel">
-        <div className="panel-head"><Tabs<Tab> value={tab} onChange={setTab} items={[
-          { id: 'attendance', label: 'البصمة والحضور · Attendance' },
-          { id: 'requests', label: 'طلباتي · Requests', badge: requests.data.length },
-          { id: 'leaves', label: 'إجازاتي · Leave', badge: leaves.data.length },
-          { id: 'payslips', label: 'قسائمي · Payslips', badge: payslips.data.length },
-          { id: 'notices', label: 'إشعاراتي · Notices', badge: notices.data.filter((item) => item.status === 'issued').length || undefined },
-        ]} />
+      {tab && tab !== 'notices' && <section className="panel">
+        <div className="panel-head"><Tabs<Tab> value={tab} onChange={setTab} items={tabs.map((item) => ({ ...item, badge: badges[item.id] }))} />
           {tab === 'attendance' && <input className="inline-month" type="month" value={period} max={currentPeriod()} onChange={(event) => setPeriod(event.target.value)} aria-label="الشهر" />}</div>
 
         {tab === 'attendance' && (!attendance.data ? <Loading /> : days.length ? <div className="table-scroll"><table className="dense">
           <thead><tr><th>اليوم</th><th>الحالة</th><th>دخول</th><th>خروج</th><th>البصمات</th><th>العمل</th><th>تأخير</th><th>إضافي</th></tr></thead>
           <tbody>{days.map((day) => <tr key={day.date}>
             <td><strong>{formatDate(day.date)}</strong></td>
-            <td><StatusTag map={DAY_STATUS} value={day.status} />{day.leaveTypeName && <small className="table-sub">{day.leaveTypeName}</small>}</td>
+            <td><StatusTag map={DAY_STATUS} value={day.status} />{day.leaveTypeName && <small className="table-sub">{day.leaveTypeName}</small>}{day.taskTitle && <small className="table-sub">مهمة: {day.taskTitle}</small>}</td>
             <td dir="ltr">{day.firstIn ?? '—'}</td><td dir="ltr">{day.lastOut ?? '—'}</td>
             <td>{formatNumber(day.punchCount)}</td><td>{formatMinutes(day.workedMinutes)}</td>
             <td className={day.lateMinutes ? 'num-warn' : ''}>{day.lateMinutes ? formatMinutes(day.lateMinutes) : '—'}</td>
@@ -159,9 +174,10 @@ export function MySpacePage() {
             <td>{formatMoney(slip.totalDeductions, slip.currency)}</td><td><strong>{formatMoney(slip.netPay, slip.currency)}</strong></td><td><FileText size={14} /></td>
           </tr>)}</tbody>
         </table></div> : <Empty icon={<Wallet size={22} />} title="لا توجد قسائم بعد" text="ستظهر قسيمتك هنا بعد اعتماد رواتب الشهر." />)}
-      </section>
+      </section>}
 
       {tab === 'notices' && <section className="panel">
+        <div className="panel-head"><Tabs<Tab> value={tab} onChange={setTab} items={tabs.map((item) => ({ ...item, badge: badges[item.id] }))} /></div>
         {notices.data.length ? <div className="table-scroll"><table className="dense">
           <thead><tr><th>المرجع</th><th>الإجراء</th><th>العنوان</th><th>التاريخ</th><th>الحالة</th></tr></thead>
           <tbody>{notices.data.map((item) => <tr key={item.id} className="row-link" onClick={() => setNotice(item)}>
@@ -173,7 +189,7 @@ export function MySpacePage() {
         {notice && <RecordView record={notice} own onChanged={() => { setNotice(null); notices.reload(); }} />}
       </Dialog>
 
-      {balances.data?.balances.length ? <section className="panel">
+      {portal.leaveBalances && balances.data?.balances.length ? <section className="panel">
         <div className="panel-head"><div><h3><Bi ar={"أرصدة إجازاتي"} en={"Leave balances"} /></h3><p>الرصيد المتاح بعد خصم الطلبات المعلقة.</p></div></div>
         <div className="balance-tiles">{balances.data.balances.map((item) => <div key={item.leaveTypeId}>
           <small>{item.leaveTypeName}</small><strong>{formatNumber(item.available, 2)}</strong><span>{item.unit === 'hours' ? 'ساعة' : 'يوم'} متاح</span>
@@ -181,7 +197,52 @@ export function MySpacePage() {
       </section> : null}
 
       <RequestForms form={form} employeeId={me.id} onClose={() => setForm(null)} onDone={() => { setForm(null); refresh(); }} />
+      <PhotoDialog open={photoOpen} state={photo.data} hasPhoto={me.hasPhoto} onClose={() => setPhotoOpen(false)} onSent={() => { setPhotoOpen(false); photo.reload(); }} />
     </section>
+  );
+}
+
+/** The employee sends their own photo; HR takes it into the file. */
+function PhotoDialog({ open, state, hasPhoto, onClose, onSent }: {
+  open: boolean; state: PhotoState | null; hasPhoto: boolean; onClose: () => void; onSent: () => void;
+}) {
+  const session = useSession();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  function choose(selected: File | null) {
+    if (preview) URL.revokeObjectURL(preview);
+    setFile(selected);
+    setPreview(selected ? URL.createObjectURL(selected) : null);
+  }
+  async function send() {
+    if (!file) return;
+    setBusy(true);
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      await session.call('/me/photo', { form });
+      session.notify('أُرسلت صورتك إلى الموارد البشرية. تظهر في ملفك بعد اعتمادها.');
+      choose(null);
+      onSent();
+    } catch (error) {
+      session.fail(error, 'تعذر إرسال الصورة.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog open={open} title="صورتي الشخصية · My photo" subtitle="صورة واضحة للوجه بخلفية فاتحة. تُستعمل في ملفك وبطاقة الموظف." onClose={() => { choose(null); onClose(); }}>
+      {state?.status === 'pending' && <Warning title="صورتك بانتظار اعتماد الموارد البشرية">أُرسلت {formatDateTime(state.submittedAt)}. إرسال صورة جديدة يحل محلها.</Warning>}
+      {state?.status === 'rejected' && <Warning title="لم تُعتمد صورتك السابقة">{state.decisionNote ?? 'أرسل صورة أخرى.'}</Warning>}
+      {state?.status === 'accepted' && !file && <p className="muted">آخر صورة أرسلتها اعتُمدت {state.decidedAt ? formatDateTime(state.decidedAt) : ''}.</p>}
+      <div className="photo-picker">
+        {preview ? <img src={preview} alt="الصورة المختارة" /> : <span className="photo-picker-empty"><Camera size={28} /></span>}
+        <label className="button button-quiet file-button"><Camera size={15} />{file ? 'اختيار صورة أخرى' : hasPhoto ? 'اختيار صورة جديدة' : 'اختيار صورة'}<input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => choose(event.target.files?.[0] ?? null)} /></label>
+        <small className="muted">JPG أو PNG أو WEBP، حتى 3 ميغابايت.</small>
+      </div>
+      <div className="dialog-actions"><button className="button button-primary" disabled={!file || busy} onClick={() => void send()}><Send size={15} />{busy ? 'جارٍ الإرسال…' : 'إرسال للاعتماد'}</button><button type="button" className="button button-quiet" onClick={() => { choose(null); onClose(); }}>إلغاء</button></div>
+    </Dialog>
   );
 }
 

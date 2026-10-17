@@ -209,6 +209,41 @@ export interface HrSettings {
   ai: { enabled: boolean; model: string };
 }
 
+/**
+ * What employees see and may do in their own portal («خدمتي»). The owner
+ * decides; the server refuses what is switched off, the page hides it.
+ */
+export interface PortalSettings {
+  /** The employee card at the top: photo, position, branch, dates. */
+  card: boolean;
+  showManager: boolean;
+  showShift: boolean;
+  /** Their own fingerprint days and lateness. */
+  attendance: boolean;
+  leaveBalances: boolean;
+  leaveRequests: boolean;
+  hourlyLeave: boolean;
+  /** Payslips of approved runs and the last net salary. */
+  payslips: boolean;
+  loanRequests: boolean;
+  expenseRequests: boolean;
+  tickets: boolean;
+  /** Warnings, penalties and notes from the HR register. */
+  notices: boolean;
+  /** The employee sends their own photo; HR takes it into the file. */
+  photoUpload: boolean;
+  /** A short note shown at the top of every portal (empty = none). */
+  welcome: string;
+}
+
+export type PortalSection = Exclude<keyof PortalSettings, 'welcome'>;
+
+export const DEFAULT_PORTAL: PortalSettings = {
+  card: true, showManager: true, showShift: true, attendance: true, leaveBalances: true, leaveRequests: true,
+  hourlyLeave: true, payslips: true, loanRequests: true, expenseRequests: true, tickets: true, notices: true,
+  photoUpload: true, welcome: '',
+};
+
 export const COMP_LEAVE_TYPE_ID = '40000000-0000-4000-8000-0000000000c1';
 
 export const DEFAULT_HR: HrSettings = {
@@ -262,6 +297,7 @@ export interface SystemSettings {
   security: SecuritySettings;
   ui: InterfaceSettings;
   hr: HrSettings;
+  portal: PortalSettings;
   knownPermissions: Permission[];
   leaveRules: {
     workingDays: number[];
@@ -420,6 +456,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   security: DEFAULT_SECURITY,
   ui: DEFAULT_UI,
   hr: DEFAULT_HR,
+  portal: DEFAULT_PORTAL,
   knownPermissions: [...PERMISSIONS],
   leaveRules: {
     workingDays: [0, 1, 2, 3, 4, 6],
@@ -471,6 +508,7 @@ export function normalizeSystemSettings(saved: SystemSettings | null | undefined
       documentRules: { ...DEFAULT_HR.documentRules, ...value.hr?.documentRules },
       ai: { ...DEFAULT_HR.ai, ...value.hr?.ai },
     },
+    portal: { ...DEFAULT_PORTAL, ...value.portal },
     // The compensatory leave type always exists; its balance stays apart from annual leave.
     leaveTypes: (value.leaveTypes ?? []).some((type) => type.id === COMP_LEAVE_TYPE_ID)
       ? value.leaveTypes

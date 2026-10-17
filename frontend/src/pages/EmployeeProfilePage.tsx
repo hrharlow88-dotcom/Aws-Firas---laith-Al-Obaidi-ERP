@@ -636,7 +636,7 @@ function SalaryTab({ employeeId }: { employeeId: string }) {
 
 interface DayRow {
   workDate: string; shiftName: string | null; firstIn: string | null; lastOut: string | null; status: string; computedStatus: string;
-  lateMinutes: number; earlyLeaveMinutes: number; overtimeMinutes: number; leaveTypeName: string | null; overridden: boolean;
+  lateMinutes: number; earlyLeaveMinutes: number; overtimeMinutes: number; leaveTypeName: string | null; taskTitle?: string | null; overridden: boolean;
   overrideReason: string | null; locked: boolean; workedMinutes: number;
 }
 
@@ -673,7 +673,7 @@ export function AttendanceDaysTable({ rows, showEmployee = false, onOverride }: 
         <td>{new Intl.DateTimeFormat('ar-IQ-u-nu-latn', { weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${row.workDate}T00:00:00`))}</td>
         <td dir="ltr">{row.firstIn ?? '—'}</td>
         <td dir="ltr">{row.lastOut ?? '—'}</td>
-        <td><StatusTag map={DAY_STATUS} value={row.status} />{row.leaveTypeName && <small className="table-sub">{row.leaveTypeName}</small>}
+        <td><StatusTag map={DAY_STATUS} value={row.status} />{row.leaveTypeName && <small className="table-sub">{row.leaveTypeName}</small>}{row.taskTitle && <small className="table-sub">مهمة: {row.taskTitle}</small>}
           {row.overridden && <small className="table-sub" title={row.overrideReason ?? ''}>معدّل يدوياً (المحتسب: {DAY_STATUS[row.computedStatus]?.label})</small>}</td>
         <td className={row.lateMinutes ? 'num-bad' : ''}>{formatMinutes(row.lateMinutes)}</td>
         <td className={row.earlyLeaveMinutes ? 'num-bad' : ''}>{formatMinutes(row.earlyLeaveMinutes)}</td>

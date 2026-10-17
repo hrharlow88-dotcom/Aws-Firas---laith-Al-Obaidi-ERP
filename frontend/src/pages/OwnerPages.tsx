@@ -11,6 +11,7 @@ import { APPS, en, orderedApps } from '../lib/apps';
 import { formatDateTime, formatNumber } from '../lib/format';
 import { useLoad, useSession } from '../lib/session';
 import { FirewallPanel, RadarPanel, ScanPanel } from './SecurityRadar';
+import { DEFAULT_PORTAL, PortalSettings } from '../lib/portal';
 import type { SecuritySettings, SystemSettings } from '../SettingsPage';
 
 const SEVERITY: Record<string, { label: string; tone: string }> = {
@@ -229,10 +230,36 @@ const CHANNEL_FIELDS: Record<string, Array<{ key: string; label: string; type?: 
 };
 const SECRET_LABEL: Record<string, string> = { email: 'كلمة مرور البريد', whatsapp: 'رمز الوصول (Access token)', sms: 'مفتاح البوابة (API key)' };
 
+type PortalSwitch = Exclude<keyof PortalSettings, 'welcome'>;
+/** The parts of «خدمتي» the owner opens or closes, grouped as the employee sees them. */
+const PORTAL_GROUPS: Array<{ title: string; items: Array<{ key: PortalSwitch; label: string; hint?: string }> }> = [
+  { title: 'بطاقة الموظف', items: [
+    { key: 'card', label: 'البطاقة أعلى البوابة', hint: 'الصورة، المنصب، الفرع، المباشرة' },
+    { key: 'showManager', label: 'اسم المدير المباشر' },
+    { key: 'showShift', label: 'الدوام' },
+    { key: 'photoUpload', label: 'إرسال الصورة الشخصية', hint: 'تصل الموارد البشرية لتعتمدها' },
+  ] },
+  { title: 'الحضور والإجازات', items: [
+    { key: 'attendance', label: 'البصمة والحضور والتأخير' },
+    { key: 'leaveBalances', label: 'أرصدة الإجازات' },
+    { key: 'leaveRequests', label: 'طلب إجازة' },
+    { key: 'hourlyLeave', label: 'إجازة زمنية' },
+  ] },
+  { title: 'الرواتب والطلبات', items: [
+    { key: 'payslips', label: 'قسائم الراتب وآخر صافي', hint: 'بعد اعتماد المسير فقط' },
+    { key: 'loanRequests', label: 'طلب سلفة' },
+    { key: 'expenseRequests', label: 'تكاليف العمل' },
+  ] },
+  { title: 'أخرى', items: [
+    { key: 'tickets', label: 'التذاكر', hint: 'تقنية، صيانة، سيارة، نقل' },
+    { key: 'notices', label: 'الإنذارات والملاحظات', hint: 'من سجل الموارد البشرية' },
+  ] },
+];
+
 /** Owner console: what the interface shows, the brands, sign-in and guard settings, outside channels, module managers, and the company template. */
 export function OwnerPage() {
   const session = useSession();
-  const [tab, setTab] = useState<'interface' | 'texts' | 'brands' | 'security' | 'channels' | 'managers' | 'demo' | 'clone'>('interface');
+  const [tab, setTab] = useState<'interface' | 'portal' | 'texts' | 'brands' | 'security' | 'channels' | 'managers' | 'demo' | 'clone'>('interface');
   const [draft, setDraft] = useState<SystemSettings>(() => JSON.parse(JSON.stringify(session.settings)));
   const [busy, setBusy] = useState(false);
   const brands = useBrands();
@@ -290,6 +317,8 @@ export function OwnerPage() {
     } catch (error) { session.fail(error, 'تعذر تطبيق القالب.'); }
   }
   const setSecurity = (patch: Partial<SecuritySettings>) => setDraft({ ...draft, security: { ...security, ...patch } });
+  const portal: PortalSettings = { ...DEFAULT_PORTAL, ...draft.portal };
+  const setPortal = (patch: Partial<PortalSettings>) => setDraft({ ...draft, portal: { ...portal, ...patch } });
   const appList = orderedApps(ui.appOrder);
   const moveApp = (index: number, step: number) => {
     const ids = appList.map((app) => app.id);
@@ -303,9 +332,9 @@ export function OwnerPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="لوحة مالك النظام" en="System owner console" /></h2><p>تحكم مالك النظام وحده: ما يظهر في الواجهة، العلامات وشعاراتها، مدة الجلسة والحارس الأمني، قنوات الإرسال، مسؤولو التطبيقات، واستنساخ النظام لشركة أخرى.</p></div>
-        {['interface', 'texts', 'brands', 'security', 'managers'].includes(tab) && <button className="button button-primary" disabled={busy} onClick={() => void saveSettings()}><Save size={16} /><Bi ar={"حفظ"} en={"Save"} /></button>}</div>
+        {['interface', 'portal', 'texts', 'brands', 'security', 'managers'].includes(tab) && <button className="button button-primary" disabled={busy} onClick={() => void saveSettings()}><Save size={16} /><Bi ar={"حفظ"} en={"Save"} /></button>}</div>
       <Tabs value={tab} onChange={setTab} items={[
-        { id: 'interface', label: 'الواجهة · Interface' }, { id: 'texts', label: 'النصوص والتسميات · Texts' }, { id: 'brands', label: 'العلامات · Brands' }, { id: 'security', label: 'الجلسة والأمان · Security' },
+        { id: 'interface', label: 'الواجهة · Interface' }, { id: 'portal', label: 'بوابة الموظف · Employee portal' }, { id: 'texts', label: 'النصوص والتسميات · Texts' }, { id: 'brands', label: 'العلامات · Brands' }, { id: 'security', label: 'الجلسة والأمان · Security' },
         { id: 'demo', label: 'الحسابات التجريبية · Demo' },
         { id: 'channels', label: 'القنوات · Channels' }, { id: 'managers', label: 'مسؤولو التطبيقات · App owners' }, { id: 'clone', label: 'استنساخ لشركة · Clone' },
       ]} />
@@ -321,6 +350,21 @@ export function OwnerPage() {
             <button type="button" className="icon-button" title="إلى الخلف" disabled={index === appList.length - 1} onClick={(event) => { event.preventDefault(); moveApp(index, 1); }}>←</button>
           </span>
         </label>; })}</div>
+      </section>}
+      {tab === 'portal' && <section className="panel">
+        <div className="panel-head"><div><h3><Bi ar={"ما يظهر في بوابة الموظف"} en={"What employees see in their portal"} /></h3><p>يسري على «خدمتي» لكل الموظفين. المغلق يختفي من البوابة ويرفضه الخادم، والموارد البشرية تبقى تعمل عليه من تطبيقاتها. اضغط «حفظ» بعد التغيير.</p></div>
+          <button className="button button-quiet" onClick={() => setDraft({ ...draft, portal: { ...DEFAULT_PORTAL, welcome: portal.welcome } })}>فتح الكل</button></div>
+        <div className="portal-switches">{PORTAL_GROUPS.map((group) => <div key={group.title} className="portal-switch-group">
+          <h4>{group.title}</h4>
+          {group.items.map((item) => <label key={item.key} className="portal-switch">
+            <input type="checkbox" checked={portal[item.key]} onChange={(event) => setPortal({ [item.key]: event.target.checked })} />
+            <span>{item.label}{item.hint && <small>{item.hint}</small>}</span>
+          </label>)}
+        </div>)}</div>
+        <label className="field portal-welcome-field"><span>رسالة أعلى البوابة (اختيارية)</span>
+          <textarea maxLength={500} value={portal.welcome} placeholder="مثال: تُصرف رواتب تشرين الأول يوم 30. لأي استفسار راجع الموارد البشرية في فرعك." onChange={(event) => setPortal({ welcome: event.target.value })} />
+          <small>{portal.welcome.length}/500 · تظهر لكل الموظفين في أعلى «خدمتي».</small>
+        </label>
       </section>}
       {tab === 'brands' && <section className="panel">
         <div className="panel-head"><div><h3><Bi ar={"العلامات التجارية وشعاراتها"} en={"Brands"} /></h3><p>أضف أو احذف أو أعد تسمية أو رتّب العلامات، ثم «حفظ». بعد الحفظ ارفع شعار كل علامة من ملفاتكم الرسمية. تظهر في شاشة الدخول وتحت اسم النظام، وتُربط بشركات المجموعة.</p></div>

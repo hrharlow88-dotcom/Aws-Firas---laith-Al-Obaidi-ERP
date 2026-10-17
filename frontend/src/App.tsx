@@ -76,6 +76,7 @@ const DayAdjustmentsPage = lazy(() => loadScreen(() => import('./pages/LoansPage
 const LoansPage = lazy(() => loadScreen(() => import('./pages/LoansPage')).then((module) => ({ default: module.LoansPage })));
 const LeaveAccrualPage = lazy(() => loadScreen(() => import('./pages/LeaveAccrualPage')).then((module) => ({ default: module.LeaveAccrualPage })));
 const CompanyImportPage = lazy(() => loadScreen(() => import('./pages/CompanyImportPage')).then((module) => ({ default: module.CompanyImportPage })));
+const EmployeesImportPage = lazy(() => loadScreen(() => import('./pages/EmployeesImportPage')).then((module) => ({ default: module.EmployeesImportPage })));
 const ContractTemplatesPage = lazy(() => loadScreen(() => import('./pages/ContractTemplatesPage')).then((module) => ({ default: module.ContractTemplatesPage })));
 const UsersPage = lazy(() => loadScreen(() => import('./pages/UsersPage')).then((module) => ({ default: module.UsersPage })));
 const JobProfilesPage = lazy(() => loadScreen(() => import('./pages/JobProfilesPage')).then((module) => ({ default: module.JobProfilesPage })));
@@ -107,7 +108,7 @@ const ExpensesPage = lazy(() => loadScreen(() => import('./pages/ExpensesPages')
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
-  | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
+  | 'payroll-days' | 'loans' | 'leave-accrual' | 'company-import' | 'employees-import' | 'requests' | 'portal-accounts' | 'discipline' | 'tickets' | 'my-tickets' | 'recruitment' | 'contract-templates' | 'my' | 'my-payslip' | 'kpi'
   | 'card' | 'finance' | 'audit' | 'integrations' | 'security' | 'settings'
   | 'approvals' | 'calendar' | 'notices' | 'announcements' | 'messages' | 'archive' | 'former-employees' | 'payroll-archive'
   | 'activity' | 'guard' | 'owner' | 'recycle-bin' | 'chat' | 'companies'
@@ -518,6 +519,7 @@ function Workspace() {
       case 'loans': return allow(can('payroll.view'), <LoansPage />);
       case 'leave-accrual': return allow(can('leaves.manage_balances'), <LeaveAccrualPage />);
       case 'company-import': return allow(canManageSettings, <CompanyImportPage />);
+      case 'employees-import': return allow(can('employees.update') || can('employees.create'), <EmployeesImportPage />);
       case 'requests': return allow(can('requests.manage') || can('payroll.disburse'), <RequestsPage />);
       case 'portal-accounts': return allow(canManageAccess, <PortalAccountsPage />);
       case 'discipline': return allow(can('discipline.view'), <DisciplinePage />);

@@ -1,6 +1,8 @@
 import { Bi } from './components/Brand';
 import { useEffect, useState } from 'react';
 import { Check, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
+import type { PortalSettings } from './lib/portal';
+export type { PortalSettings } from './lib/portal';
 
 export type UserRole = 'super_admin' | 'hr_manager' | 'hr_staff' | 'finance' | 'branch_manager' | 'viewer'
   | 'employee' | 'line_manager' | 'payroll_officer' | 'auditor' | 'executive' | 'it_admin';
@@ -135,6 +137,7 @@ export interface SystemSettings {
   security?: SecuritySettings;
   ui?: InterfaceSettings;
   hr?: HrSettings;
+  portal?: PortalSettings;
   knownPermissions?: Permission[];
   leaveRules: {
     workingDays: number[];

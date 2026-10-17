@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { AuditLog, EMPLOYMENT_TYPES, SystemSetting, sequelize } from '../models';
 import {
+  DEFAULT_PORTAL,
   EmployeeFieldSetting,
   LeaveTypeSetting,
   normalizeSystemSettings,
@@ -10,7 +11,7 @@ import {
   SystemSettings,
   isUserRole,
 } from '../config/systemSettings';
-import { invalidateSettingsCache } from '../services/settings';
+import { invalidateSettingsCache, userPermissions } from '../services/settings';
 import { ROLES } from '../types';
 
 const GLOBAL_SETTINGS_ID = '00000000-0000-4000-8000-000000000001';
@@ -259,6 +260,19 @@ function validateHr(value: unknown): boolean {
     typeof ai.model === 'string' && /^[a-z0-9.-]{3,60}$/.test(ai.model));
 }
 
+const PORTAL_SWITCHES = Object.keys(DEFAULT_PORTAL).filter((key) => key !== 'welcome');
+
+/** The owner's choices for the employee portal: on/off switches and a short note. */
+function validatePortal(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value)) return false;
+  for (const [key, item] of Object.entries(value)) {
+    if (key === 'welcome') { if (typeof item !== 'string' || item.length > 500) return false; continue; }
+    if (!PORTAL_SWITCHES.includes(key) || typeof item !== 'boolean') return false;
+  }
+  return true;
+}
+
 function validateSettings(value: unknown): value is SystemSettings {
   if (
     !isRecord(value) ||
@@ -266,9 +280,10 @@ function validateSettings(value: unknown): value is SystemSettings {
     !isRecord(value.roles) ||
     !hasOnlyKeys(value, [
       'company', 'leaveTypes', 'approvalSteps', 'roles', 'employeeFields', 'leaveRules', 'payrollRules',
-      'attendanceRules', 'knownPermissions', 'security', 'ui', 'hr',
+      'attendanceRules', 'knownPermissions', 'security', 'ui', 'hr', 'portal',
     ]) ||
     !validateHr(value.hr) ||
+    !validatePortal(value.portal) ||
     !validateSecurity(value.security) ||
     !validateInterface(value.ui) ||
     (value.knownPermissions !== undefined && (!Array.isArray(value.knownPermissions) ||
@@ -321,9 +336,29 @@ function validateSettings(value: unknown): value is SystemSettings {
 }
 
 export class SettingsController {
-  static async get(_req: Request, res: Response): Promise<void> {
+  /**
+   * Everyone signed in needs the settings the screens run on (leave types,
+   * texts, the portal switches, their own role's permissions). The guard's
+   * thresholds and other roles' permissions are for the owner and for those
+   * who manage accounts.
+   */
+  static async get(req: Request, res: Response): Promise<void> {
     const record = await SystemSetting.findByPk(GLOBAL_SETTINGS_ID);
-    res.json({ data: normalizeSystemSettings(record?.value) });
+    const settings = normalizeSystemSettings(record?.value);
+    if (req.user?.role === 'super_admin') {
+      res.json({ data: settings });
+      return;
+    }
+    const managesAccounts = (await userPermissions(req)).includes('users.manage');
+    const own = req.user!.role;
+    res.json({
+      data: {
+        ...settings,
+        security: { idleMinutes: settings.security.idleMinutes, askLocationOnLogin: settings.security.askLocationOnLogin },
+        roles: managesAccounts ? settings.roles : Object.fromEntries(Object.entries(settings.roles).map(([role, entry]) =>
+          [role, role === own ? entry : { ...entry, permissions: [] }])),
+      },
+    });
   }
 
   static async update(req: Request, res: Response): Promise<void> {

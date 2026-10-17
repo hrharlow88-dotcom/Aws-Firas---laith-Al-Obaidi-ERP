@@ -18,6 +18,20 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.3',
+    date: '2026-10-17',
+    title: 'بوابة الموظف بيد المالك، إكسل الموظفين الشامل، وملفات البصمة الثلاثة',
+    titleEn: 'Owner-controlled employee portal, one employee sheet, the three fingerprint files',
+    items: [
+      { kind: 'new', ar: 'المالك يحدد ما يظهر في بوابة الموظف وما يُطلب منها (البطاقة، الحضور، الأرصدة، الإجازات، القسائم، السلف، التكاليف، التذاكر، الإنذارات، الصورة) ويضع رسالة أعلاها: لوحة المالك ← بوابة الموظف', en: 'The owner decides what the employee portal shows and offers (card, attendance, balances, leave, payslips, loans, expenses, tickets, notices, photo) and can post a note at its top: Owner console → Employee portal' },
+      { kind: 'new', ar: 'ملف Excel واحد لبيانات الموظفين: الاسم بالعربي والإنكليزي، رقم البصمة، البريد والهاتف الشخصيان، المدير، القسم، المسمى، المحافظة، الفرع، المباشرة والراتب. معاينة كل تغيير ثم اعتماد، وسطر برقم جديد يضيف موظفاً: الموظفون ← استيراد وتحديث', en: 'One Excel sheet for employee data: Arabic and English names, fingerprint number, personal e-mail and phone, manager, department, position, governorate, branch, joining date and salary. Preview every change, then apply; a new number adds an employee: Employees → Import and update' },
+      { kind: 'new', ar: 'الصور: الموظف يرسل صورته من «خدمتي» والموارد البشرية تعتمدها كلها بضغطة واحدة، أو تُرفع صور كثيرة دفعة واحدة باسم رقم الموظف (10123.jpg)', en: 'Photos: employees send theirs from the portal and HR takes them all in with one click, or many photos are uploaded at once named by employee number (10123.jpg)' },
+      { kind: 'new', ar: 'ملفات نظام البصمة الثلاثة كلٌّ على حدة: الحضور، والإجازات بكل أنواعها (تُسجّل معتمدة وتُخصم من الرصيد ولا تتكرر)، ومهام بصمة التطبيق للعمل الخارجي (وقت المهمة يُحتسب دواماً واليوم الكامل حضوراً)', en: 'The fingerprint system\'s three files, each on its own: attendance, leave of every type (recorded as approved, taken from the balance, never twice), and app tasks for external work (task time counts as work, a whole day as present)' },
+      { kind: 'improve', ar: 'تُقرأ الملفات برقم البصمة والاسم والتاريخ؛ الأعمدة تُعرف تلقائياً ويمكن تغييرها، ومن طوبق بالاسم يُحفظ رقم بصمته في ملفه', en: 'Files are read by fingerprint number, name and date; columns are recognised automatically and can be changed, and a fingerprint number matched by name is saved to the employee' },
+      { kind: 'security', ar: 'إعدادات النظام كاملة للمالك وحده؛ بقية الحسابات تستلم ما تحتاجه شاشاتها فقط', en: 'Full system settings go to the owner only; other accounts receive what their screens need' },
+    ],
+  },
+  {
     version: '1.2',
     date: '2026-10-17',
     title: 'الموبايل أولاً: كل الشاشات تناسب التلفون، خط أوضح، تحميل أسرع',
