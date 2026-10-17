@@ -2,7 +2,7 @@ import { useGovernorates } from './PayrollRegisterPage';
 import { RateBulletin } from '../components/RateBulletin';
 import { FormEvent, Fragment, useRef, useState } from 'react';
 import { exportWord } from '../components/DocumentFrame';
-import { DEVELOPER, SYSTEM_NAME } from '../components/Brand';
+import { DEVELOPER, SYSTEM_NAME, Bi } from '../components/Brand';
 import {
   AlertTriangle, ArrowRight, Calculator, Check, ChevronDown, ChevronLeft, Download, FileSpreadsheet, Landmark, Plus,
   Printer, RotateCcw, Trash2, Upload, Wallet, X,
@@ -92,7 +92,7 @@ function RunsList({ branches }: { branches: Array<{ id: string; name: string }> 
 
   return (
     <section className="panel">
-      <div className="panel-head"><div><h3>أرشيف المسيرات · Payroll archive</h3><p>{runs.data.length} مسير، كل شهر بسجله وتواقيعه</p></div>
+      <div className="panel-head"><div><h3><Bi ar={"أرشيف المسيرات"} en={"Payroll archive"} /></h3><p>{runs.data.length} مسير، كل شهر بسجله وتواقيعه</p></div>
         <div className="row-actions">
           <select value={governorateFilter} onChange={(event) => setGovernorateFilter(event.target.value)} aria-label="المحافظة">
             <option value="">كل المحافظات</option>{governorates.data.governorates.map((item) => <option key={item.id} value={item.nameAr}>{item.nameAr}</option>)}</select>
@@ -268,7 +268,7 @@ function ApprovalChain({ run, onDone }: { run: RunDetail; onDone: () => void }) 
 
   return (
     <section className="panel approval-chain">
-      <div className="panel-head"><div><h3>سلسلة الاعتماد · Approval chain</h3><p>كل خطوة يوقّعها شخص مختلف بتوقيعه الإلكتروني. إعادة الاحتساب تلغي التواقيع.</p></div>
+      <div className="panel-head"><div><h3><Bi ar={"سلسلة الاعتماد"} en={"Approval chain"} /></h3><p>كل خطوة يوقّعها شخص مختلف بتوقيعه الإلكتروني. إعادة الاحتساب تلغي التواقيع.</p></div>
         {run.status === 'calculated' && run.signoffs.length > 0 && (session.can('payroll.audit') || session.can('payroll.approve')) &&
           <button className="button button-quiet" onClick={() => void sendBack()}><RotateCcw size={15} />إرجاع</button>}</div>
       <ol className="chain-steps">

@@ -7,6 +7,12 @@
 # name in ERP_DOMAIN and replace this block's first line with  http://{$ERP_DOMAIN}
 {$ERP_DOMAIN} {
 	encode zstd gzip
+	# Browsers that saw the site once always come back over HTTPS (set after the
+	# proxied response, so it replaces the API's own copy instead of doubling it).
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		defer
+	}
 	reverse_proxy web:80
 }
 

@@ -66,7 +66,7 @@ export function CompaniesPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="شركات المجموعة" en="Group companies" /></h2><p>الشركات التابعة لمجموعة الليث العبيدي، لكل شركة فروعها وعلاماتها التجارية وشعارها، وتظهر شعاراتها في شاشة الدخول.</p></div>
-        {owner && <button className="button button-primary" onClick={() => setEditing({ isActive: true, brandIds: [] })}><Plus size={16} />شركة جديدة · New company</button>}</div>
+        {owner && <button className="button button-primary" onClick={() => setEditing({ isActive: true, brandIds: [] })}><Plus size={16} /><Bi ar={"شركة جديدة"} en={"New company"} /></button>}</div>
       <div className="stat-row"><Stat label="الشركات · Companies" value={formatNumber(companies.data.length)} />
         <Stat label="الفروع المرتبطة" value={formatNumber(branches.data.filter((branch) => branch.companyId).length)} foot={`من ${branches.data.length}`} />
         <Stat label="العلامات · Brands" value={formatNumber(brands.length)} /></div>
@@ -83,7 +83,7 @@ export function CompaniesPage() {
           </div>}
         </article>)}</div>}
       <section className="panel">
-        <div className="panel-head"><div><h3>ربط الفروع بالشركات · Branches</h3><p>كل فرع يتبع شركة واحدة من شركات المجموعة.</p></div></div>
+        <div className="panel-head"><div><h3><Bi ar={"ربط الفروع بالشركات"} en={"Branches"} /></h3><p>كل فرع يتبع شركة واحدة من شركات المجموعة.</p></div></div>
         <div className="table-scroll"><table className="dense"><thead><tr><th>الفرع</th><th>المدينة</th><th>الموظفون</th><th>الشركة</th></tr></thead>
           <tbody>{branches.data.map((branch) => <tr key={branch.id}><td><strong>{branch.name}</strong></td><td>{branch.city}</td><td>{branch.employeeCount ?? '—'}</td>
             <td>{owner ? <select value={branch.companyId ?? ''} onChange={(event) => void moveBranch(branch, event.target.value)}><option value="">— بلا شركة —</option>{companies.data.map((company) => <option key={company.id} value={company.id}>{company.nameAr}</option>)}</select>

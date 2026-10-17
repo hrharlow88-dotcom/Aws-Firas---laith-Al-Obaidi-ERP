@@ -1,3 +1,4 @@
+import { Bi } from './components/Brand';
 import { useEffect, useState } from 'react';
 import { Check, Plus, Save, ShieldCheck, Trash2 } from 'lucide-react';
 
@@ -568,7 +569,7 @@ export function SettingsPage({ value, busy, onSave }: {
             <div className="settings-policy-body payroll-policy-body">
               <label className="field"><span>العملة الأساسية (ISO 4217)</span><input value={settings.payrollRules.baseCurrency} maxLength={3} dir="ltr" onChange={(event) => updatePayrollRules({ baseCurrency: event.target.value.toUpperCase() })} /></label>
               <label className="settings-check"><input type="checkbox" checked={settings.payrollRules.approvalChain === true} onChange={(event) => updatePayrollRules({ approvalChain: event.target.checked })} />سلسلة اعتماد المسير بالتوقيع الإلكتروني: الموارد البشرية ← التدقيق ← المدير التنفيذي ← المالية للصرف</label>
-              <label className="field"><span>شهر انطلاق النظام · Go-live month</span><input type="month" value={settings.payrollRules.launchPeriod ?? ''} onChange={(event) => updatePayrollRules({ launchPeriod: event.target.value || null })} /><small>آخر شهر صُرف خارج النظام. هو وما قبله في «أرشيف المسيرات»، ومسيرات النظام تبدأ بعده.</small></label>
+              <label className="field"><span><Bi ar={"شهر انطلاق النظام"} en={"Go-live month"} /></span><input type="month" value={settings.payrollRules.launchPeriod ?? ''} onChange={(event) => updatePayrollRules({ launchPeriod: event.target.value || null })} /><small>آخر شهر صُرف خارج النظام. هو وما قبله في «أرشيف المسيرات»، ومسيرات النظام تبدأ بعده.</small></label>
               <label className="field"><span>أيام الشهر لأغراض احتساب الأجر اليومي</span><input type="number" min="1" max="31" step="0.5" value={settings.payrollRules.monthlyDivisor} onChange={(event) => updatePayrollRules({ monthlyDivisor: Number(event.target.value) })} /></label>
               <label className="field"><span>الخانات العشرية للتقريب</span><input type="number" min="0" max="4" step="1" value={settings.payrollRules.roundingDigits} onChange={(event) => updatePayrollRules({ roundingDigits: Number(event.target.value) })} /></label>
             </div>
@@ -606,7 +607,7 @@ export function SettingsPage({ value, busy, onSave }: {
               <label className="field"><span>دمج البصمات المتكررة خلال (دقيقة)</span><input type="number" min="0" max="60" step="1" value={settings.attendanceRules.duplicatePunchWindowMinutes} onChange={(event) => updateAttendanceRules({ duplicatePunchWindowMinutes: Number(event.target.value) })} /></label>
               <label className="settings-check settings-wide"><input type="checkbox" checked={settings.attendanceRules.markAbsentWithoutPunch} onChange={(event) => updateAttendanceRules({ markAbsentWithoutPunch: event.target.checked })} />اعتبار يوم العمل بلا بصمة ولا إجازة معتمدة غياباً</label>
             </div>
-            <div className="panel-head"><div><h3>سياسة التأخير اليومية للشركة · Daily lateness policy</h3><p>اليوم المتأخر بالدقائق المحددة أو أكثر يُخصم منه جزء من يوم (أعلى شريحة تنطبق). تُطبق تلقائياً عند احتساب المسير بعد رفع البصمات. اتركها فارغة إن لم تعتمد الشركة شرائح.</p></div>
+            <div className="panel-head"><div><h3><Bi ar={"سياسة التأخير اليومية للشركة"} en={"Daily lateness policy"} /></h3><p>اليوم المتأخر بالدقائق المحددة أو أكثر يُخصم منه جزء من يوم (أعلى شريحة تنطبق). تُطبق تلقائياً عند احتساب المسير بعد رفع البصمات. اتركها فارغة إن لم تعتمد الشركة شرائح.</p></div>
               <button className="button button-quiet" type="button" onClick={() => updateAttendanceRules({ lateDayTiers: [...(settings.attendanceRules.lateDayTiers ?? []), { minutes: 30, days: 0.25 }] })}><Plus size={15} />إضافة شريحة</button></div>
             {(settings.attendanceRules.lateDayTiers ?? []).length ? <div className="settings-list">
               {(settings.attendanceRules.lateDayTiers ?? []).map((tier, index) => <div className="approval-row" key={index}>
@@ -614,7 +615,7 @@ export function SettingsPage({ value, busy, onSave }: {
                 <label className="field"><span>يُخصم (يوم)</span><input type="number" min="0.05" max="3" step="0.05" value={tier.days} onChange={(event) => updateAttendanceRules({ lateDayTiers: (settings.attendanceRules.lateDayTiers ?? []).map((row, i) => i === index ? { ...row, days: Number(event.target.value) } : row) })} /></label>
                 <div className="approval-actions"><button className="icon-button" type="button" aria-label="حذف الشريحة" onClick={() => updateAttendanceRules({ lateDayTiers: (settings.attendanceRules.lateDayTiers ?? []).filter((_, i) => i !== index) })}><Trash2 size={16} /></button></div>
               </div>)}
-            </div> : <p className="muted">لا توجد شرائح. · No tiers.</p>}
+            </div> : <p className="muted"><Bi ar={"لا توجد شرائح."} en={"No tiers."} /></p>}
             <div className="permission-note leave-policy-warning">
               <ShieldCheck size={18} />
               <div><strong>قبل تفعيل الخصومات</strong><span>مكونا «العمل الإضافي» و«خصم دقائق التأخير» معطلان افتراضياً في إعدادات الرواتب. فعّلهما بعد اعتماد نسب الإضافي وسياسة التأخير من الإدارة والمستشار القانوني.</span></div>

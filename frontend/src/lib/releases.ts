@@ -18,6 +18,23 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '1.2',
+    date: '2026-10-17',
+    title: 'الموبايل أولاً: كل الشاشات تناسب التلفون، خط أوضح، تحميل أسرع',
+    titleEn: 'Mobile first: every screen fits the phone, clearer type, faster loading',
+    items: [
+      { kind: 'fix', ar: 'لا شاشة أعرض من التلفون بعد الآن: فُحصت 59 شاشة على 5 قياسات (من 320 إلى 1440 بكسل) ولا تتزحلق أي منها جانبياً', en: 'No screen is wider than the phone any more: 59 screens checked at five widths (320–1440 px), none scrolls sideways' },
+      { kind: 'improve', ar: 'على التلفون: قوائم التطبيق بصف ثانٍ يُسحب، الجداول تتحول إلى بطاقات، النوافذ بملء الشاشة، وأربعة تطبيقات في كل صف', en: 'On phones: app menus in a second swipeable row, tables turn into cards, dialogs fill the screen, four apps per row' },
+      { kind: 'improve', ar: 'خط عربي وإنكليزي موحّد (IBM Plex Sans Arabic) ونصوص أكبر وأوضح، ولا تكبير تلقائي مزعج عند الكتابة على الآيفون', en: 'One Arabic/English typeface (IBM Plex Sans Arabic), larger clearer text, no automatic zoom while typing on iPhone' },
+      { kind: 'improve', ar: 'الواجهة بالعربي افتراضياً، والإنكليزي أو اللغتان معاً من قائمة الحساب', en: 'Arabic by default; English or both from the account menu' },
+      { kind: 'improve', ar: 'فتح أسرع: الملف الأول صار 82 كيلوبايت مضغوط بدل 216، وكل شاشة تُحمّل عند فتحها', en: 'Faster start: the first download is 82 KB compressed instead of 216, each screen loads when opened' },
+      { kind: 'fix', ar: 'التطبيق المثبت على الآيفون لم يعد يدخل تحت شريط الساعة', en: 'The installed iPhone app no longer sits under the status bar' },
+      { kind: 'fix', ar: 'شاشة بلا صلاحية أو بلا اختيار (قسيمة، بطاقة) تشرح السبب بدل صفحة فارغة', en: 'A screen without access or without a selection explains why instead of showing a blank page' },
+      { kind: 'improve', ar: 'زر «تعطيل» أُزيل من كل صف في دليل الموظفين؛ الحالة تُغيّر من ملف الموظف', en: 'The deactivate button left every row of the employee directory; status is changed in the employee file' },
+      { kind: 'security', ar: 'HTTPS إلزامي للمتصفحات (HSTS)، ترقية مكتبة البريد لسد ثغرتين، وفهارس وقيود جديدة في قاعدة البيانات', en: 'HTTPS enforced for browsers (HSTS), mail library upgraded to close two flaws, new database indexes and constraints' },
+    ],
+  },
+  {
     version: '1.1',
     date: '2026-10-17',
     title: 'المحافظات، الموظفون الأجانب، المساعد الذكي، التكاليف والموافقات',

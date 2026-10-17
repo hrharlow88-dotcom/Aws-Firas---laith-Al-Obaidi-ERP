@@ -59,9 +59,9 @@ export function PayrollRegisterPage() {
         <label className="field"><span>القسم</span><select value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
           <option value="">كل الأقسام</option>{departments.data.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <div className="field"><span>العملة</span><div className="segmented">
-          <button aria-pressed={currency === ''} onClick={() => setCurrency('')}>كلاهما · Both</button>
-          <button aria-pressed={currency === 'IQD'} onClick={() => setCurrency('IQD')}>دينار · IQD</button>
-          <button aria-pressed={currency === 'USD'} onClick={() => setCurrency('USD')}>دولار · USD</button></div></div>
+          <button aria-pressed={currency === ''} onClick={() => setCurrency('')}><Bi ar={"كلاهما"} en={"Both"} /></button>
+          <button aria-pressed={currency === 'IQD'} onClick={() => setCurrency('IQD')}><Bi ar={"دينار"} en={"IQD"} /></button>
+          <button aria-pressed={currency === 'USD'} onClick={() => setCurrency('USD')}><Bi ar={"دولار"} en={"USD"} /></button></div></div>
       </div>
       {register.loading ? <Loading /> : !data || !data.lines.length
         ? <section className="panel"><Empty icon={<Landmark size={22} />} title={`لا توجد رواتب لشهر ${monthLabel(period)}`} text="شغّل مسير الشهر أو ارفع ملف المحافظة في أرشيف المسيرات." /></section>

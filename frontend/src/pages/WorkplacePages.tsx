@@ -2,7 +2,7 @@ import { FormEvent, useMemo, useState } from 'react';
 import {
   CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Copy, Inbox, Mail, Megaphone, MessageCircle, Plus, Send, Smartphone, Trash2, X,
 } from 'lucide-react';
-import { Bi } from '../components/Brand';
+import { Bi, BiText } from '../components/Brand';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
 import { ANNOUNCEMENT_KIND, goTo } from '../components/Shell';
 import { DocumentFrame } from '../components/DocumentFrame';
@@ -20,13 +20,13 @@ export function ApprovalsPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="اعتماداتي ومهامي" en="My approvals & to-dos" /></h2><p>كل ما ينتظر قرارك أو توقيعك أو إقرارك من كل التطبيقات في مكان واحد.</p></div>
-        <button className="button button-quiet" onClick={inbox.reload}>تحديث · Refresh</button></div>
+        <button className="button button-quiet" onClick={inbox.reload}><Bi ar={"تحديث"} en={"Refresh"} /></button></div>
       <div className="stat-row"><Stat label="بانتظارك · Waiting for you" value={formatNumber(inbox.data.total)} tone={inbox.data.total ? 'warn' : undefined} />
         {inbox.data.groups.slice(0, 3).map((group) => <Stat key={group.id} label={group.title} value={formatNumber(group.items.length)} />)}</div>
       {inbox.loading ? <Loading /> : !inbox.data.groups.length
         ? <section className="panel"><Empty icon={<ClipboardCheck size={22} />} title="لا شيء بانتظارك" text="أنجزت كل الاعتمادات. · Nothing waiting for you." /></section>
         : <div className="inbox-groups">{inbox.data.groups.map((group) => <section key={group.id} className="panel inbox-group">
-          <div className="panel-head"><div><h3>{group.title}</h3></div><button className="button button-quiet" onClick={() => goTo(group.link)}>فتح · Open<ChevronLeft size={15} /></button></div>
+          <div className="panel-head"><div><h3>{group.title}</h3></div><button className="button button-quiet" onClick={() => goTo(group.link)}><Bi ar={"فتح"} en={"Open"} /><ChevronLeft size={15} /></button></div>
           <ul className="inbox-list">{group.items.map((item) => <li key={item.id}><button onClick={() => goTo(item.link ?? group.link)}>
             <strong>{item.title}</strong>{item.detail && <span>{item.detail}</span>}{item.at && <small>{formatDateTime(item.at)}</small>}
           </button></li>)}</ul>
@@ -125,20 +125,20 @@ export function CalendarPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="التقويم" en="Calendar" /></h2><p>الإجازات والعطل والرواتب والمقابلات وانتهاء المستمسكات والعقود ومواعيد الشركة في تقويم واحد. اضغط على أي يوم لإضافة موعد.</p></div>
-        <button className="button button-primary" onClick={() => setEditing({ start: today(), end: today(), allDay: false, visibility: data.data.canManage ? 'company' : 'private', category: 'meeting' })}><Plus size={16} />موعد جديد · New</button></div>
+        <button className="button button-primary" onClick={() => setEditing({ start: today(), end: today(), allDay: false, visibility: data.data.canManage ? 'company' : 'private', category: 'meeting' })}><Plus size={16} /><Bi ar={"موعد جديد"} en={"New"} /></button></div>
       <section className="panel">
         <div className="calendar-bar">
           <div className="calendar-nav">
             <button className="icon-button" aria-label="الشهر السابق" onClick={() => move(-1)}><ChevronRight size={18} /></button>
             <strong>{monthName}</strong><span className="muted" dir="ltr">{monthEn}</span>
             <button className="icon-button" aria-label="الشهر التالي" onClick={() => move(1)}><ChevronLeft size={18} /></button>
-            <button className="button button-quiet button-small" onClick={() => { const now = new Date(); setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); }}>اليوم · Today</button>
+            <button className="button button-quiet button-small" onClick={() => { const now = new Date(); setCursor(new Date(now.getFullYear(), now.getMonth(), 1)); }}><Bi ar={"اليوم"} en={"Today"} /></button>
           </div>
-          <div className="segmented"><button aria-pressed={view === 'month'} onClick={() => setView('month')}>شهر · Month</button><button aria-pressed={view === 'agenda'} onClick={() => setView('agenda')}>جدول · Agenda</button></div>
+          <div className="segmented"><button aria-pressed={view === 'month'} onClick={() => setView('month')}><Bi ar={"شهر"} en={"Month"} /></button><button aria-pressed={view === 'agenda'} onClick={() => setView('agenda')}><Bi ar={"جدول"} en={"Agenda"} /></button></div>
         </div>
         <div className="calendar-legend">{Object.entries(SOURCES).map(([key, value]) => <label key={key} className={hidden.has(key) ? 'is-off' : ''}>
           <input type="checkbox" checked={!hidden.has(key)} onChange={() => setHidden((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; })} />
-          <i style={{ background: value.color }} />{value.label}
+          <i style={{ background: value.color }} /><BiText text={value.label} />
         </label>)}</div>
         {data.loading && <Loading />}
         {view === 'month' ? <div className="calendar-grid">
@@ -165,26 +165,26 @@ export function CalendarPage() {
             <td>{formatDate(item.start.slice(0, 10))}{item.end.slice(0, 10) !== item.start.slice(0, 10) && <> → {formatDate(item.end.slice(0, 10))}</>}</td>
             <td dir="ltr">{item.allDay ? '—' : `${item.start.slice(11, 16)}–${item.end.slice(11, 16)}`}</td>
             <td><strong>{item.title}</strong>{item.detail && <small className="table-sub">{item.detail}</small>}</td>
-            <td><span className="calendar-dot" style={{ background: item.color || SOURCES[item.source]?.color }} />{SOURCES[item.source]?.label}</td>
+            <td><span className="calendar-dot" style={{ background: item.color || SOURCES[item.source]?.color }} /><BiText text={SOURCES[item.source]?.label} /></td>
           </tr>)}</tbody>
         </table></div>}
       </section>
       <Dialog open={Boolean(editing)} title={editing?.id ? 'تعديل موعد · Edit event' : 'موعد جديد · New event'} onClose={() => setEditing(null)}>
         {editing && <form className="form-grid" onSubmit={(event) => void save(event)}>
-          <label className="field settings-wide"><span>العنوان · Title *</span><input name="title" required maxLength={200} defaultValue={editing.title ?? ''} /></label>
-          <label className="field"><span>النوع · Type</span><select name="category" defaultValue={editing.category ?? 'meeting'}>{Object.entries(CATEGORY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-          <label className="field"><span>من يراه · Visibility</span><select name="visibility" defaultValue={editing.visibility ?? 'private'} disabled={!data.data.canManage}>
+          <label className="field settings-wide"><span><Bi ar={"العنوان *"} en={"Title *"} /></span><input name="title" required maxLength={200} defaultValue={editing.title ?? ''} /></label>
+          <label className="field"><span><Bi ar={"النوع"} en={"Type"} /></span><select name="category" defaultValue={editing.category ?? 'meeting'}>{Object.entries(CATEGORY_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+          <label className="field"><span><Bi ar={"من يراه"} en={"Visibility"} /></span><select name="visibility" defaultValue={editing.visibility ?? 'private'} disabled={!data.data.canManage}>
             <option value="private">أنا فقط · Only me</option><option value="branch">فرعي · My branch</option><option value="company">كل الشركة · Company</option></select></label>
-          <label className="field"><span>التاريخ · Date</span><input type="date" name="date" required defaultValue={(editing.start ?? today()).slice(0, 10)} /></label>
-          <label className="field"><span>إلى تاريخ · Until</span><input type="date" name="endDate" defaultValue={(editing.end ?? editing.start ?? today()).slice(0, 10)} /></label>
-          <label className="field"><span>من الساعة · From</span><input type="time" name="startTime" defaultValue={editing.start?.slice(11, 16) || '09:00'} /></label>
-          <label className="field"><span>إلى الساعة · To</span><input type="time" name="endTime" defaultValue={editing.end?.slice(11, 16) || '10:00'} /></label>
-          <label className="settings-check"><input type="checkbox" name="allDay" defaultChecked={editing.allDay} />طوال اليوم · All day</label>
-          <label className="field"><span>اللون · Colour</span><input type="color" name="color" defaultValue={editing.color || '#E15532'} /></label>
-          <label className="field settings-wide"><span>المكان · Location</span><input name="location" maxLength={200} defaultValue={editing.location ?? ''} /></label>
-          <label className="field settings-wide"><span>التفاصيل · Details</span><textarea name="description" rows={3} maxLength={2000} defaultValue={editing.description ?? editing.detail ?? ''} /></label>
+          <label className="field"><span><Bi ar={"التاريخ"} en={"Date"} /></span><input type="date" name="date" required defaultValue={(editing.start ?? today()).slice(0, 10)} /></label>
+          <label className="field"><span><Bi ar={"إلى تاريخ"} en={"Until"} /></span><input type="date" name="endDate" defaultValue={(editing.end ?? editing.start ?? today()).slice(0, 10)} /></label>
+          <label className="field"><span><Bi ar={"من الساعة"} en={"From"} /></span><input type="time" name="startTime" defaultValue={editing.start?.slice(11, 16) || '09:00'} /></label>
+          <label className="field"><span><Bi ar={"إلى الساعة"} en={"To"} /></span><input type="time" name="endTime" defaultValue={editing.end?.slice(11, 16) || '10:00'} /></label>
+          <label className="settings-check"><input type="checkbox" name="allDay" defaultChecked={editing.allDay} /><Bi ar={"طوال اليوم"} en={"All day"} /></label>
+          <label className="field"><span><Bi ar={"اللون"} en={"Colour"} /></span><input type="color" name="color" defaultValue={editing.color || '#E15532'} /></label>
+          <label className="field settings-wide"><span><Bi ar={"المكان"} en={"Location"} /></span><input name="location" maxLength={200} defaultValue={editing.location ?? ''} /></label>
+          <label className="field settings-wide"><span><Bi ar={"التفاصيل"} en={"Details"} /></span><textarea name="description" rows={3} maxLength={2000} defaultValue={editing.description ?? editing.detail ?? ''} /></label>
           <div className="dialog-actions settings-wide">
-            <button className="button button-primary" type="submit">حفظ · Save</button>
+            <button className="button button-primary" type="submit"><Bi ar={"حفظ"} en={"Save"} /></button>
             {editing.id && <button className="button button-danger" type="button" onClick={() => void cancel()}><Trash2 size={15} />إلغاء الموعد</button>}
             <button className="button button-quiet" type="button" onClick={() => setEditing(null)}>إغلاق</button>
           </div>
@@ -240,15 +240,15 @@ export function AnnouncementsPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="الإعلانات والتعاميم" en="Announcements & circulars" /></h2><p>يظهر الإعلان بشاشة كاملة لكل موظف في الجمهور عند فتح النظام أو البوابة، ويمكن طلب الإقرار بالاطلاع ومتابعة من اطّلع.</p></div>
-        <button className="button button-primary" onClick={() => setCreating(true)}><Megaphone size={16} />إعلان جديد · New</button></div>
+        <button className="button button-primary" onClick={() => setCreating(true)}><Megaphone size={16} /><Bi ar={"إعلان جديد"} en={"New"} /></button></div>
       <section className="panel">
         {list.loading ? <Loading /> : !list.data.length ? <Empty icon={<Megaphone size={22} />} title="لا توجد إعلانات" text="انشر أول تعميم للموظفين." />
           : <div className="table-scroll"><table className="dense">
             <thead><tr><th>العنوان</th><th>النوع</th><th>الجمهور</th><th>الاطلاع</th><th>النشر</th></tr></thead>
             <tbody>{list.data.map((row) => <tr key={row.id} className="row-link" onClick={() => setViewing(row)}>
               <td><strong>{row.titleAr}</strong>{row.titleEn && <small className="table-sub" dir="ltr">{row.titleEn}</small>}</td>
-              <td>{ANNOUNCEMENT_KIND[row.kind]}<br /><Tone tone={SEVERITY[row.severity].tone}>{SEVERITY[row.severity].label}</Tone></td>
-              <td>{AUDIENCE[row.audience]}{row.branchName && <small className="table-sub">{row.branchName}</small>}{row.departmentName && <small className="table-sub">{row.departmentName}</small>}</td>
+              <td><BiText text={ANNOUNCEMENT_KIND[row.kind]} /><br /><Tone tone={SEVERITY[row.severity].tone}><BiText text={SEVERITY[row.severity].label} /></Tone></td>
+              <td><BiText text={AUDIENCE[row.audience]} />{row.branchName && <small className="table-sub">{row.branchName}</small>}{row.departmentName && <small className="table-sub">{row.departmentName}</small>}</td>
               <td>{row.seen}/{row.audience_size}{row.requireAck && <small className="table-sub">أقرّ: {row.acknowledged}</small>}</td>
               <td>{formatDateTime(row.startsAt)}<small className="table-sub">{row.createdByName}</small></td>
             </tr>)}</tbody>
@@ -272,8 +272,8 @@ export function AnnouncementsPage() {
           <label className="field"><span>يبدأ الظهور</span><input type="datetime-local" name="startsAt" /></label>
           <label className="field"><span>ينتهي الظهور</span><input type="datetime-local" name="endsAt" /></label>
           <label className="field"><span>التوقيع</span><input name="signedByTitle" defaultValue="إدارة النظام — الموارد البشرية" maxLength={120} /></label>
-          <label className="settings-check"><input type="checkbox" name="requireAck" />يطلب إقراراً بالاطلاع · Require acknowledgement</label>
-          <div className="dialog-actions settings-wide"><button className="button button-primary" type="submit"><Send size={15} />نشر · Publish</button></div>
+          <label className="settings-check"><input type="checkbox" name="requireAck" /><Bi ar={"يطلب إقراراً بالاطلاع"} en={"Require acknowledgement"} /></label>
+          <div className="dialog-actions settings-wide"><button className="button button-primary" type="submit"><Send size={15} /><Bi ar={"نشر"} en={"Publish"} /></button></div>
         </form>
       </Dialog>
       <Dialog wide open={Boolean(viewing)} title={viewing?.titleAr ?? ''} onClose={() => setViewing(null)}>
@@ -283,7 +283,7 @@ export function AnnouncementsPage() {
             {viewing.bodyEn && <p dir="ltr" style={{ whiteSpace: 'pre-wrap' }}>{viewing.bodyEn}</p>}
             <p><b>{viewing.signedByTitle}</b></p>
           </DocumentFrame>
-          <h4>من اطّلع · Who has seen it</h4>
+          <h4><Bi ar={"من اطّلع"} en={"Who has seen it"} /></h4>
           <div className="table-scroll"><table className="dense"><thead><tr><th>الاسم</th><th>اطّلع</th><th>أقرّ</th></tr></thead>
             <tbody>{receipts.data.map((row, index) => <tr key={index}><td>{row.name}<small className="table-sub">{row.employeeNo}</small></td>
               <td>{row.seenAt ? formatDateTime(row.seenAt) : <Tone tone="warn">لم يطّلع</Tone>}</td><td>{row.acknowledgedAt ? formatDateTime(row.acknowledgedAt) : '—'}</td></tr>)}</tbody></table></div>
@@ -305,7 +305,7 @@ export function NoticeBoardPage() {
       <div className="screen-heading"><div><h2><Bi ar="لوحة الإعلانات" en="Notice board" /></h2><p>التعاميم والتبليغات والدعوات الموجهة إليك.</p></div></div>
       {list.loading ? <Loading /> : !list.data.length ? <section className="panel"><Empty icon={<Megaphone size={22} />} title="لا توجد إعلانات" text="ستظهر هنا التعاميم الموجهة إليك." /></section>
         : <div className="notice-board">{list.data.map((row) => <article key={row.id} className={`notice-card notice-${row.severity}`}>
-          <header><span>{ANNOUNCEMENT_KIND[row.kind]}</span><small>{formatDateTime(row.startsAt)}</small></header>
+          <header><span><BiText text={ANNOUNCEMENT_KIND[row.kind]} /></span><small>{formatDateTime(row.startsAt)}</small></header>
           <h3>{row.titleAr}</h3>{row.titleEn && <h4 dir="ltr">{row.titleEn}</h4>}
           <p>{row.bodyAr}</p>{row.bodyEn && <p dir="ltr">{row.bodyEn}</p>}
           <footer><span>{row.signedByTitle}</span>{row.acknowledgedAt ? <Tone tone="good">أقررت بالاطلاع</Tone> : row.seenAt ? <Tone tone="info">اطلعت</Tone> : <Tone tone="warn">جديد</Tone>}</footer>
@@ -358,8 +358,8 @@ export function MessagesPage() {
       <Tabs value={tab} onChange={setTab} items={[{ id: 'compose', label: 'رسالة جديدة · Compose' }, { id: 'outbox', label: 'سجل الإرسال · Outbox', badge: outbox.data.filter((row) => row.status === 'queued').length }]} />
       {tab === 'compose' && <section className="panel">
         <div className="form-grid">
-          <label className="field settings-wide"><span>النموذج · Template</span><select value={templateId} onChange={(event) => { setTemplateId(event.target.value); setResult(null); }}>{templates.data.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-          {template?.fields.map((field) => <label key={field} className={`field ${field === 'details' ? 'settings-wide' : ''}`}><span>{FIELD_LABEL[field] ?? field}</span>
+          <label className="field settings-wide"><span><Bi ar={"النموذج"} en={"Template"} /></span><select value={templateId} onChange={(event) => { setTemplateId(event.target.value); setResult(null); }}>{templates.data.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+          {template?.fields.map((field) => <label key={field} className={`field ${field === 'details' ? 'settings-wide' : ''}`}><span><BiText text={FIELD_LABEL[field] ?? field} /></span>
             {field === 'details' ? <textarea rows={4} value={values[field] ?? ''} onChange={(event) => setValues({ ...values, [field]: event.target.value })} />
               : <input value={values[field] ?? ''} type={field === 'date' ? 'date' : field === 'time' ? 'time' : 'text'} dir={field === 'link' ? 'ltr' : undefined} onChange={(event) => setValues({ ...values, [field]: event.target.value })} />}
           </label>)}
@@ -372,7 +372,7 @@ export function MessagesPage() {
             return <label key={id as string} className="settings-check"><input type="checkbox" checked={use.has(id as string)} onChange={() => setUse((current) => { const next = new Set(current); if (next.has(id as string)) next.delete(id as string); else next.add(id as string); return next; })} /><IconComponent size={15} />{label as string}{!enabled.has(id as string) && <small className="muted"> (يدوي)</small>}</label>;
           })}</div>
         </div>
-        {template && <details className="message-preview"><summary>معاينة النص · Preview</summary><pre>{template.body}</pre></details>}
+        {template && <details className="message-preview"><summary><Bi ar={"معاينة النص"} en={"Preview"} /></summary><pre>{template.body}</pre></details>}
         <div className="dialog-actions"><button className="button button-primary" disabled={!people.length} onClick={() => void send()}><Send size={15} />تجهيز وإرسال · Prepare & send</button></div>
         {result && <div className="prepared-list">
           {result.disabledChannels.length > 0 && <p className="muted">القنوات غير المفعّلة ({result.disabledChannels.join('، ')}) تُرسل يدوياً من الأزرار. يفعّلها مالك النظام من «لوحة المالك ← القنوات».</p>}

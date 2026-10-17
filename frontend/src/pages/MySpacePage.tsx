@@ -79,17 +79,17 @@ export function MySpacePage() {
       <header className="portal-card">
         <div className="portal-card-photo"><EmployeePhoto employeeId={me.id} hasPhoto={me.hasPhoto} name={me.fullName} size={96} /></div>
         <div className="portal-card-body">
-          <span className="portal-card-company">مجموعة الليث العبيدي للسيارات · Al-Laith Al-Obaidi Automotive Group</span>
+          <span className="portal-card-company"><Bi ar={"مجموعة الليث العبيدي للسيارات"} en={"Al-Laith Al-Obaidi Automotive Group"} /></span>
           <h2>{me.fullName} <StatusTag map={STATUS} value={me.employmentStatus} /></h2>
           {me.nameEn && <p dir="ltr" className="portal-card-en">{me.nameEn}</p>}
           <p>{me.position} · {me.department}</p>
           <div className="portal-card-facts">
-            <span><small>الرقم الوظيفي · ID</small><strong dir="ltr">{me.employeeNo}</strong></span>
-            <span><small>الفرع · Branch</small><strong>{me.branchName}</strong></span>
-            <span><small>المباشرة · Joined</small><strong>{formatDate(me.hireDate)}</strong></span>
-            <span><small>التوظيف · Type</small><strong>{EMPLOYMENT_TYPES[me.employmentType] ?? me.employmentType}</strong></span>
-            <span><small>المدير المباشر · Manager</small><strong>{me.managerName ?? '—'}</strong></span>
-            <span><small>الدوام · Shift</small><strong>{me.shiftName ?? '—'}</strong></span>
+            <span><small><Bi ar={"الرقم الوظيفي"} en={"ID"} /></small><strong dir="ltr">{me.employeeNo}</strong></span>
+            <span><small><Bi ar={"الفرع"} en={"Branch"} /></small><strong>{me.branchName}</strong></span>
+            <span><small><Bi ar={"المباشرة"} en={"Joined"} /></small><strong>{formatDate(me.hireDate)}</strong></span>
+            <span><small><Bi ar={"التوظيف"} en={"Type"} /></small><strong>{EMPLOYMENT_TYPES[me.employmentType] ?? me.employmentType}</strong></span>
+            <span><small><Bi ar={"المدير المباشر"} en={"Manager"} /></small><strong>{me.managerName ?? '—'}</strong></span>
+            <span><small><Bi ar={"الدوام"} en={"Shift"} /></small><strong>{me.shiftName ?? '—'}</strong></span>
           </div>
         </div>
       </header>
@@ -174,7 +174,7 @@ export function MySpacePage() {
       </Dialog>
 
       {balances.data?.balances.length ? <section className="panel">
-        <div className="panel-head"><div><h3>أرصدة إجازاتي · Leave balances</h3><p>الرصيد المتاح بعد خصم الطلبات المعلقة.</p></div></div>
+        <div className="panel-head"><div><h3><Bi ar={"أرصدة إجازاتي"} en={"Leave balances"} /></h3><p>الرصيد المتاح بعد خصم الطلبات المعلقة.</p></div></div>
         <div className="balance-tiles">{balances.data.balances.map((item) => <div key={item.leaveTypeId}>
           <small>{item.leaveTypeName}</small><strong>{formatNumber(item.available, 2)}</strong><span>{item.unit === 'hours' ? 'ساعة' : 'يوم'} متاح</span>
         </div>)}</div>

@@ -1,3 +1,4 @@
+import { Bi } from '../components/Brand';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Briefcase, ChevronDown, ChevronLeft, Network, Pencil, Plus, Users } from 'lucide-react';
 import { Dialog, Empty, Loading, Tabs, Tone } from '../components/ui';
@@ -220,7 +221,7 @@ function OrgChart({ departments }: { departments: Department[] }) {
           <button type="button" onClick={() => setZoom((value) => Math.min(1.3, +(value + 0.15).toFixed(2)))}>+</button>
         </div>
         <button className="button button-quiet" onClick={() => { setExpandAll(!expandAll); setOpen(new Set()); }}>{expandAll ? 'طي الكل' : 'توسيع الكل'}</button>
-        <ul className="chart-legend"><li className="level-manager">مدراء · Managers</li><li className="level-supervisor">مشرفون · Supervisors</li><li className="level-staff">موظفون · Staff</li></ul>
+        <ul className="chart-legend"><li className="level-manager"><Bi ar={"مدراء"} en={"Managers"} /></li><li className="level-supervisor"><Bi ar={"مشرفون"} en={"Supervisors"} /></li><li className="level-staff"><Bi ar={"موظفون"} en={"Staff"} /></li></ul>
         <span className="result-count">{people.length} موظف</span>
       </div>
       {chart.loading ? <Loading /> : people.length ? <div className="org-chart" ref={scroller}>

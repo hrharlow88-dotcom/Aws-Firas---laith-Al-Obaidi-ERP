@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, lazy, ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -19,52 +19,91 @@ import {
   Wallet,
   X,
 } from 'lucide-react';
-import { SettingsPage } from './SettingsPage';
 import type { Permission, SystemSettings, UserRole } from './SettingsPage';
-import { LeavePage } from './LeavePage';
 import { api as request } from './lib/api';
 import { buildSession, SessionProvider, useLoad, useSession } from './lib/session';
 import { navigate, useRoute } from './lib/router';
 import { AppearanceControls, Bi, BrandStrip, CompanyStrip, DeveloperCredit, SYSTEM_NAME, usePublicBranding } from './components/Brand';
 import { UpdateBanner, VersionBadge } from './components/Version';
+import { ChatButton } from './components/ChatButton';
 import { ViewSwitch, useViewMode } from './components/ViewSwitch';
-import { MySignature } from './components/Signature';
-import { PortalAccountsPage, RequestsPage } from './pages/RequestsPage';
-import { DisciplinePage } from './pages/DisciplinePage';
-import { TicketsPage } from './pages/TicketsPage';
-import { RecruitmentPage } from './pages/RecruitmentPage';
 import { DOCUMENT_TYPES, EMPLOYMENT_TYPES, formatMoney, monthLabel } from './lib/format';
-import { OrgPage } from './pages/OrgPage';
 import type { Department, JobTitle } from './pages/OrgPage';
-import { EmployeeProfilePage } from './pages/EmployeeProfilePage';
-import { AttendancePage } from './pages/AttendancePage';
-import { PayrollPage, PayslipPage } from './pages/PayrollPage';
-import { AuditPage, FinancePage, IntegrationsPage } from './pages/FinancePage';
-import { EmployeeCardPage, VerifyCardPage } from './pages/CardPages';
 import { RUN_STATUS } from './lib/format';
 import { APPS, appForPage, arLabel, en, hiddenFor, orderedApps, visibleMenus } from './lib/apps';
 import { setTextOverrides, tAr, tEn } from './lib/texts';
 import type { AppDefinition, AppMenu } from './lib/apps';
 import { CrumbProvider, useCrumbs } from './lib/breadcrumbs';
-import { DayAdjustmentsPage, LoansPage } from './pages/LoansPage';
-import { LeaveAccrualPage } from './pages/LeaveAccrualPage';
-import { CompanyImportPage } from './pages/CompanyImportPage';
-import { ContractTemplatesPage } from './pages/ContractTemplatesPage';
-import { UsersPage } from './pages/UsersPage';
-import { JobProfilesPage } from './pages/JobProfilesPage';
-import { MySpacePage } from './pages/MySpacePage';
-import { StatusTag } from './components/ui';
+import { Loading, StatusTag } from './components/ui';
 import { AnnouncementGate, IdleGuard, InstallAppButton, NotificationBell, reportLoginLocation, useVisitTracking } from './components/Shell';
-import { AnnouncementsPage, ApprovalsPage, CalendarPage, MessagesPage, NoticeBoardPage } from './pages/WorkplacePages';
-import { ArchivePage, FormerEmployeesPage, PayrollArchivePage } from './pages/ArchivePages';
-import { ActivityPage, GuardPage, OwnerPage, RecycleBinPage } from './pages/OwnerPages';
-import { ChatButton, ChatPage } from './pages/ChatPage';
-import { CompaniesPage } from './pages/CompaniesPage';
-import { PayrollRegisterPage } from './pages/PayrollRegisterPage';
-import { GovernorateBranches, NotificationPreferences } from './pages/AccountExtras';
-import { CompLeavePage, HolidaysPage } from './pages/HolidaysPages';
-import { AiAssistantPage, DocumentsCheckPage } from './pages/AiPages';
-import { ApprovalCategoriesPage, ApprovalRequestsPage, ExpensesPage } from './pages/ExpensesPages';
+
+/**
+ * Loads a screen's file. After an update the old file names are gone, so a tab
+ * opened before the update reloads itself once to pick up the new version.
+ */
+function loadScreen<T>(importer: () => Promise<T>): Promise<T> {
+  return importer().catch((error: unknown) => {
+    const key = 'erp.screenReloadAt';
+    const last = Number(sessionStorage.getItem(key) || 0);
+    if (Date.now() - last > 60_000) {
+      sessionStorage.setItem(key, String(Date.now()));
+      window.location.reload();
+    }
+    throw error;
+  });
+}
+
+// Each screen loads when first opened, so the sign-in page and the shell stay small on phones.
+const SettingsPage = lazy(() => loadScreen(() => import('./SettingsPage')).then((module) => ({ default: module.SettingsPage })));
+const LeavePage = lazy(() => loadScreen(() => import('./LeavePage')).then((module) => ({ default: module.LeavePage })));
+const MySignature = lazy(() => loadScreen(() => import('./components/Signature')).then((module) => ({ default: module.MySignature })));
+const PortalAccountsPage = lazy(() => loadScreen(() => import('./pages/RequestsPage')).then((module) => ({ default: module.PortalAccountsPage })));
+const RequestsPage = lazy(() => loadScreen(() => import('./pages/RequestsPage')).then((module) => ({ default: module.RequestsPage })));
+const DisciplinePage = lazy(() => loadScreen(() => import('./pages/DisciplinePage')).then((module) => ({ default: module.DisciplinePage })));
+const TicketsPage = lazy(() => loadScreen(() => import('./pages/TicketsPage')).then((module) => ({ default: module.TicketsPage })));
+const RecruitmentPage = lazy(() => loadScreen(() => import('./pages/RecruitmentPage')).then((module) => ({ default: module.RecruitmentPage })));
+const OrgPage = lazy(() => loadScreen(() => import('./pages/OrgPage')).then((module) => ({ default: module.OrgPage })));
+const EmployeeProfilePage = lazy(() => loadScreen(() => import('./pages/EmployeeProfilePage')).then((module) => ({ default: module.EmployeeProfilePage })));
+const AttendancePage = lazy(() => loadScreen(() => import('./pages/AttendancePage')).then((module) => ({ default: module.AttendancePage })));
+const PayrollPage = lazy(() => loadScreen(() => import('./pages/PayrollPage')).then((module) => ({ default: module.PayrollPage })));
+const PayslipPage = lazy(() => loadScreen(() => import('./pages/PayrollPage')).then((module) => ({ default: module.PayslipPage })));
+const AuditPage = lazy(() => loadScreen(() => import('./pages/FinancePage')).then((module) => ({ default: module.AuditPage })));
+const FinancePage = lazy(() => loadScreen(() => import('./pages/FinancePage')).then((module) => ({ default: module.FinancePage })));
+const IntegrationsPage = lazy(() => loadScreen(() => import('./pages/FinancePage')).then((module) => ({ default: module.IntegrationsPage })));
+const EmployeeCardPage = lazy(() => loadScreen(() => import('./pages/CardPages')).then((module) => ({ default: module.EmployeeCardPage })));
+const VerifyCardPage = lazy(() => loadScreen(() => import('./pages/CardPages')).then((module) => ({ default: module.VerifyCardPage })));
+const DayAdjustmentsPage = lazy(() => loadScreen(() => import('./pages/LoansPage')).then((module) => ({ default: module.DayAdjustmentsPage })));
+const LoansPage = lazy(() => loadScreen(() => import('./pages/LoansPage')).then((module) => ({ default: module.LoansPage })));
+const LeaveAccrualPage = lazy(() => loadScreen(() => import('./pages/LeaveAccrualPage')).then((module) => ({ default: module.LeaveAccrualPage })));
+const CompanyImportPage = lazy(() => loadScreen(() => import('./pages/CompanyImportPage')).then((module) => ({ default: module.CompanyImportPage })));
+const ContractTemplatesPage = lazy(() => loadScreen(() => import('./pages/ContractTemplatesPage')).then((module) => ({ default: module.ContractTemplatesPage })));
+const UsersPage = lazy(() => loadScreen(() => import('./pages/UsersPage')).then((module) => ({ default: module.UsersPage })));
+const JobProfilesPage = lazy(() => loadScreen(() => import('./pages/JobProfilesPage')).then((module) => ({ default: module.JobProfilesPage })));
+const MySpacePage = lazy(() => loadScreen(() => import('./pages/MySpacePage')).then((module) => ({ default: module.MySpacePage })));
+const AnnouncementsPage = lazy(() => loadScreen(() => import('./pages/WorkplacePages')).then((module) => ({ default: module.AnnouncementsPage })));
+const ApprovalsPage = lazy(() => loadScreen(() => import('./pages/WorkplacePages')).then((module) => ({ default: module.ApprovalsPage })));
+const CalendarPage = lazy(() => loadScreen(() => import('./pages/WorkplacePages')).then((module) => ({ default: module.CalendarPage })));
+const MessagesPage = lazy(() => loadScreen(() => import('./pages/WorkplacePages')).then((module) => ({ default: module.MessagesPage })));
+const NoticeBoardPage = lazy(() => loadScreen(() => import('./pages/WorkplacePages')).then((module) => ({ default: module.NoticeBoardPage })));
+const ArchivePage = lazy(() => loadScreen(() => import('./pages/ArchivePages')).then((module) => ({ default: module.ArchivePage })));
+const FormerEmployeesPage = lazy(() => loadScreen(() => import('./pages/ArchivePages')).then((module) => ({ default: module.FormerEmployeesPage })));
+const PayrollArchivePage = lazy(() => loadScreen(() => import('./pages/ArchivePages')).then((module) => ({ default: module.PayrollArchivePage })));
+const ActivityPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.ActivityPage })));
+const GuardPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.GuardPage })));
+const OwnerPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.OwnerPage })));
+const RecycleBinPage = lazy(() => loadScreen(() => import('./pages/OwnerPages')).then((module) => ({ default: module.RecycleBinPage })));
+const ChatPage = lazy(() => loadScreen(() => import('./pages/ChatPage')).then((module) => ({ default: module.ChatPage })));
+const CompaniesPage = lazy(() => loadScreen(() => import('./pages/CompaniesPage')).then((module) => ({ default: module.CompaniesPage })));
+const PayrollRegisterPage = lazy(() => loadScreen(() => import('./pages/PayrollRegisterPage')).then((module) => ({ default: module.PayrollRegisterPage })));
+const GovernorateBranches = lazy(() => loadScreen(() => import('./pages/AccountExtras')).then((module) => ({ default: module.GovernorateBranches })));
+const NotificationPreferences = lazy(() => loadScreen(() => import('./pages/AccountExtras')).then((module) => ({ default: module.NotificationPreferences })));
+const CompLeavePage = lazy(() => loadScreen(() => import('./pages/HolidaysPages')).then((module) => ({ default: module.CompLeavePage })));
+const HolidaysPage = lazy(() => loadScreen(() => import('./pages/HolidaysPages')).then((module) => ({ default: module.HolidaysPage })));
+const AiAssistantPage = lazy(() => loadScreen(() => import('./pages/AiPages')).then((module) => ({ default: module.AiAssistantPage })));
+const DocumentsCheckPage = lazy(() => loadScreen(() => import('./pages/AiPages')).then((module) => ({ default: module.DocumentsCheckPage })));
+const ApprovalCategoriesPage = lazy(() => loadScreen(() => import('./pages/ExpensesPages')).then((module) => ({ default: module.ApprovalCategoriesPage })));
+const ApprovalRequestsPage = lazy(() => loadScreen(() => import('./pages/ExpensesPages')).then((module) => ({ default: module.ApprovalRequestsPage })));
+const ExpensesPage = lazy(() => loadScreen(() => import('./pages/ExpensesPages')).then((module) => ({ default: module.ExpensesPage })));
 
 type Page =
   | 'home' | 'overview' | 'employees' | 'org' | 'branches' | 'access' | 'leaves' | 'attendance' | 'payroll' | 'payslip'
@@ -205,7 +244,6 @@ function Workspace() {
   const rolePermissions = systemSettings?.roles[user?.role || 'viewer'].permissions
     || defaultRolePermissions[user?.role || 'viewer'];
   const canCreateEmployees = rolePermissions.includes('employees.create');
-  const canUpdateEmployees = rolePermissions.includes('employees.update');
   const canManageBranches = rolePermissions.includes('branches.manage');
   const canManageAccess = rolePermissions.includes('users.manage');
   const canViewLeaves = rolePermissions.includes('leaves.view');
@@ -406,22 +444,6 @@ function Workspace() {
     }
   }
 
-  async function toggleEmployeeStatus(employee: Employee) {
-    const action = employee.employmentStatus === 'active' ? 'تعطيل' : 'تفعيل';
-    if (action === 'تعطيل' && !window.confirm(`هل تريد تعطيل سجل ${employee.fullName}؟`)) return;
-    try {
-      await api(`/employees/${employee.id}`, token, {
-        method: 'PUT',
-        body: { employmentStatus: employee.employmentStatus === 'active' ? 'inactive' : 'active' },
-      });
-      notify('تم تحديث حالة الموظف.');
-      await loadData();
-    } catch (cause) {
-      notify(cause instanceof Error ? cause.message : 'تعذر تحديث الحالة.', true);
-    }
-  }
-
-
   const session = useMemo(
     () => (token && user && systemSettings ? buildSession(token, user, systemSettings, notify, signOut, refreshSettings) : null),
     [token, user, systemSettings, notify, signOut, refreshSettings],
@@ -444,6 +466,108 @@ function Workspace() {
   const isAdmin = user.role === 'super_admin';
   const currentApp = page === 'home' ? undefined : appForPage(page) ?? APPS[0];
   const menus = currentApp ? visibleMenus(currentApp, can, isAdmin) : [];
+
+  /** The screen for the current address; a screen the account may not open, or one opened without what it needs, says so. */
+  function renderPage(): ReactNode {
+    if (!user) return null;
+    const allow = (allowed: boolean | undefined, element: ReactNode) => (allowed ? element : <NoAccess />);
+    const id = route.params[0];
+    switch (page) {
+      case 'employees':
+        return id
+          ? <EmployeeProfilePage key={id} employeeId={id} branches={branchOptions} />
+          : <EmployeesPage
+            employees={employees}
+            branches={branches}
+            search={search}
+            busy={busy}
+            total={employeeTotal}
+            page={employeePage}
+            pageCount={Math.max(1, Math.ceil(employeeTotal / 25))}
+            canManage={canCreateEmployees}
+            customFields={['super_admin', 'hr_manager', 'hr_staff'].includes(user.role) ? systemSettings?.employeeFields.filter((field) => field.enabled) || [] : []}
+            showShift={can('attendance.view') && user.role !== 'branch_manager'}
+            onSearch={(value) => { setSearch(value); setEmployeePage(1); }}
+            onPage={setEmployeePage}
+            onCreate={() => setShowEmployeeForm(!showEmployeeForm)}
+            onSubmit={handleEmployeeCreate}
+            showForm={showEmployeeForm}
+          />;
+      case 'branches':
+        return <BranchesPage branches={branches} canManage={Boolean(canManageBranches)} onCreate={() => setShowBranchForm(!showBranchForm)} onSubmit={handleBranchCreate} showForm={showBranchForm} />;
+      case 'access': return allow(canManageAccess, <UsersPage roleNames={roleLabels} branches={branchOptions} />);
+      case 'my': return allow(can('self.service'), <MySpacePage />);
+      case 'my-payslip': return allow(can('self.service'), id ? <PayslipPage own runId={id} /> : <ChooseFirst text="اختر القسيمة من «ملفي ← قسائم الراتب»." page="my" label="ملفي" />);
+      case 'leaves':
+        return allow(canViewLeaves, systemSettings ? <LeavePage
+          token={token}
+          userId={user.id}
+          userRole={user.role}
+          settings={systemSettings}
+          canRequest={canRequestLeaves}
+          canApprove={canApproveLeaves}
+          canManageBalances={canManageLeaveBalances}
+          onError={notifyLeaveError}
+          onSuccess={notify}
+        /> : <Loading />);
+      case 'org': return <OrgPage branches={branchOptions} />;
+      case 'kpi': return <JobProfilesPage key={id ?? 'list'} jobTitleId={id} />;
+      case 'attendance': return allow(can('attendance.view'), <AttendancePage branches={branchOptions} />);
+      case 'payroll': return allow(can('payroll.view'), <PayrollPage key={id ?? 'list'} runId={id} branches={branchOptions} />);
+      case 'payroll-days': return allow(can('payroll.view'), <DayAdjustmentsPage />);
+      case 'loans': return allow(can('payroll.view'), <LoansPage />);
+      case 'leave-accrual': return allow(can('leaves.manage_balances'), <LeaveAccrualPage />);
+      case 'company-import': return allow(canManageSettings, <CompanyImportPage />);
+      case 'requests': return allow(can('requests.manage') || can('payroll.disburse'), <RequestsPage />);
+      case 'portal-accounts': return allow(canManageAccess, <PortalAccountsPage />);
+      case 'discipline': return allow(can('discipline.view'), <DisciplinePage />);
+      case 'tickets': return allow(can('tickets.manage'), <TicketsPage />);
+      case 'my-tickets': return <TicketsPage mine />;
+      case 'recruitment': return allow(can('recruitment.view'), <RecruitmentPage key={id ?? 'list'} positionId={id} />);
+      case 'contract-templates': return allow(can('employees.manage_profile'), <ContractTemplatesPage />);
+      case 'payslip': return route.params[1] ? <PayslipPage runId={route.params[0]} employeeId={route.params[1]} /> : <ChooseFirst text="افتح القسيمة من مسير الرواتب." page="payroll" label="المسيرات" />;
+      case 'card': return id ? <EmployeeCardPage employeeId={id} /> : <ChooseFirst text="افتح البطاقة من ملف الموظف." page="employees" label="الموظفون" />;
+      case 'finance': return allow(can('finance.view'), <FinancePage key={route.params.join('/')} params={route.params} />);
+      case 'audit': return allow(can('audit.view'), <AuditPage />);
+      case 'integrations': return allow(can('integrations.manage'), <IntegrationsPage />);
+      case 'security': return <SecurityPage onSubmit={handlePasswordChange} />;
+      case 'settings': return allow(canManageSettings, systemSettings ? <SettingsPage value={systemSettings} busy={savingSettings} onSave={handleSettingsSave} /> : <Loading />);
+      case 'approvals': return <ApprovalsPage />;
+      case 'calendar': return <CalendarPage />;
+      case 'notices': return <NoticeBoardPage />;
+      case 'announcements': return allow(can('announcements.manage'), <AnnouncementsPage />);
+      case 'messages': return allow(can('messages.send'), <MessagesPage />);
+      case 'archive': return allow(can('archive.view'), <ArchivePage />);
+      case 'former-employees': return allow(can('archive.view'), <FormerEmployeesPage />);
+      case 'payroll-archive': return allow(can('payroll.view'), <PayrollArchivePage key={id ?? 'list'} monthId={id} />);
+      case 'activity': return allow(can('audit.view'), <ActivityPage />);
+      case 'guard': return allow(isAdmin, <GuardPage />);
+      case 'owner': return allow(isAdmin, <OwnerPage />);
+      case 'recycle-bin': return allow(isAdmin, <RecycleBinPage />);
+      case 'chat': return <ChatPage key="chat" channelId={id} />;
+      case 'companies': return <CompaniesPage />;
+      case 'payroll-register': return allow(can('payroll.view'), <PayrollRegisterPage />);
+      case 'comp-leave': return allow(can('leaves.view'), <CompLeavePage />);
+      case 'holidays': return <HolidaysPage />;
+      case 'documents-check': return allow(can('employees.view_profile'), <DocumentsCheckPage />);
+      case 'expenses': return <ExpensesPage key={id ?? 'list'} id={id} />;
+      case 'approval-requests': return <ApprovalRequestsPage key={id ?? 'list'} id={id} />;
+      case 'approval-categories': return allow(isAdmin, <ApprovalCategoriesPage />);
+      case 'ai': return allow(isAdmin, <AiAssistantPage />);
+      default:
+        // The overview, and any address the system does not know.
+        return <Dashboard
+          employees={employees}
+          branches={branches}
+          activeEmployees={activeEmployees}
+          totalEmployees={employeeSummary.total}
+          canCreateEmployees={canCreateEmployees}
+          onNavigate={setPage}
+          onAddEmployee={() => { setPage('employees'); setShowEmployeeForm(true); }}
+          onAddBranch={() => { setPage('branches'); setShowBranchForm(true); }}
+        />;
+    }
+  }
 
   return (
     <SessionProvider value={session}>
@@ -475,7 +599,7 @@ function Workspace() {
         </div>
       </header>
 
-      {(user as User & { isDemo?: boolean }).isDemo && <div className="demo-ribbon demo-ribbon-shell">نسخة عرض تجريبية — البيانات وهمية · Demo copy — fictional data</div>}
+      {(user as User & { isDemo?: boolean }).isDemo && <div className="demo-ribbon demo-ribbon-shell"><Bi ar={"نسخة عرض تجريبية — البيانات وهمية"} en={"Demo copy — fictional data"} /></div>}
       <AnnouncementGate />
       <IdleGuard minutes={systemSettings?.security?.idleMinutes ?? 15} />
       <VisitTracker page={page} params={route.params} module={currentApp?.id} />
@@ -489,103 +613,9 @@ function Workspace() {
           </div>}
 
           {page === 'home' && <AppLauncher companyName={systemSettings?.company.displayName} userName={user.name} can={can} isAdmin={isAdmin} selfOnly={user.role === 'employee'} hiddenApps={systemSettings?.ui?.hiddenApps} appOrder={systemSettings?.ui?.appOrder} appAccess={user.appAccess} />}
-          {currentApp && hiddenFor(currentApp, systemSettings?.ui?.hiddenApps, isAdmin, user.appAccess) ? <p className="notice notice-error">هذا التطبيق مخفي من مالك النظام. · This app is hidden by the system owner.</p> : <>
-          {(page === 'overview' || !KNOWN_PAGES.includes(page)) && <Dashboard
-            employees={employees}
-            branches={branches}
-            activeEmployees={activeEmployees}
-            totalEmployees={employeeSummary.total}
-            canCreateEmployees={canCreateEmployees}
-            onNavigate={setPage}
-            onAddEmployee={() => { setPage('employees'); setShowEmployeeForm(true); }}
-            onAddBranch={() => { setPage('branches'); setShowBranchForm(true); }}
-          />}
-          {page === 'employees' && route.params[0] && <EmployeeProfilePage key={route.params[0]} employeeId={route.params[0]} branches={branchOptions} />}
-          {page === 'employees' && !route.params[0] && <EmployeesPage
-            employees={employees}
-            branches={branches}
-            search={search}
-            busy={busy}
-            total={employeeTotal}
-            page={employeePage}
-            pageCount={Math.max(1, Math.ceil(employeeTotal / 25))}
-            canManage={canCreateEmployees}
-            canUpdate={canUpdateEmployees}
-            customFields={['super_admin', 'hr_manager', 'hr_staff'].includes(user.role) ? systemSettings?.employeeFields.filter((field) => field.enabled) || [] : []}
-            showShift={can('attendance.view') && user.role !== 'branch_manager'}
-            onSearch={(value) => { setSearch(value); setEmployeePage(1); }}
-            onPage={setEmployeePage}
-            onCreate={() => setShowEmployeeForm(!showEmployeeForm)}
-            onSubmit={handleEmployeeCreate}
-            onToggle={toggleEmployeeStatus}
-            showForm={showEmployeeForm}
-          />}
-          {page === 'branches' && <BranchesPage
-            branches={branches}
-            canManage={Boolean(canManageBranches)}
-            onCreate={() => setShowBranchForm(!showBranchForm)}
-            onSubmit={handleBranchCreate}
-            showForm={showBranchForm}
-          />}
-          {page === 'access' && canManageAccess && <UsersPage roleNames={roleLabels} branches={branchOptions} />}
-          {page === 'my' && can('self.service') && <MySpacePage />}
-          {page === 'my-payslip' && route.params[0] && can('self.service') && <PayslipPage own runId={route.params[0]} />}
-          {page === 'leaves' && canViewLeaves && systemSettings && <LeavePage
-            token={token}
-            userId={user.id}
-            userRole={user.role}
-            settings={systemSettings}
-            canRequest={canRequestLeaves}
-            canApprove={canApproveLeaves}
-            canManageBalances={canManageLeaveBalances}
-            onError={notifyLeaveError}
-            onSuccess={notify}
-          />}
-          {page === 'org' && <OrgPage branches={branchOptions} />}
-          {page === 'kpi' && <JobProfilesPage key={route.params[0] ?? 'list'} jobTitleId={route.params[0]} />}
-          {page === 'attendance' && can('attendance.view') && <AttendancePage branches={branchOptions} />}
-          {page === 'payroll' && can('payroll.view') && <PayrollPage key={route.params[0] ?? 'list'} runId={route.params[0]} branches={branchOptions} />}
-          {page === 'payroll-days' && can('payroll.view') && <DayAdjustmentsPage />}
-          {page === 'loans' && can('payroll.view') && <LoansPage />}
-          {page === 'leave-accrual' && can('leaves.manage_balances') && <LeaveAccrualPage />}
-          {page === 'company-import' && canManageSettings && <CompanyImportPage />}
-          {page === 'requests' && (can('requests.manage') || can('payroll.disburse')) && <RequestsPage />}
-          {page === 'portal-accounts' && canManageAccess && <PortalAccountsPage />}
-          {page === 'discipline' && can('discipline.view') && <DisciplinePage />}
-          {page === 'tickets' && can('tickets.manage') && <TicketsPage />}
-          {page === 'my-tickets' && <TicketsPage mine />}
-          {page === 'recruitment' && can('recruitment.view') && <RecruitmentPage key={route.params[0] ?? 'list'} positionId={route.params[0]} />}
-          {page === 'contract-templates' && can('employees.manage_profile') && <ContractTemplatesPage />}
-          {page === 'payslip' && route.params[1] && <PayslipPage runId={route.params[0]} employeeId={route.params[1]} />}
-          {page === 'card' && route.params[0] && <EmployeeCardPage employeeId={route.params[0]} />}
-          {page === 'finance' && can('finance.view') && <FinancePage key={route.params.join('/')} params={route.params} />}
-          {page === 'audit' && can('audit.view') && <AuditPage />}
-          {page === 'integrations' && can('integrations.manage') && <IntegrationsPage />}
-          {page === 'security' && <SecurityPage onSubmit={handlePasswordChange} />}
-          {page === 'settings' && canManageSettings && systemSettings && <SettingsPage value={systemSettings} busy={savingSettings} onSave={handleSettingsSave} />}
-          {page === 'approvals' && <ApprovalsPage />}
-          {page === 'calendar' && <CalendarPage />}
-          {page === 'notices' && <NoticeBoardPage />}
-          {page === 'announcements' && can('announcements.manage') && <AnnouncementsPage />}
-          {page === 'messages' && can('messages.send') && <MessagesPage />}
-          {page === 'archive' && can('archive.view') && <ArchivePage />}
-          {page === 'former-employees' && can('archive.view') && <FormerEmployeesPage />}
-          {page === 'payroll-archive' && can('payroll.view') && <PayrollArchivePage key={route.params[0] ?? 'list'} monthId={route.params[0]} />}
-          {page === 'activity' && can('audit.view') && <ActivityPage />}
-          {page === 'guard' && isAdmin && <GuardPage />}
-          {page === 'owner' && isAdmin && <OwnerPage />}
-          {page === 'recycle-bin' && isAdmin && <RecycleBinPage />}
-          {page === 'chat' && <ChatPage key="chat" channelId={route.params[0]} />}
-          {page === 'companies' && <CompaniesPage />}
-          {page === 'payroll-register' && can('payroll.view') && <PayrollRegisterPage />}
-          {page === 'comp-leave' && can('leaves.view') && <CompLeavePage />}
-          {page === 'holidays' && <HolidaysPage />}
-          {page === 'documents-check' && can('employees.view_profile') && <DocumentsCheckPage />}
-          {page === 'expenses' && <ExpensesPage key={route.params[0] ?? 'list'} id={route.params[0]} />}
-          {page === 'approval-requests' && <ApprovalRequestsPage key={route.params[0] ?? 'list'} id={route.params[0]} />}
-          {page === 'approval-categories' && isAdmin && <ApprovalCategoriesPage />}
-          {page === 'ai' && isAdmin && <AiAssistantPage />}
-          </>}
+          {page !== 'home' && (currentApp && hiddenFor(currentApp, systemSettings?.ui?.hiddenApps, isAdmin, user.appAccess)
+            ? <p className="notice notice-error"><Bi ar={"هذا التطبيق مخفي من مالك النظام."} en={"This app is hidden by the system owner."} /></p>
+            : <Suspense fallback={<Loading />}>{renderPage()}</Suspense>)}
 
           <footer className="page-footer no-print"><span><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /><VersionBadge /></span><DeveloperCredit /></footer>
       </main>
@@ -595,12 +625,29 @@ function Workspace() {
   );
 }
 
-const KNOWN_PAGES: string[] = [
-  'home', 'overview', 'employees', 'org', 'branches', 'access', 'leaves', 'attendance', 'payroll', 'payroll-days', 'loans', 'leave-accrual', 'company-import', 'requests', 'portal-accounts', 'discipline', 'tickets', 'my-tickets', 'recruitment',
-  'contract-templates', 'my', 'my-payslip', 'kpi', 'payslip', 'card', 'finance', 'audit', 'integrations', 'security', 'settings',
-  'approvals', 'calendar', 'notices', 'announcements', 'messages', 'archive', 'former-employees', 'payroll-archive', 'activity', 'guard', 'owner', 'recycle-bin', 'chat', 'companies',
-  'payroll-register', 'comp-leave', 'holidays', 'documents-check', 'expenses', 'approval-requests', 'approval-categories', 'ai',
-];
+
+/** Shown instead of a screen the account may not open (the server refuses its data anyway). */
+function NoAccess() {
+  return (
+    <section className="panel state-panel" role="status">
+      <span className="empty-icon"><ShieldCheck size={22} /></span>
+      <strong><Bi ar="لا تملك صلاحية فتح هذه الشاشة" en="You do not have access to this screen" /></strong>
+      <p>اطلب الصلاحية من مالك النظام إذا كان عملك يحتاجها.</p>
+      <button className="button button-quiet" onClick={() => navigate('home')}><LayoutGrid size={16} />كل التطبيقات</button>
+    </section>
+  );
+}
+
+/** A screen opened without the record it shows (a payslip, a card) points to where it is chosen. */
+function ChooseFirst({ text, page, label }: { text: string; page: string; label: string }) {
+  return (
+    <section className="panel state-panel" role="status">
+      <span className="empty-icon"><CircleHelp size={22} /></span>
+      <strong>{text}</strong>
+      <button className="button button-quiet" onClick={() => navigate(page)}>{label}</button>
+    </section>
+  );
+}
 
 function menuActive(menuPage: string, page: string, app?: AppDefinition): boolean {
   if (menuPage === page) return true;
@@ -651,7 +698,7 @@ function AppLauncher({ companyName, userName, can, isAdmin, selfOnly, hiddenApps
     <section className="o-home">
       <div className="o-home-head">
         <img className="o-home-mark" src="/brand/shield-256.png" alt="" />
-        <div><h2>{hour < 12 ? 'صباح الخير' : 'مساء الخير'}، {userName.split(' ')[0]} <span className="o-home-en" dir="ltr">{hour < 12 ? 'Good morning' : 'Good evening'}</span></h2>
+        <div><h2>{hour < 12 ? 'صباح الخير' : 'مساء الخير'}، {userName.split(' ')[0]} <span className="o-home-en bi-en" dir="ltr">{hour < 12 ? 'Good morning' : 'Good evening'}</span></h2>
           <p className="o-system-name"><Bi ar={SYSTEM_NAME.ar} en={SYSTEM_NAME.en} block /></p></div>
       </div>
       <BrandStrip />
@@ -729,22 +776,22 @@ function Login({ onSubmit, busy, error, companyName }: { onSubmit: (event: FormE
     <main className="login-layout">
       <section className="login-story">
         <div className="login-brand"><BrandMark size={58} /><img className="login-wordmark" src="/brand/wordmark-white.png" alt={companyName || 'شركة الليث العبيدي'} /></div>
-        <div className="login-message"><span className="gold-rule" /><h1>{SYSTEM_NAME.ar}</h1><p className="login-en" dir="ltr">{SYSTEM_NAME.en}</p>
+        <div className="login-message"><span className="gold-rule" /><h1>{SYSTEM_NAME.ar}</h1><p className="login-en bi-en" dir="ltr">{SYSTEM_NAME.en}</p>
           <p>{tAr('login.tagline', 'الموظفون والحضور والرواتب والتوظيف والمالية في منصة واحدة، مرتبطة بـ SAP Business One.')}</p>
-          <p className="login-en" dir="ltr">{tEn('login.tagline', 'People, attendance, payroll, recruitment and finance on one platform, linked to SAP Business One.')}</p></div>
+          <p className="login-en bi-en" dir="ltr">{tEn('login.tagline', 'People, attendance, payroll, recruitment and finance on one platform, linked to SAP Business One.')}</p></div>
         <div className="login-bottom"><CompanyStrip tone="light" /><BrandStrip tone="light" /><DeveloperCredit /></div>
       </section>
       <section className="login-panel">
         <form className="login-form" onSubmit={onSubmit}>
           <span className="form-symbol"><ShieldCheck size={22} /></span>
-          {branding.demo && <div className="demo-ribbon">نسخة عرض تجريبية ببيانات وهمية · Demo copy with fictional data</div>}
-          <h2>{tAr('login.heading', 'تسجيل الدخول')} <small className="login-en" dir="ltr">{tEn('login.heading', 'Sign in')}</small></h2>
+          {branding.demo && <div className="demo-ribbon"><Bi ar={"نسخة عرض تجريبية ببيانات وهمية"} en={"Demo copy with fictional data"} /></div>}
+          <h2>{tAr('login.heading', 'تسجيل الدخول')} <small className="login-en bi-en" dir="ltr">{tEn('login.heading', 'Sign in')}</small></h2>
           <p>{tAr('login.subtitle', 'أدخل بيانات حسابك للوصول إلى مساحة العمل.')}</p>
           {error && <div className="notice notice-error" role="alert"><CircleHelp size={17} /><span>{error}</span></div>}
-          <label className="field"><span>البريد الإلكتروني أو الرقم الوظيفي · E-mail or employee ID</span><input name="email" type="text" autoComplete="username" required placeholder="name@company.com · 10123" dir="ltr" /></label>
-          <label className="field"><span>كلمة المرور · Password</span><input name="password" type="password" autoComplete="current-password" required minLength={12} dir="ltr" /></label>
+          <label className="field"><span><Bi ar={"البريد الإلكتروني أو الرقم الوظيفي"} en={"E-mail or employee ID"} /></span><input name="email" type="text" autoComplete="username" required placeholder="name@company.com · 10123" dir="ltr" /></label>
+          <label className="field"><span><Bi ar={"كلمة المرور"} en={"Password"} /></span><input name="password" type="password" autoComplete="current-password" required minLength={12} dir="ltr" /></label>
           <DeveloperCredit compact />
-          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : `${tAr('login.button', 'دخول آمن')} · ${tEn('login.button', 'Secure sign-in')}`}<ArrowLeft size={17} /></button>
+          <button className="button button-primary login-submit" disabled={busy}>{busy ? 'جارٍ التحقق…' : <Bi ar={tAr('login.button', 'دخول آمن')} en={tEn('login.button', 'Secure sign-in')} />}<ArrowLeft size={17} /></button>
           <div className="login-security"><ShieldCheck size={15} /><span>{tAr('login.security', 'الجلسة تنتهي تلقائياً عند عدم النشاط، ويُسجَّل وقت الدخول ومكانه لحمايتك.')}</span></div>
           <VersionBadge className="login-version" />
         </form>
@@ -818,7 +865,7 @@ function Dashboard({ employees, branches, activeEmployees, totalEmployees, canCr
   );
 }
 
-function EmployeesPage({ employees, branches, search, busy, total, page, pageCount, canManage, canUpdate, customFields, showShift, onSearch, onPage, onCreate, onSubmit, onToggle, showForm }: {
+function EmployeesPage({ employees, branches, search, busy, total, page, pageCount, canManage, customFields, showShift, onSearch, onPage, onCreate, onSubmit, showForm }: {
   employees: Employee[];
   branches: Branch[];
   search: string;
@@ -827,14 +874,12 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
   page: number;
   pageCount: number;
   canManage: boolean;
-  canUpdate: boolean;
   customFields: SystemSettings['employeeFields'];
   showShift: boolean;
   onSearch: (value: string) => void;
   onPage: (page: number) => void;
   onCreate: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onToggle: (employee: Employee) => void;
   showForm: boolean;
 }) {
   const departments = useLoad<Department[]>(showForm ? '/org/departments' : null, []);
@@ -851,7 +896,7 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
   }, {});
   return (
     <section className="screen">
-      <div className="screen-heading"><div><h2><Bi ar="دليل الموظفين" en="Employee Directory" /></h2><p>اضغط على أي موظف لفتح ملفه الكامل. · Click an employee to open the full file.</p></div>{canManage && <button className="button button-primary" onClick={onCreate}><Plus size={17} />إضافة موظف</button>}</div>
+      <div className="screen-heading"><div><h2><Bi ar="دليل الموظفين" en="Employee Directory" /></h2><p><Bi ar={"اضغط على أي موظف لفتح ملفه الكامل."} en={"Click an employee to open the full file."} /></p></div>{canManage && <button className="button button-primary" onClick={onCreate}><Plus size={17} />إضافة موظف</button>}</div>
       {showForm && canManage && <form className="panel form-panel" onSubmit={onSubmit} key={`${departments.data.length}-${shifts.data.length}`}>
         <div className="panel-head"><div><h3>موظف جديد</h3><p>البيانات الأساسية. الراتب والمستمسكات تُضاف من ملف الموظف بعد الحفظ.</p></div><button type="button" className="icon-button" aria-label="إغلاق النموذج" onClick={onCreate}><X size={18} /></button></div>
         <div className="form-grid">
@@ -894,8 +939,8 @@ function EmployeesPage({ employees, branches, search, busy, total, page, pageCou
             <span className="person-mark">{employee.fullName.slice(0, 1)}</span>
             <span><strong>{employee.fullName}</strong><small>{employee.position}</small><small>{employee.department} · {branchName(employee)}</small><small dir="ltr">{employee.employeeNo}</small></span>
           </button>)}
-        </div> : <div className="table-scroll"><table className="directory-table"><thead><tr><th>الموظف</th><th>القسم والمنصب</th><th>الفرع</th><th>تاريخ التعيين</th><th>الحالة</th>{customFields.map((field) => <th key={field.id}>{field.label}</th>)}{canUpdate && <th>إجراء</th>}</tr></thead><tbody>
-          {employees.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><span className="person-mark">{employee.fullName.slice(0, 1)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}{employee.email ? ` · ${employee.email}` : ''}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`state-pill state-${employee.employmentStatus}`}><i />{statusNames[employee.employmentStatus]}</span></td>{customFields.map((field) => <td key={field.id}>{employee.customFields?.[field.key] ?? '—'}</td>)}{canUpdate && <td><button className="table-action" onClick={(event) => { event.stopPropagation(); onToggle(employee); }}>{employee.employmentStatus === 'active' ? 'تعطيل' : 'تفعيل'}</button></td>}</tr>)}
+        </div> : <div className="table-scroll"><table className="directory-table"><thead><tr><th>الموظف</th><th>القسم والمنصب</th><th>الفرع</th><th>تاريخ التعيين</th><th>الحالة</th>{customFields.map((field) => <th key={field.id}>{field.label}</th>)}</tr></thead><tbody>
+          {employees.map((employee) => <tr key={employee.id} className="row-link" onClick={() => navigate('employees', employee.id)}><td><span className="person-cell"><span className="person-mark">{employee.fullName.slice(0, 1)}</span><span><strong>{employee.fullName}</strong><small>{employee.employeeNo}{employee.email ? ` · ${employee.email}` : ''}</small></span></span></td><td><strong>{employee.department}</strong><small className="table-sub">{employee.position}</small></td><td>{employee.branch?.name || branches.find((branch) => branch.id === employee.branchId)?.name || '—'}</td><td>{formatDate(employee.hireDate)}</td><td><span className={`state-pill state-${employee.employmentStatus}`}><i />{statusNames[employee.employmentStatus]}</span></td>{customFields.map((field) => <td key={field.id}>{employee.customFields?.[field.key] ?? '—'}</td>)}</tr>)}
         </tbody></table></div>}<div className="pagination"><span>عرض {Math.min((page - 1) * 25 + 1, total).toLocaleString('ar-IQ-u-nu-latn')}–{Math.min(page * 25, total).toLocaleString('ar-IQ-u-nu-latn')} من {total.toLocaleString('ar-IQ-u-nu-latn')}</span><div><button className="button button-quiet" disabled={page <= 1 || busy} onClick={() => onPage(page - 1)}>السابق</button><span>{page.toLocaleString('ar-IQ-u-nu-latn')} / {pageCount.toLocaleString('ar-IQ-u-nu-latn')}</span><button className="button button-quiet" disabled={page >= pageCount || busy} onClick={() => onPage(page + 1)}>التالي</button></div></div></> : <EmptyState icon={<Users size={22} />} title={search ? 'لا توجد نتائج مطابقة' : 'دليل الموظفين فارغ'} description={search ? 'جرّب البحث برقم الموظف أو القسم.' : 'ابدأ بإضافة أول سجل موظف واربطه بفرعه.'} action={!search && canManage ? 'إضافة موظف' : undefined} onClick={onCreate} />}
         {busy && <div className="table-loading">جارٍ تحديث السجلات…</div>}
       </section>

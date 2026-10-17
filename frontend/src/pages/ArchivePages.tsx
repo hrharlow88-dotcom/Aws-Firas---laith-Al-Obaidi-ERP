@@ -1,7 +1,7 @@
 import { useGovernorates } from './PayrollRegisterPage';
 import { FormEvent, useState } from 'react';
 import { Archive, Download, Eye, FileArchive, FileUp, Lock, RotateCcw, Search, Trash2, UserMinus } from 'lucide-react';
-import { Bi } from '../components/Brand';
+import { Bi, BiText } from '../components/Brand';
 import { EmployeePicker, PickedEmployee } from '../components/EmployeePicker';
 import { DocumentFrame } from '../components/DocumentFrame';
 import { Dialog, Empty, Loading, Stat, Tone, useReasonPrompt } from '../components/ui';
@@ -78,7 +78,7 @@ export function ArchivePage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="أرشيف الوثائق" en="Document archive" /></h2><p>كل أنواع الملفات (PDF، Word، Excel، صور، صوت، فيديو، مضغوطة…) حتى 50 ميغابايت للملف، مع البحث والتصنيف والربط بالموظف أو القسم، وكل فتح وتنزيل مسجل.</p></div>
-        {canManage && <button className="button button-primary" onClick={() => setUploading(true)}><FileUp size={16} />أرشفة ملفات · Upload</button>}</div>
+        {canManage && <button className="button button-primary" onClick={() => setUploading(true)}><FileUp size={16} /><Bi ar={"أرشفة ملفات"} en={"Upload"} /></button>}</div>
       <div className="stat-row"><Stat label="الوثائق · Documents" value={formatNumber(docs.data.length)} />
         <Stat label="مرتبطة بموظفين" value={formatNumber(docs.data.filter((doc) => doc.employeeId).length)} />
         <Stat label="سرية" value={formatNumber(docs.data.filter((doc) => doc.confidential).length)} />
@@ -91,13 +91,13 @@ export function ArchivePage() {
         </div>
         {docs.loading ? <Loading /> : !docs.data.length ? <Empty icon={<FileArchive size={22} />} title="الأرشيف فارغ" text="ارفع الوثائق لتُحفظ هنا." />
           : view === 'grid' ? <div className="card-grid">{docs.data.map((doc) => <div key={doc.id} className="record-card">
-            <span className="record-ref">{ARCHIVE_CATEGORY[doc.category]}</span><strong>{doc.confidential && <Lock size={13} />} {doc.title}</strong>
+            <span className="record-ref"><BiText text={ARCHIVE_CATEGORY[doc.category]} /></span><strong>{doc.confidential && <Lock size={13} />} {doc.title}</strong>
             <small>{doc.employeeName ?? doc.departmentName ?? '—'}</small><small>{doc.originalName} · {size(doc.sizeBytes)}</small>{actions(doc)}
           </div>)}</div>
           : <div className="table-scroll"><table className="dense"><thead><tr><th>الوثيقة</th><th>التصنيف</th><th>مرتبطة بـ</th><th>التاريخ</th><th>رفعها</th><th /></tr></thead>
             <tbody>{docs.data.map((doc) => <tr key={doc.id}>
               <td><strong>{doc.confidential && <Lock size={13} />} {doc.title}</strong><small className="table-sub">{doc.originalName} · {size(doc.sizeBytes)}{doc.reference ? ` · ${doc.reference}` : ''}</small></td>
-              <td>{ARCHIVE_CATEGORY[doc.category]}</td>
+              <td><BiText text={ARCHIVE_CATEGORY[doc.category]} /></td>
               <td>{doc.employeeName ? <a href={`#/employees/${doc.employeeId}`}>{doc.employeeName}</a> : doc.departmentName ?? '—'}</td>
               <td>{doc.docDate ? formatDate(doc.docDate) : '—'}</td>
               <td>{doc.uploadedByName}<small className="table-sub">{formatDateTime(doc.createdAt)}</small></td>
@@ -168,7 +168,7 @@ export function FormerEmployeesPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="أرشيف الموظفين المنفكّين" en="Former employees" /></h2><p>المستقيلون ومنتهية خدماتهم مع تاريخ آخر يوم عمل والسبب ومن سجّله، وملفاتهم ومستمسكاتهم محفوظة.</p></div>
-        {session.can('employees.update') && <button className="button button-primary" onClick={() => setSeparating(true)}><UserMinus size={16} />تسجيل انفكاك · Record separation</button>}</div>
+        {session.can('employees.update') && <button className="button button-primary" onClick={() => setSeparating(true)}><UserMinus size={16} /><Bi ar={"تسجيل انفكاك"} en={"Record separation"} /></button>}</div>
       <div className="stat-row"><Stat label="المنفكّون · Former" value={formatNumber(rows.data.length)} />
         {byReason.slice(0, 3).map((item) => <Stat key={item.key} label={SEPARATION[item.key]} value={formatNumber(item.count)} />)}</div>
       <section className="panel">
@@ -179,7 +179,7 @@ export function FormerEmployeesPage() {
               <td><a href={`#/employees/${row.id}`}><strong>{row.fullName}</strong></a><small className="table-sub">{row.employeeNo} · {row.branchName}</small></td>
               <td>{row.position}<small className="table-sub">{row.department}</small></td>
               <td>{formatDate(row.hireDate)} → {row.terminationDate ? formatDate(row.terminationDate) : '—'}</td>
-              <td>{row.separationReason ? SEPARATION[row.separationReason] : <Tone tone="muted">غير نشط</Tone>}{row.separationNote && <small className="table-sub">{row.separationNote}</small>}</td>
+              <td>{row.separationReason ? <BiText text={SEPARATION[row.separationReason]} /> : <Tone tone="muted">غير نشط</Tone>}{row.separationNote && <small className="table-sub">{row.separationNote}</small>}</td>
               <td>{row.separatedByName ?? '—'}{row.separatedAt && <small className="table-sub">{formatDateTime(row.separatedAt)}</small>}</td>
               <td>{session.can('employees.update') && <button className="button button-quiet button-small" onClick={() => void reinstate(row)}><RotateCcw size={14} />إرجاع</button>}</td>
             </tr>)}</tbody></table></div>}
@@ -268,7 +268,7 @@ export function PayrollArchivePage({ monthId }: { monthId?: string }) {
           })}</tbody></table></div>
       </section>
       {session.can('payroll.prepare') && <section className="panel">
-        <div className="panel-head"><div><h3>رفع شهر · Upload a month</h3><p>ملف Excel للفرع أو للشركة. يُقرأ شهر الرواتب من لوحة الملف إن وُجد، وإلا اختره.</p></div></div>
+        <div className="panel-head"><div><h3><Bi ar={"رفع شهر"} en={"Upload a month"} /></h3><p>ملف Excel للفرع أو للشركة. يُقرأ شهر الرواتب من لوحة الملف إن وُجد، وإلا اختره.</p></div></div>
         <div className="form-grid">
           <label className="field"><span>الملف (xlsx) *</span><input type="file" accept=".xlsx" onChange={(event) => { setFile(event.target.files?.[0] ?? null); setPreview(null); }} /></label>
           <label className="field"><span>الشهر</span><input type="month" value={period} max={launch ?? undefined} onChange={(event) => setPeriod(event.target.value)} /></label>
@@ -276,7 +276,7 @@ export function PayrollArchivePage({ monthId }: { monthId?: string }) {
             <option value="">اختر المحافظة</option>{governorates.data.governorates.map((item) => <option key={item.id} value={item.id}>{item.nameAr} · {item.nameEn}</option>)}</select></label>
           <label className="field"><span>الوصف (مثل: رواتب أربيل)</span><input value={label} maxLength={120} onChange={(event) => setLabel(event.target.value)} /></label>
         </div>
-        <div className="dialog-actions"><button className="button button-quiet" disabled={!file || busy} onClick={() => void check()}>معاينة · Preview</button>
+        <div className="dialog-actions"><button className="button button-quiet" disabled={!file || busy} onClick={() => void check()}><Bi ar={"معاينة"} en={"Preview"} /></button>
           {preview && !preview.duplicate && <button className="button button-primary" disabled={busy || !governorateId} title={governorateId ? undefined : 'اختر المحافظة'} onClick={() => void save()}>أرشفة {monthLabel(preview.period)}</button>}</div>
         {preview && <div className="archive-preview">
           {preview.duplicate && <p className="form-error">هذا الملف مؤرشف مسبقاً لنفس الشهر.</p>}

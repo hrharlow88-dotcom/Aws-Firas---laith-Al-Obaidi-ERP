@@ -2,7 +2,7 @@ import { ChangeEvent, useState } from 'react';
 import {
   Download, EyeOff, Plus, Fingerprint, Image, LogOut, MapPin, RefreshCw, RotateCcw, Save, ShieldCheck, Trash2, Upload,
 } from 'lucide-react';
-import { Bi, refreshBrands, useBrands } from '../components/Brand';
+import { Bi, refreshBrands, useBrands, BiText } from '../components/Brand';
 import { EDITABLE_TEXTS } from '../lib/texts';
 import { DemoAccounts } from './DemoAccounts';
 import { Dialog, Empty, Loading, Stat, Tabs, Tone, useReasonPrompt } from '../components/ui';
@@ -42,7 +42,7 @@ function MapView({ latitude, longitude }: { latitude: number; longitude: number 
   const src = `https://www.openstreetmap.org/export/embed.html?bbox=${longitude - d},${latitude - d},${longitude + d},${latitude + d}&layer=mapnik&marker=${latitude},${longitude}`;
   return <div className="map-frame">
     <iframe title="موقع تسجيل الدخول" src={src} loading="lazy" referrerPolicy="no-referrer" />
-    <a href={`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`} target="_blank" rel="noreferrer">فتح الخريطة · Open map</a>
+    <a href={`https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=17/${latitude}/${longitude}`} target="_blank" rel="noreferrer"><Bi ar={"فتح الخريطة"} en={"Open map"} /></a>
   </div>;
 }
 
@@ -82,7 +82,7 @@ export function GuardPage() {
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="الحارس الأمني" en="Security guard" /></h2>
         <p>موظف إلكتروني يجول على النظام كل دقيقتين: محاولات الاختراق وتخمين كلمات المرور، الطلبات المرفوضة المتكررة، التنزيل الكثيف، التعديلات الحساسة خارج الدوام، الدخول من عناوين جديدة، وأي تلاعب بسجل التدقيق المتسلسل. يبلّغك فوراً ولا يقرر بدلاً عنك.</p></div>
-        <button className="button button-primary" onClick={() => void scan()}><ShieldCheck size={16} />جولة الآن · Scan now</button></div>
+        <button className="button button-primary" onClick={() => void scan()}><ShieldCheck size={16} /><Bi ar={"جولة الآن"} en={"Scan now"} /></button></div>
       {!o ? <Loading /> : <div className="stat-row">
         <Stat label="تنبيهات مفتوحة · Open alerts" value={formatNumber(o.openAlerts)} tone={o.critical + o.high ? 'bad' : o.openAlerts ? 'warn' : 'good'} foot={o.critical ? `${o.critical} حرج` : undefined} />
         <Stat label="سلامة سجل التدقيق · Audit chain" value={o.chain.broken ? 'تلاعب!' : 'سليم'} tone={o.chain.broken ? 'bad' : 'good'} foot={`${formatNumber(o.chain.entries)} عملية مسلسلة`} />
@@ -102,7 +102,7 @@ export function GuardPage() {
         {alerts.loading ? <Loading /> : !alerts.data.length ? <Empty icon={<ShieldCheck size={22} />} title="لا توجد تنبيهات" text="النظام هادئ. · All quiet." />
           : <div className="table-scroll"><table className="dense"><thead><tr><th>الوقت</th><th>الخطورة</th><th>التنبيه</th><th>الشخص / العنوان</th><th /></tr></thead>
             <tbody>{alerts.data.map((row) => <tr key={row.id} className={row.resolvedAt ? 'row-muted' : ''}>
-              <td>{formatDateTime(row.at)}</td><td><Tone tone={SEVERITY[row.severity].tone}>{SEVERITY[row.severity].label}</Tone></td>
+              <td>{formatDateTime(row.at)}</td><td><Tone tone={SEVERITY[row.severity].tone}><BiText text={SEVERITY[row.severity].label} /></Tone></td>
               <td><strong>{row.title}</strong>{row.details && <small className="table-sub" dir="ltr">{JSON.stringify(row.details).slice(0, 140)}</small>}
                 {row.resolvedAt && <small className="table-sub">عولج: {row.resolution} — {row.resolvedByName}</small>}</td>
               <td>{row.userName ?? '—'}<small className="table-sub" dir="ltr">{row.ip}</small></td>
@@ -303,19 +303,19 @@ export function OwnerPage() {
   return (
     <section className="screen">
       <div className="screen-heading"><div><h2><Bi ar="لوحة مالك النظام" en="System owner console" /></h2><p>تحكم مالك النظام وحده: ما يظهر في الواجهة، العلامات وشعاراتها، مدة الجلسة والحارس الأمني، قنوات الإرسال، مسؤولو التطبيقات، واستنساخ النظام لشركة أخرى.</p></div>
-        {['interface', 'texts', 'brands', 'security', 'managers'].includes(tab) && <button className="button button-primary" disabled={busy} onClick={() => void saveSettings()}><Save size={16} />حفظ · Save</button>}</div>
+        {['interface', 'texts', 'brands', 'security', 'managers'].includes(tab) && <button className="button button-primary" disabled={busy} onClick={() => void saveSettings()}><Save size={16} /><Bi ar={"حفظ"} en={"Save"} /></button>}</div>
       <Tabs value={tab} onChange={setTab} items={[
         { id: 'interface', label: 'الواجهة · Interface' }, { id: 'texts', label: 'النصوص والتسميات · Texts' }, { id: 'brands', label: 'العلامات · Brands' }, { id: 'security', label: 'الجلسة والأمان · Security' },
         { id: 'demo', label: 'الحسابات التجريبية · Demo' },
         { id: 'channels', label: 'القنوات · Channels' }, { id: 'managers', label: 'مسؤولو التطبيقات · App owners' }, { id: 'clone', label: 'استنساخ لشركة · Clone' },
       ]} />
       {tab === 'interface' && <section className="panel">
-        <div className="panel-head"><div><h3>التطبيقات وترتيبها · Apps and their order</h3><p>رتّب التطبيقات بالأسهم كما تريدها في الشاشة الرئيسية للجميع، وأخفِ ما لا تحتاجه (المخفي لا يظهر لأحد غيرك). لتحديد تطبيقات مستخدم بعينه: الإعدادات ← المستخدمون ← «التطبيقات».</p></div>
+        <div className="panel-head"><div><h3><Bi ar={"التطبيقات وترتيبها"} en={"Apps and their order"} /></h3><p>رتّب التطبيقات بالأسهم كما تريدها في الشاشة الرئيسية للجميع، وأخفِ ما لا تحتاجه (المخفي لا يظهر لأحد غيرك). لتحديد تطبيقات مستخدم بعينه: الإعدادات ← المستخدمون ← «التطبيقات».</p></div>
           {ui.appOrder?.length ? <button className="button button-quiet" onClick={() => setDraft({ ...draft, ui: { ...ui, appOrder: [] } })}>الترتيب الافتراضي</button> : null}</div>
         <div className="app-toggles">{appList.map((app, index) => { const Icon = app.icon; const hiddenNow = ui.hiddenApps.includes(app.id); return <label key={app.id} className={`app-toggle ${hiddenNow ? 'is-hidden' : ''}`}>
           <input type="checkbox" checked={!hiddenNow} onChange={() => toggleApp(app.id)} />
           <span className="o-app-icon small" style={{ background: `linear-gradient(145deg, ${app.colors[0]}, ${app.colors[1]})` }}><Icon size={20} /></span>
-          <span><strong>{app.label}</strong><small>{en(app.label)}</small></span>{hiddenNow && <EyeOff size={15} />}
+          <span><strong>{app.label}</strong><small className="bi-en">{en(app.label)}</small></span>{hiddenNow && <EyeOff size={15} />}
           <span className="app-order-buttons">
             <button type="button" className="icon-button" title="إلى الأمام" disabled={index === 0} onClick={(event) => { event.preventDefault(); moveApp(index, -1); }}>→</button>
             <button type="button" className="icon-button" title="إلى الخلف" disabled={index === appList.length - 1} onClick={(event) => { event.preventDefault(); moveApp(index, 1); }}>←</button>
@@ -323,7 +323,7 @@ export function OwnerPage() {
         </label>; })}</div>
       </section>}
       {tab === 'brands' && <section className="panel">
-        <div className="panel-head"><div><h3>العلامات التجارية وشعاراتها · Brands</h3><p>أضف أو احذف أو أعد تسمية أو رتّب العلامات، ثم «حفظ». بعد الحفظ ارفع شعار كل علامة من ملفاتكم الرسمية. تظهر في شاشة الدخول وتحت اسم النظام، وتُربط بشركات المجموعة.</p></div>
+        <div className="panel-head"><div><h3><Bi ar={"العلامات التجارية وشعاراتها"} en={"Brands"} /></h3><p>أضف أو احذف أو أعد تسمية أو رتّب العلامات، ثم «حفظ». بعد الحفظ ارفع شعار كل علامة من ملفاتكم الرسمية. تظهر في شاشة الدخول وتحت اسم النظام، وتُربط بشركات المجموعة.</p></div>
           <button className="button button-quiet" onClick={() => setDraft({ ...draft, ui: { ...ui, brands: [...ui.brands, { id: `brand-${Date.now().toString(36)}`, name: 'علامة جديدة', logoKey: null }] } })}><Plus size={15} />إضافة علامة</button></div>
         <div className="brand-admin">{ui.brands.map((brand, index) => { const live = brands.find((item) => item.id === brand.id); const saved = Boolean(session.settings.ui?.brands.some((item) => item.id === brand.id)); return <div key={brand.id} className="brand-admin-card">
           <div className="brand-admin-logo">{live?.logo ? <img src={live.logo} alt={brand.name} /> : <Image size={28} />}</div>
@@ -358,7 +358,7 @@ export function OwnerPage() {
       </section>}
       {tab === 'demo' && <section className="panel"><DemoAccounts /></section>}
       {tab === 'security' && <section className="panel"><div className="form-grid">
-        <label className="field"><span>إنهاء الجلسة بعد عدم النشاط (دقيقة) · Idle sign-out</span><input type="number" min={5} max={480} value={security.idleMinutes} onChange={(event) => setSecurity({ idleMinutes: Number(event.target.value) })} /><small>الافتراضي 15 دقيقة. يظهر تنبيه قبلها بدقيقة.</small></label>
+        <label className="field"><span><Bi ar={"إنهاء الجلسة بعد عدم النشاط (دقيقة)"} en={"Idle sign-out"} /></span><input type="number" min={5} max={480} value={security.idleMinutes} onChange={(event) => setSecurity({ idleMinutes: Number(event.target.value) })} /><small>الافتراضي 15 دقيقة. يظهر تنبيه قبلها بدقيقة.</small></label>
         <label className="settings-check"><input type="checkbox" checked={security.askLocationOnLogin} onChange={(event) => setSecurity({ askLocationOnLogin: event.target.checked })} />طلب الموقع عند الدخول (يظهر على الخريطة في الحارس الأمني)</label>
         <label className="field"><span>بداية الدوام</span><input type="time" value={security.workdayStart} onChange={(event) => setSecurity({ workdayStart: event.target.value })} /></label>
         <label className="field"><span>نهاية الدوام</span><input type="time" value={security.workdayEnd} onChange={(event) => setSecurity({ workdayEnd: event.target.value })} /><small>التعديلات الحساسة خارج هذا الوقت تُنبَّه.</small></label>
@@ -387,7 +387,7 @@ export function OwnerPage() {
         </div>)}</div>
       </section>}
       {tab === 'clone' && <section className="panel">
-        <div className="panel-head"><div><h3>استنساخ النظام لشركة أخرى · Clone for another company</h3>
+        <div className="panel-head"><div><h3><Bi ar={"استنساخ النظام لشركة أخرى"} en={"Clone for another company"} /></h3>
           <p>١) نزّل قالب الشركة: الإعدادات والأدوار وقواعد الرواتب والإجازات والفروع والأقسام والمسميات والدوامات — بلا موظفين أو رواتب أو ملفات أو كلمات مرور.<br />
             ٢) شغّل نسخة جديدة مستقلة على السيرفر (قاعدة بيانات ونطاق منفصلان) بالأمر <code dir="ltr">./new-company.sh &lt;name&gt; &lt;domain&gt;</code> من مجلد deploy.<br />
             ٣) ادخل للنسخة الجديدة كمالك وارفع القالب هنا.</p></div></div>

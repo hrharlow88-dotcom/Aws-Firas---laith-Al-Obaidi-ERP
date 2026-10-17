@@ -84,7 +84,8 @@ async function deliver(channel: Channel, recipient: string, subject: string | nu
       auth: config.user ? { user: config.user, pass: settings.secret ?? '' } : undefined,
     });
     await transport.sendMail({
-      from: config.fromName ? `"${config.fromName}" <${config.fromAddress}>` : config.fromAddress,
+      // The display name goes through nodemailer's own address object, so quotes or brackets in it cannot change the address.
+      from: config.fromName ? { name: String(config.fromName).replace(/["<>\r\n]/g, ' ').trim(), address: String(config.fromAddress) } : String(config.fromAddress),
       to: recipient, subject: subject ?? '', text,
       html: `<div dir="auto" style="font-family:Tahoma,Arial,sans-serif;font-size:15px;line-height:1.8;white-space:pre-wrap">${text
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`,

@@ -1,6 +1,6 @@
 /* L-O ERP service worker: makes the system installable and opens the app shell offline.
    API calls are never cached (always live, always with the session). */
-const CACHE = 'lo-erp-shell-v1';
+const CACHE = 'lo-erp-shell-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/brand/shield-256.png', '/brand/icon-192.png', '/brand/wordmark-white.png'];
 
 self.addEventListener('install', (event) => {

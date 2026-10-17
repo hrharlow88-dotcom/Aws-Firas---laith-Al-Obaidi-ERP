@@ -33,7 +33,8 @@ export function savedMode(): Mode {
 }
 export function savedLanguage(): Language {
   const value = read('erp.lang');
-  return value === 'ar' || value === 'en' || value === 'both' ? value : 'both';
+  // Arabic by default; English or both are one tap away in the account menu.
+  return value === 'ar' || value === 'en' || value === 'both' ? value : 'ar';
 }
 
 export function applyTheme(theme: ThemeId, mode: Mode): void {

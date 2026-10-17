@@ -1,3 +1,4 @@
+import { Bi } from '../components/Brand';
 import { FormEvent, useRef, useState } from 'react';
 import {
   Camera, CreditCard, Download, Eye, FilePlus2, FileText, IdCard, Plus, Printer, Trash2, Upload, Wallet,
@@ -291,7 +292,7 @@ function PersonalTab({ employeeId }: { employeeId: string }) {
           <label className="field"><span>فصيلة الدم</span><select name="bloodType" defaultValue={value?.bloodType ?? ''}><option value="">—</option>{['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
           <label className="field"><span>رقم الضمان الاجتماعي</span><input name="socialSecurityNo" dir="ltr" maxLength={40} defaultValue={value?.socialSecurityNo ?? ''} /></label>
         </div>
-        <h4 className="form-section">محلي / أجنبي · Local / Foreign</h4>
+        <h4 className="form-section"><Bi ar={"محلي / أجنبي"} en={"Local / Foreign"} /></h4>
         <p className="muted-note">للموظف الأجنبي: يصل تذكير له وللمالك قبل انتهاء الإقامة (الفيزا) بـ 60 يوماً وقبل انتهاء الجواز بـ 6 أشهر. رقم الجواز مشفّر.</p>
         <div className="form-grid">
           <label className="field"><span>نوع الموظف</span><select name="residencyStatus" defaultValue={value?.residencyStatus ?? 'local'}><option value="local">محلي (عراقي)</option><option value="foreign">أجنبي</option></select></label>

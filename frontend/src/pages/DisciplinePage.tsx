@@ -182,8 +182,8 @@ export function RecordView({ record, onChanged, own = false }: { record: Discipl
       <div className="facts-wide"><dt>الوقائع</dt><dd className="pre">{record.description}</dd></div>
     </dl>
     <div className="notice-doc-sign">
-      <div><small>أصدره · Issued by</small><strong>{record.issuedByName}</strong><small>{formatDateTime(record.issuedAt)}</small>{record.signature && <img src={record.signature} alt="التوقيع" />}</div>
-      <div><small>اطلاع الموظف · Employee acknowledgement</small>{record.acknowledgedAt ? <><strong>{record.employeeName}</strong><small>{formatDateTime(record.acknowledgedAt)}</small>{record.employeeComment && <small>«{record.employeeComment}»</small>}</> : <span className="muted">لم يؤكد بعد</span>}</div>
+      <div><small><Bi ar={"أصدره"} en={"Issued by"} /></small><strong>{record.issuedByName}</strong><small>{formatDateTime(record.issuedAt)}</small>{record.signature && <img src={record.signature} alt="التوقيع" />}</div>
+      <div><small><Bi ar={"اطلاع الموظف"} en={"Employee acknowledgement"} /></small>{record.acknowledgedAt ? <><strong>{record.employeeName}</strong><small>{formatDateTime(record.acknowledgedAt)}</small>{record.employeeComment && <small>«{record.employeeComment}»</small>}</> : <span className="muted">لم يؤكد بعد</span>}</div>
     </div>
     {record.status === 'cancelled' && <p className="muted">ملغى: {record.cancelReason}</p>}
     <footer className="doc-foot"><span>أعدّه {record.issuedByName} · طُبع بواسطة {session.user.name}</span><span>{DEVELOPER.ar}</span></footer>

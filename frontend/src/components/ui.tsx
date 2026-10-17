@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Plus, X } from 'lucide-react';
+import { BiText } from './Brand';
 
 export function Tone({ tone, children }: { tone: string; children: ReactNode }) {
   return <span className={`tone tone-${tone}`}><i />{children}</span>;
@@ -7,7 +8,7 @@ export function Tone({ tone, children }: { tone: string; children: ReactNode }) 
 
 export function StatusTag({ map, value }: { map: Record<string, { label: string; tone: string }>; value: string }) {
   const entry = map[value] ?? { label: value, tone: 'muted' };
-  return <Tone tone={entry.tone}>{entry.label}</Tone>;
+  return <Tone tone={entry.tone}><BiText text={entry.label} /></Tone>;
 }
 
 export function Tabs<T extends string>({ value, items, onChange }: {
@@ -25,7 +26,7 @@ export function Tabs<T extends string>({ value, items, onChange }: {
           className={`tab ${value === item.id ? 'tab-active' : ''}`}
           onClick={() => onChange(item.id)}
         >
-          {item.label}
+          <BiText text={item.label} />
           {item.badge ? <span className="tab-badge">{item.badge > 99 ? '99+' : item.badge}</span> : null}
         </button>
       ))}
@@ -43,8 +44,8 @@ export function Empty({ icon, title, text, action, onAction }: {
   return (
     <div className="empty-state">
       <span className="empty-icon">{icon}</span>
-      <strong>{title}</strong>
-      <p>{text}</p>
+      <strong><BiText text={title} /></strong>
+      <p><BiText text={text} /></p>
       {action && onAction && <button className="button button-quiet" onClick={onAction}><Plus size={16} />{action}</button>}
     </div>
   );
@@ -57,7 +58,7 @@ export function Loading({ label = 'جارٍ التحميل…' }: { label?: stri
 export function Stat({ label, value, foot, tone }: { label: string; value: ReactNode; foot?: ReactNode; tone?: string }) {
   return (
     <div className={`stat ${tone ? `stat-${tone}` : ''}`}>
-      <span className="stat-label">{label}</span>
+      <span className="stat-label"><BiText text={label} /></span>
       <strong>{value}</strong>
       {foot && <span className="stat-foot">{foot}</span>}
     </div>
@@ -68,7 +69,7 @@ export function Warning({ title, children }: { title: string; children: ReactNod
   return (
     <div className="callout callout-warn">
       <AlertTriangle size={17} />
-      <div><strong>{title}</strong><span>{children}</span></div>
+      <div><strong><BiText text={title} /></strong><span>{children}</span></div>
     </div>
   );
 }
@@ -98,7 +99,7 @@ export function Dialog({ open, title, subtitle, onClose, children, wide }: {
     >
       {open && <>
         <div className="dialog-head">
-          <div><h3>{title}</h3>{subtitle && <p>{subtitle}</p>}</div>
+          <div><h3><BiText text={title} /></h3>{subtitle && <p><BiText text={subtitle} /></p>}</div>
           <button className="icon-button" type="button" aria-label="إغلاق" onClick={onClose}><X size={18} /></button>
         </div>
         <div className="dialog-body">{children}</div>

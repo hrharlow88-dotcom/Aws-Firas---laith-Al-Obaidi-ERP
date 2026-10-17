@@ -1,3 +1,4 @@
+import { Bi } from '../components/Brand';
 import { FormEvent, useState } from 'react';
 import { CalendarClock, Download, FileText, HandCoins, Pencil, Plus, Trash2 } from 'lucide-react';
 import { DocumentFrame } from '../components/DocumentFrame';
@@ -115,8 +116,8 @@ export function LoansPage() {
         <form onSubmit={create}>
           <div className="form-grid">
             <div className="field field-wide"><span>طريقة الاسترداد</span><div className="segmented">
-              <button type="button" aria-pressed={kind === 'installment'} onClick={() => setKind('installment')}>أقساط شهرية · Instalments</button>
-              <button type="button" aria-pressed={kind === 'direct'} onClick={() => setKind('direct')}>استقطاع مباشر من الراتب · Direct</button></div>
+              <button type="button" aria-pressed={kind === 'installment'} onClick={() => setKind('installment')}><Bi ar={"أقساط شهرية"} en={"Instalments"} /></button>
+              <button type="button" aria-pressed={kind === 'direct'} onClick={() => setKind('direct')}><Bi ar={"استقطاع مباشر من الراتب"} en={"Direct"} /></button></div>
               <small>{kind === 'direct' ? 'تُستقطع كاملة من راتب أول شهر، وعند اعتماد المسير تُغلق وتُؤرشف ولا تظهر في السلف القائمة.' : 'تُقسّم على الأشهر، ويصل تذكير كل شهر بالقسط والمتبقي وآخر استقطاع.'}</small></div>
             <EmployeePicker label="الموظف *" value={employee} onChange={setEmployee} />
             <label className="field"><span>العملة</span><select name="currency" defaultValue=""><option value="">عملة راتب الموظف</option><option value="IQD">دينار عراقي</option><option value="USD">دولار أمريكي</option></select></label>
@@ -303,7 +304,7 @@ function SplitPreview({ principal, months, start }: { principal: number; months:
   }));
   return (
     <div className="split-preview">
-      <strong>التقسيم على الأشهر · Monthly split</strong>
+      <strong><Bi ar={"التقسيم على الأشهر"} en={"Monthly split"} /></strong>
       <div className="loan-split-grid">{rows.map((row, index) => <span key={row.period}><small>{index + 1}. {monthLabel(row.period)}</small><b>{formatNumber(row.amount)}</b></span>)}</div>
     </div>
   );

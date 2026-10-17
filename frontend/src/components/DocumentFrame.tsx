@@ -1,7 +1,7 @@
 import { ReactNode, useRef } from 'react';
 import { FileText, Printer } from 'lucide-react';
 import { useSession } from '../lib/session';
-import { DEVELOPER, SYSTEM_NAME } from './Brand';
+import { DEVELOPER, SYSTEM_NAME, Bi } from './Brand';
 
 async function asDataUrl(src: string): Promise<string> {
   try {
@@ -76,9 +76,9 @@ export function DocumentFrame({ title, titleEn, reference, children, fileName, p
           <h2>{title}</h2>
           {titleEn && <h3 dir="ltr">{titleEn}</h3>}
           <p className="doc-meta">
-            {reference && <span>المرجع · Ref: <b dir="ltr">{reference}</b></span>}
-            <span>أعدّه · Prepared by: <b>{preparedBy ?? session.user.name}</b></span>
-            <span>تاريخ الإصدار · Issued: <b>{issued}</b></span>
+            {reference && <span><Bi ar={"المرجع"} en={"Ref:"} /> <b dir="ltr">{reference}</b></span>}
+            <span><Bi ar={"أعدّه"} en={"Prepared by:"} /> <b>{preparedBy ?? session.user.name}</b></span>
+            <span><Bi ar={"تاريخ الإصدار"} en={"Issued:"} /> <b>{issued}</b></span>
           </p>
         </div>
         <div className="doc-body">{children}</div>

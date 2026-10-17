@@ -191,13 +191,13 @@ export function ChatPage({ channelId }: { channelId?: string }) {
       <aside className="chat-side">
         <div className="chat-side-head"><h2><MessagesSquare size={20} /><Bi ar="المحادثات" en="Discuss" /></h2></div>
         <label className="chat-search"><Search size={15} /><input value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="بحث… · Search" /></label>
-        <div className="chat-group-head"><span>القنوات · Channels</span><button className="icon-button" title="قناة جديدة" onClick={() => setCreating(true)}><Plus size={15} /></button></div>
+        <div className="chat-group-head"><span><Bi ar={"القنوات"} en={"Channels"} /></span><button className="icon-button" title="قناة جديدة" onClick={() => setCreating(true)}><Plus size={15} /></button></div>
         {channelRows.map(row)}
         {discover.length > 0 && <details className="chat-discover"><summary>قنوات عامة للانضمام ({discover.length})</summary>
           {discover.map((item) => <button key={item.id} className="chat-channel" onClick={async () => { await session.call(`/chat/channels/${item.id}/join`, { method: 'POST' }); await loadChannels(true); navigate('chat', item.id); }}>
             <span className="chat-hash"><Hash size={15} /></span><span className="chat-channel-text"><strong>{item.name}</strong><small>{item.members} عضو · انضمام</small></span></button>)}
         </details>}
-        <div className="chat-group-head"><span>الرسائل المباشرة · Direct</span><button className="icon-button" title="محادثة جديدة" onClick={() => setStarting(true)}><Plus size={15} /></button></div>
+        <div className="chat-group-head"><span><Bi ar={"الرسائل المباشرة"} en={"Direct"} /></span><button className="icon-button" title="محادثة جديدة" onClick={() => setStarting(true)}><Plus size={15} /></button></div>
         {directRows.map(row)}
       </aside>
 
@@ -222,7 +222,7 @@ export function ChatPage({ channelId }: { channelId?: string }) {
                   <div className="chat-bubble-wrap">
                     {!compact && <div className="chat-meta"><strong style={{ color: colorOf(message.userId) }}>{message.userName}</strong><small>{time(message.createdAt)}</small></div>}
                     {message.replyTo && <div className="chat-reply-quote"><Reply size={12} /><b>{message.replyName}</b> {message.replyBody}</div>}
-                    {message.deletedAt ? <p className="chat-deleted">حُذفت هذه الرسالة · Message deleted</p> : <>
+                    {message.deletedAt ? <p className="chat-deleted"><Bi ar={"حُذفت هذه الرسالة"} en={"Message deleted"} /></p> : <>
                       {message.body && <p className="chat-body">{message.body.split(/(@[^\s@]+(?:\s[^\s@]+)?)/g).map((part, i) => part.startsWith('@') ? <mark key={i}>{part}</mark> : part)}</p>}
                       {message.attachmentName && (message.attachmentMime?.startsWith('image/')
                         ? <ImagePreview messageId={message.id} />
@@ -246,7 +246,7 @@ export function ChatPage({ channelId }: { channelId?: string }) {
                 </article>;
               })}
             </div>)}
-            {!messages.length && <p className="chat-empty">ابدأ المحادثة… · Say hello</p>}
+            {!messages.length && <p className="chat-empty"><Bi ar={"ابدأ المحادثة…"} en={"Say hello"} /></p>}
           </div>
           <form className="chat-composer" onSubmit={(event) => void send(event)}>
             {(replyTo || editing || file) && <div className="chat-composer-bar">
@@ -296,15 +296,3 @@ export function ChatPage({ channelId }: { channelId?: string }) {
 }
 
 /** Chat icon in the top bar with the unread count. */
-export function ChatButton() {
-  const session = useSession();
-  const [unread, setUnread] = useState(0);
-  useEffect(() => {
-    let live = true;
-    const load = () => session.call<{ data: { unread: number } }>('/chat/unread', { background: true }).then((result) => { if (live) setUnread(result.data.unread); }).catch(() => undefined);
-    void load();
-    const timer = window.setInterval(load, 20000);
-    return () => { live = false; window.clearInterval(timer); };
-  }, [session]);
-  return <button className="o-bell-button" title="المحادثات · Discuss" onClick={() => navigate('chat')}><MessagesSquare size={18} />{unread > 0 && <span className="o-bell-count">{unread > 99 ? '99+' : unread}</span>}</button>;
-}

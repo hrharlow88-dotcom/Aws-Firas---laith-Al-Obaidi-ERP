@@ -1,3 +1,4 @@
+import { Bi } from './Brand';
 import { ChangeEvent, PointerEvent, useEffect, useRef, useState } from 'react';
 import { Check, Eraser, ImageUp, PenLine, Type } from 'lucide-react';
 import '@fontsource/great-vibes';
@@ -134,7 +135,7 @@ export function SignaturePad({ onSave }: { onSave: (image: string) => Promise<vo
     <div className="signature-pad">
       <canvas ref={canvas} onPointerDown={start} onPointerMove={move} onPointerUp={() => { drawing.current = false; }} onPointerLeave={() => { drawing.current = false; }} aria-label="مساحة رسم التوقيع · Signature area" />
       <div className="signature-actions">
-        <span className="muted"><PenLine size={14} />ارسم توقيعك بالماوس أو بالإصبع · Draw your signature</span>
+        <span className="muted"><PenLine size={14} /><Bi ar={"ارسم توقيعك بالماوس أو بالإصبع"} en={"Draw your signature"} /></span>
         <button type="button" className="button button-quiet" onClick={clear}><Eraser size={15} />مسح</button>
         <button type="button" className="button button-primary" disabled={empty || busy} onClick={() => void save()}><Check size={15} />حفظ التوقيع</button>
       </div>
@@ -170,9 +171,9 @@ export function SignatureMaker({ onSave, defaultName = '' }: { onSave: (image: s
   return (
     <div className="signature-maker">
       <div className="segmented signature-modes">
-        <button type="button" aria-pressed={mode === 'draw'} onClick={() => { setMode('draw'); setPreview(null); }}><PenLine size={14} />رسم · Draw</button>
-        <button type="button" aria-pressed={mode === 'upload'} onClick={() => { setMode('upload'); setPreview(null); }}><ImageUp size={14} />رفع صورة · Upload</button>
-        <button type="button" aria-pressed={mode === 'type'} onClick={() => setMode('type')}><Type size={14} />كتابة · Type</button>
+        <button type="button" aria-pressed={mode === 'draw'} onClick={() => { setMode('draw'); setPreview(null); }}><PenLine size={14} /><Bi ar={"رسم"} en={"Draw"} /></button>
+        <button type="button" aria-pressed={mode === 'upload'} onClick={() => { setMode('upload'); setPreview(null); }}><ImageUp size={14} /><Bi ar={"رفع صورة"} en={"Upload"} /></button>
+        <button type="button" aria-pressed={mode === 'type'} onClick={() => setMode('type')}><Type size={14} /><Bi ar={"كتابة"} en={"Type"} /></button>
       </div>
       {mode === 'draw' && <SignaturePad onSave={onSave} />}
       {mode === 'upload' && <div className="signature-upload">
@@ -180,7 +181,7 @@ export function SignatureMaker({ onSave, defaultName = '' }: { onSave: (image: s
         <small className="muted">وقّع على ورقة بيضاء وصوّرها؛ تُزال الخلفية البيضاء تلقائياً.</small>
       </div>}
       {mode === 'type' && <div className="signature-type">
-        <label className="field"><span>الاسم بالإنكليزي كما تريد أن يظهر · Name</span><input value={name} dir="ltr" maxLength={40} onChange={(event) => setName(event.target.value)} placeholder="Aws F. Al-Shalal" /></label>
+        <label className="field"><span><Bi ar={"الاسم بالإنكليزي كما تريد أن يظهر"} en={"Name"} /></span><input value={name} dir="ltr" maxLength={40} onChange={(event) => setName(event.target.value)} placeholder="Aws F. Al-Shalal" /></label>
         <div className="signature-fonts">{SIGNATURE_FONTS.map((item) => <button type="button" key={item.id} className={font === item.id ? 'is-on' : ''} style={{ fontFamily: `"${item.id}", cursive` }} onClick={() => setFont(item.id)}>{name.trim() || 'Signature'}</button>)}</div>
       </div>}
       {error && <p className="form-error">{error}</p>}
@@ -198,7 +199,7 @@ export function MySignature() {
   const signature = useLoad<{ image: string | null }>('/auth/signature', { image: null });
   return (
     <section className="panel">
-      <div className="panel-head"><div><h3>توقيعي الإلكتروني · My e-signature</h3><p>ارسمه أو ارفع صورته أو اكتبه بخط توقيع مزخرف. يُستخدم في اعتماد المسيرات والطلبات، وكل اعتماد يحفظ نسخة من التوقيع وقت التوقيع.</p></div></div>
+      <div className="panel-head"><div><h3><Bi ar={"توقيعي الإلكتروني"} en={"My e-signature"} /></h3><p>ارسمه أو ارفع صورته أو اكتبه بخط توقيع مزخرف. يُستخدم في اعتماد المسيرات والطلبات، وكل اعتماد يحفظ نسخة من التوقيع وقت التوقيع.</p></div></div>
       {signature.data.image && <div className="signature-current"><img src={signature.data.image} alt="التوقيع الحالي" /><span className="muted">التوقيع المحفوظ حالياً</span></div>}
       <SignatureMaker defaultName={session.user.name && /[a-z]/i.test(session.user.name) ? session.user.name : ''} onSave={async (image) => {
         try {

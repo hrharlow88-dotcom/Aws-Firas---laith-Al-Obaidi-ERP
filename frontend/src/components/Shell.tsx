@@ -1,3 +1,4 @@
+import { Bi, BiText } from './Brand';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bell, BellRing, CheckCheck, Download, Megaphone, ShieldAlert, Timer } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
@@ -54,11 +55,11 @@ export function NotificationBell() {
         {unread > 0 && <span className="o-bell-count">{unread > 99 ? '99+' : unread}</span>}
       </button>
       {open && <div className="o-bell-menu" role="menu">
-        <div className="o-bell-head"><strong>الإشعارات · Notifications</strong>
+        <div className="o-bell-head"><strong><Bi ar={"الإشعارات"} en={"Notifications"} /></strong>
           {unread > 0 && <button className="button button-quiet button-small" onClick={async () => { await session.call('/notifications/read', { method: 'POST', body: { all: true } }); void load(); }}><CheckCheck size={14} />قراءة الكل</button>}
         </div>
         {typeof Notification !== 'undefined' && Notification.permission === 'default' &&
-          <button className="o-bell-enable" onClick={() => void Notification.requestPermission()}>فعّل تنبيهات سطح المكتب والهاتف · Enable device alerts</button>}
+          <button className="o-bell-enable" onClick={() => void Notification.requestPermission()}><Bi ar={"فعّل تنبيهات سطح المكتب والهاتف"} en={"Enable device alerts"} /></button>}
         <div className="o-bell-list">
           {items.length ? items.map((item) => <button key={item.id} className={`o-bell-item ${item.readAt ? '' : 'is-unread'}`} onClick={() => void openItem(item)}>
             <strong>{item.title}</strong>{item.body && <span>{item.body}</span>}<small>{formatDateTime(item.createdAt)}</small>
@@ -103,7 +104,7 @@ export function AnnouncementGate() {
     <div className={`announce-screen announce-${current.severity}`} role="dialog" aria-modal="true" aria-labelledby="announce-title">
       <article className="announce-card">
         <header>
-          <span className="announce-kind"><Megaphone size={16} />{ANNOUNCEMENT_KIND[current.kind] ?? current.kind}</span>
+          <span className="announce-kind"><Megaphone size={16} /><BiText text={ANNOUNCEMENT_KIND[current.kind] ?? current.kind} /></span>
           {current.severity !== 'info' && <span className="announce-severity"><ShieldAlert size={15} />{current.severity === 'urgent' ? 'عاجل · Urgent' : 'مهم · Important'}</span>}
         </header>
         <img className="announce-mark" src="/brand/shield-256.png" alt="" />
@@ -117,8 +118,8 @@ export function AnnouncementGate() {
           <span>{current.signedByTitle ?? 'إدارة النظام — الموارد البشرية'} · {formatDateTime(current.startsAt)}</span>
           <div className="announce-actions">
             {current.requireAck
-              ? <button className="button button-primary" onClick={() => void close(true)}><CheckCheck size={16} />أقرّ بالاطلاع · I acknowledge</button>
-              : <button className="button button-primary" onClick={() => void close(false)}>اطلعت · Got it</button>}
+              ? <button className="button button-primary" onClick={() => void close(true)}><CheckCheck size={16} /><Bi ar={"أقرّ بالاطلاع"} en={"I acknowledge"} /></button>
+              : <button className="button button-primary" onClick={() => void close(false)}><Bi ar={"اطلعت"} en={"Got it"} /></button>}
             {queue.length > 1 && <small>{queue.length - 1} إعلان آخر · more</small>}
           </div>
         </footer>
@@ -167,7 +168,7 @@ export function IdleGuard({ minutes }: { minutes: number }) {
         last.current = Date.now();
         setLeft(null);
         void session.call('/auth/me').catch(() => undefined);
-      }}>البقاء متصلاً · Stay signed in</button>
+      }}><Bi ar={"البقاء متصلاً"} en={"Stay signed in"} /></button>
     </div>
   );
 }
@@ -207,7 +208,7 @@ export function InstallAppButton() {
     <>
       <button onClick={async () => {
         if (deferredInstall) { await deferredInstall.prompt(); deferredInstall = null; } else setHelp(!help);
-      }}><Download size={15} />تثبيت التطبيق · Install app</button>
+      }}><Download size={15} /><Bi ar={"تثبيت التطبيق"} en={"Install app"} /></button>
       {help && <p className="install-help">{ios
         ? 'على آيفون وآيباد: افتح النظام في Safari ← زر المشاركة ← «إضافة إلى الشاشة الرئيسية».'
         : 'في Chrome أو Edge: من القائمة ⋮ اختر «تثبيت التطبيق» أو «Install». على أندرويد: «إضافة إلى الشاشة الرئيسية».'}</p>}

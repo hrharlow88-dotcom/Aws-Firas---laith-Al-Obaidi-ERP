@@ -1,3 +1,4 @@
+import { Bi } from '../components/Brand';
 import { FormEvent, useState } from 'react';
 import { Bell, MapPinned } from 'lucide-react';
 import { Tone } from '../components/ui';
@@ -16,7 +17,7 @@ export function GovernorateBranches({ branches }: { branches: Array<{ id: string
   }
   return (
     <section className="panel">
-      <div className="panel-head"><div><h3><MapPinned size={17} /> المحافظات وفروعها · Governorates</h3><p>لكل محافظة فروعها وملف رواتبها الخاص.</p></div></div>
+      <div className="panel-head"><div><h3><MapPinned size={17} /> <Bi ar={"المحافظات وفروعها"} en={"Governorates"} /></h3><p>لكل محافظة فروعها وملف رواتبها الخاص.</p></div></div>
       <div className="governorate-grid">{data.data.governorates.map((item) => <article key={item.id} className="governorate-card">
         <strong>{item.nameAr}</strong><small dir="ltr">{item.nameEn}</small>
         <span>{item.branches.length} فرع · {item.branches.reduce((sum, branch) => sum + Number(branch.employees), 0)} موظف</span>
@@ -43,7 +44,7 @@ export function NotificationPreferences() {
   }
   return (
     <form className="panel" onSubmit={(event) => void save(event)}>
-      <div className="panel-head"><div><h3><Bell size={17} /> الإشعارات بالبريد · E-mail notifications</h3>
+      <div className="panel-head"><div><h3><Bell size={17} /> <Bi ar={"الإشعارات بالبريد"} en={"E-mail notifications"} /></h3>
         <p>تصلك نسخة من كل إشعار وطلب موافقة وسير عمل على بريدك، برسالة باللغتين العربية والإنكليزية فيها رابط الدخول. تعمل حين يفعّل مالك النظام قناة البريد.</p></div>
         {saved && <Tone tone={saved.notifyEmail ? 'good' : 'muted'}>{saved.notifyEmail ? 'مفعّلة' : 'متوقفة'}</Tone>}</div>
       <div className="form-grid">

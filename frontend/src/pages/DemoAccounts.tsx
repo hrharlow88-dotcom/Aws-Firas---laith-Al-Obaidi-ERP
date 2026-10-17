@@ -1,3 +1,4 @@
+import { Bi, BiText } from '../components/Brand';
 import { FormEvent, useState } from 'react';
 import { Power, PowerOff, Presentation, Send, UserPlus } from 'lucide-react';
 import { InviteDialog, InviteTarget } from '../components/InviteDialog';
@@ -64,7 +65,7 @@ export function DemoAccounts() {
   if (data.loading) return <Loading />;
   return (
     <div className="demo-admin">
-      <div className="panel-head"><div><h3><Presentation size={18} /> دعوات تجربة النظام · Demo invitations</h3>
+      <div className="panel-head"><div><h3><Presentation size={18} /> <Bi ar={"دعوات تجربة النظام"} en={"Demo invitations"} /></h3>
         <p>لعرض النظام على أي شخص: أرسل له من هنا دعوة «ديمو أدمن» أو «ديمو موظف» عبر واتساب أو رسالة نصية أو بريد. الضيف يفتح الرابط ويختار كلمة مروره بنفسه، ويدخل على <b>نسخة العرض</b> ذات البيانات الوهمية فقط، فلا يرى أي اسم أو راتب حقيقي. أنت وحدك تدعو وتوقف وتحدد تاريخ الانتهاء، والضيف لا يمنح أي حساب أو صلاحية ولا يغيّر الإعدادات.</p></div>
         {ready && accounts.length > 0 && <div className="row-actions">
           <button className="button button-quiet" onClick={() => void toggleAll(true)}><Power size={14} />تفعيل الكل</button>
@@ -86,7 +87,7 @@ export function DemoAccounts() {
         : <div className="table-scroll"><table className="dense"><thead><tr><th>الضيف</th><th>النوع</th><th>الحالة</th><th>ينتهي</th><th>آخر دخول</th><th /></tr></thead>
           <tbody>{accounts.map((account) => <tr key={account.id}>
             <td><strong>{account.name}</strong><small className="table-sub" dir="ltr">{account.email}</small>{account.employeeName && <small className="table-sub">{account.employeeName}</small>}</td>
-            <td>{ROLE[account.role] ?? account.role}</td>
+            <td><BiText text={ROLE[account.role] ?? account.role} /></td>
             <td>{!account.isActive ? <Tone tone="muted">موقوف</Tone> : account.lastLoginAt ? <Tone tone="good">مفعّل</Tone> : <Tone tone="warn">بانتظار قبول الدعوة</Tone>}</td>
             <td>{account.expiresAt ? formatDateTime(account.expiresAt) : 'بلا انتهاء'}</td>
             <td>{account.lastLoginAt ? formatDateTime(account.lastLoginAt) : '—'}<small className="table-sub">{account.logins} دخول</small></td>

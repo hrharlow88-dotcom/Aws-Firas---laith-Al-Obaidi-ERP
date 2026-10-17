@@ -1,3 +1,4 @@
+import { Bi } from '../components/Brand';
 import { FormEvent, useEffect, useState } from 'react';
 import { Ban, CheckCircle2, Radar, RefreshCw, ShieldAlert, ShieldCheck, Unlock, Wrench } from 'lucide-react';
 import { Empty, Loading, Stat, Tone } from '../components/ui';
@@ -60,13 +61,13 @@ export function RadarPanel() {
       </div>
       <div className="radar-side">
         <div className="stat-row"><Stat label="متصلون الآن" value={formatNumber(data.people.length)} /><Stat label="مصادر تهديد (ساعة)" value={formatNumber(data.threats.length)} tone={data.threats.some((threat) => !threat.blocked) ? 'bad' : undefined} /><Stat label="عناوين محظورة" value={formatNumber(data.blockedCount)} /></div>
-        <h4>المستخدمون في النظام الآن · Who is in</h4>
+        <h4><Bi ar={"المستخدمون في النظام الآن"} en={"Who is in"} /></h4>
         {!data.people.length ? <p className="muted">لا أحد متصل.</p> : <ul className="radar-list">{data.people.map((person) => <li key={person.id} className={focus === person.id ? 'is-focus' : ''} onMouseEnter={() => setFocus(person.id)}>
           <strong>{person.name}{person.isDemo && <Tone tone="info">تجريبي</Tone>}</strong>
           <span>{person.role} · {device(person.userAgent)} · <bdi dir="ltr">{person.ip ?? '—'}</bdi>{person.latitude !== null && ` · 📍${person.latitude.toFixed(3)},${person.longitude?.toFixed(3)}`}</span>
           <small>{person.module ? `يعمل على: ${person.module}` : ''} {person.path ? <bdi dir="ltr">{person.path}</bdi> : null} · {formatDateTime(person.lastSeenAt)}</small>
         </li>)}</ul>}
-        <h4>من يحاول الدخول أو العبث · Probing sources</h4>
+        <h4><Bi ar={"من يحاول الدخول أو العبث"} en={"Probing sources"} /></h4>
         {!data.threats.length ? <p className="muted"><ShieldCheck size={14} /> لا توجد محاولات خلال الساعة الماضية.</p> : <ul className="radar-list">{data.threats.map((threat) => <li key={threat.ip} className={`is-threat ${focus === threat.ip ? 'is-focus' : ''}`} onMouseEnter={() => setFocus(threat.ip)}>
           <strong dir="ltr">{threat.ip}</strong>
           <span>{threat.hits} محاولة · {threat.kinds.map((kind) => KIND[kind] ?? kind).join('، ')}</span>
@@ -99,7 +100,7 @@ export function ScanPanel() {
     <div>
       <div className="scan-head">
         <div className={`scan-score ${score >= 85 ? 'good' : score >= 60 ? 'warn' : 'bad'}`}><strong>{score}</strong><span>/100</span><small>درجة الحماية</small></div>
-        <div><h3>فحص الثغرات والمخاطر · Vulnerability scan</h3><p className="muted">يفحص الإعدادات والحسابات والملفات وحركة الهجوم وسلامة السجل، ويعالج ما يمكن معالجته بنقرة.</p>
+        <div><h3><Bi ar={"فحص الثغرات والمخاطر"} en={"Vulnerability scan"} /></h3><p className="muted">يفحص الإعدادات والحسابات والملفات وحركة الهجوم وسلامة السجل، ويعالج ما يمكن معالجته بنقرة.</p>
           <button className="button button-quiet" onClick={report.reload}><RefreshCw size={14} />فحص من جديد</button></div>
       </div>
       <div className="scan-list">{findings.map((finding) => <div key={finding.id} className={`scan-item sev-${finding.severity}`}>

@@ -1,3 +1,4 @@
+import { Bi } from './Brand';
 import { FormEvent, useState } from 'react';
 import { ArrowDownRight, ArrowUpRight, DollarSign, Minus } from 'lucide-react';
 import { formatDate, formatNumber } from '../lib/format';
@@ -37,7 +38,7 @@ export function RateBulletin({ compact = false }: { compact?: boolean }) {
     <div className={`rate-bulletin ${compact ? 'rate-bulletin-compact' : ''}`}>
       <span className="rate-icon"><DollarSign size={18} /></span>
       <div className="rate-main">
-        <small>سعر صرف الدولار اليوم · USD/IQD</small>
+        <small><Bi ar={"سعر صرف الدولار اليوم"} en={"USD/IQD"} /></small>
         {latest ? <strong dir="ltr">1 $ = {formatNumber(latest.rate)} د.ع</strong> : <strong>لم يُنشر بعد</strong>}
         {latest && <span className="rate-date">{formatDate(latest.date)}{latest.setByName ? ` · ${latest.setByName}` : ''}</span>}
       </div>

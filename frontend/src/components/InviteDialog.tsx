@@ -1,3 +1,4 @@
+import { Bi } from './Brand';
 import { useEffect, useState } from 'react';
 import { Copy, Mail, MessageCircle, Send, Smartphone } from 'lucide-react';
 import { Dialog } from './ui';
@@ -61,7 +62,7 @@ export function InviteDialog({ target, onClose }: { target: InviteTarget | null;
     <Dialog open={Boolean(target)} title={target?.kind === 'staff' ? 'دعوة مستخدم · Invite user' : target?.kind === 'demo' ? 'دعوة لتجربة النظام · Demo invitation' : 'دعوة لبوابة الموظف · Portal invitation'}
       subtitle={target ? `${target.name} · يدخل بـ ${target.login} · الرابط صالح 7 أيام ولمرة واحدة` : ''} onClose={onClose}>
       {target && <div className="invite-link">
-        <div className="field"><span>طريقة الإرسال · Send by</span><div className="segmented">
+        <div className="field"><span><Bi ar={"طريقة الإرسال"} en={"Send by"} /></span><div className="segmented">
           {(['whatsapp', 'sms', 'email'] as const).map((item) => <button key={item} type="button" aria-pressed={channel === item} onClick={() => setChannel(item)}>
             {item === 'whatsapp' ? <MessageCircle size={14} /> : item === 'sms' ? <Smartphone size={14} /> : <Mail size={14} />}{CHANNEL_LABEL[item]}</button>)}
         </div></div>
