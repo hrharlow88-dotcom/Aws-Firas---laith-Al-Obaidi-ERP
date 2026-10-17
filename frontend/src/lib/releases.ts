@@ -18,6 +18,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.1.1',
+    date: '2026-10-17',
+    title: 'تصحيح تحميل الخطوط',
+    titleEn: 'Font loading fixed',
+    items: [
+      { kind: 'fix', ar: 'أجزاء صغيرة من الخط كانت تُرفض عند فتح كل صفحة بسبب سياسة الأمان وتترك أخطاء في المتصفح؛ صارت تُحمّل كملفات عادية', en: 'Small parts of the font were refused by the security policy on every page load and left errors in the browser; they now load as ordinary files' },
+      { kind: 'improve', ar: 'الفحص الآلي للشاشات يعمل بسياسة الأمان نفسها التي يعمل بها النظام على الخادم، ويلتقط ما يحدث لحظة فتح النظام', en: 'The automated screen check runs under the same security policy as the live server and catches what happens while the system opens' },
+    ],
+  },
+  {
     version: '2.1',
     date: '2026-10-17',
     title: 'الوضع الداكن أوضح، وتنظيف التنسيق وأدوات التطوير',

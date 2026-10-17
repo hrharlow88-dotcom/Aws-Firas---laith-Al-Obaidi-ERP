@@ -18,13 +18,26 @@ export function createApp() {
   app.disable('x-powered-by');
   app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
   app.use(helmet({
+    // The same policy nginx sends with the pages in production (frontend/nginx.conf; a test keeps
+    // the two equal), so a page that breaks it fails the screen check here too, not only in production.
     contentSecurityPolicy: {
+      useDefaults: false,
       directives: {
+        'default-src': ["'self'"],
+        'script-src': ["'self'"],
+        'style-src': ["'self'", "'unsafe-inline'"],
+        'connect-src': ["'self'"],
         // Employee photos are served by the API as blobs and QR codes are drawn
         // into data URLs, so both need to be allowed as image sources.
         'img-src': ["'self'", 'data:', 'blob:'],
-        'frame-src': ["'self'", 'blob:', 'https://www.openstreetmap.org'],
+        'font-src': ["'self'"],
+        'frame-src': ['blob:', 'https://www.openstreetmap.org'],
         'worker-src': ["'self'"],
+        'manifest-src': ["'self'"],
+        'object-src': ["'none'"],
+        'base-uri': ["'self'"],
+        'form-action': ["'self'"],
+        'frame-ancestors': ["'self'"],
       },
     },
   }));

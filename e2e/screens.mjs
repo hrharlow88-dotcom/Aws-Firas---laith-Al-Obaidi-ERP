@@ -72,6 +72,16 @@ for (const [who, token, pages] of [['owner', tokens.owner, OWNER_PAGES], ['emplo
       sessionStorage.setItem('erp_token', t); localStorage.setItem('erp.lang', 'ar'); localStorage.setItem('erp.mode', mode);
       localStorage.setItem('erp.installLater', String(Date.now() + 864e5));
     }, [token, process.env.MODE || 'light']);
+    // Listen from the moment the app starts: the screens below change only the #route, so the page
+    // loads once, and what goes wrong while it loads (a font the security policy refuses, a failed
+    // first request) is reported with the first screen.
+    let errors = []; let failed = [];
+    page.on('pageerror', (error) => errors.push(`pageerror: ${String(error).slice(0, 200)}`));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(`console: ${message.text().slice(0, 200)}`); });
+    page.on('response', (response) => {
+      const url = response.url();
+      if (url.includes('/api/') && response.status() >= 400 && !url.includes('/logo')) failed.push(`${response.status()} ${response.request().method()} ${url.replace(BASE, '')}`);
+    });
     await page.reload();
     await page.waitForTimeout(1200);
     // Announcements open full screen until read: read them, as a person would, so the screens behind are measured.
@@ -83,25 +93,17 @@ for (const [who, token, pages] of [['owner', tokens.owner, OWNER_PAGES], ['emplo
     }
     for (const route of pages) {
       if (ONLY && !ONLY.includes(route)) continue;
-      const errors = []; const failed = [];
-      const onError = (error) => errors.push(`pageerror: ${String(error).slice(0, 200)}`);
-      const onConsole = (message) => { if (message.type() === 'error') errors.push(`console: ${message.text().slice(0, 200)}`); };
-      const onResponse = (response) => {
-        const url = response.url();
-        if (url.includes('/api/') && response.status() >= 400 && !url.includes('/logo')) failed.push(`${response.status()} ${response.request().method()} ${url.replace(BASE, '')}`);
-      };
-      page.on('pageerror', onError); page.on('console', onConsole); page.on('response', onResponse);
       await page.goto(`${BASE}/#/${route}`);
       await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => undefined);
       await page.waitForTimeout(400);
       const m = await page.evaluate(measure, width);
-      page.off('pageerror', onError); page.off('console', onConsole); page.off('response', onResponse);
       const problems = [
         ...(m.overflow > 0 ? [`scrolls sideways by ${m.overflow}px: ${m.offenders.join(', ')}`] : []),
         ...errors, ...failed.map((item) => `request failed: ${item}`),
         ...(phone && m.tinyCount ? [`${m.tinyCount} texts under 12px: ${m.tiny.join(', ')}`] : []),
         ...(m.empty ? ['screen is empty'] : []),
       ];
+      errors = []; failed = [];
       if (problems.length) failures += 1;
       // SHOTS=all keeps a picture of every screen (to compare two builds); otherwise only of the failures.
       if (problems.length || process.env.SHOTS === 'all') {
