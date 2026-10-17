@@ -6,7 +6,8 @@
  *   BASE=http://127.0.0.1:5077 TOKENS=tokens.json node screens.mjs
  *
  * tokens.json (written by tokens.mjs): { owner, employee, employeeId, runId }.
- * WIDTHS (default 1440,390,320), ONLY (comma-separated routes), CHROMIUM (browser path) are optional.
+ * WIDTHS (default 1440,390,320), ONLY (comma-separated routes), CHROMIUM (browser path), OUT (default results)
+ * SHOTS=all (a screenshot of every screen, to compare two builds) and MODE=dark are optional.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -67,9 +68,19 @@ for (const [who, token, pages] of [['owner', tokens.owner, OWNER_PAGES], ['emplo
     const context = await browser.newContext({ viewport: { width, height: phone ? 844 : 900 }, locale: 'ar-IQ', isMobile: phone, hasTouch: phone });
     const page = await context.newPage();
     await page.goto(`${BASE}/`);
-    await page.evaluate((t) => { sessionStorage.setItem('erp_token', t); localStorage.setItem('erp.lang', 'ar'); localStorage.setItem('erp.installLater', String(Date.now() + 864e5)); }, token);
+    await page.evaluate(([t, mode]) => {
+      sessionStorage.setItem('erp_token', t); localStorage.setItem('erp.lang', 'ar'); localStorage.setItem('erp.mode', mode);
+      localStorage.setItem('erp.installLater', String(Date.now() + 864e5));
+    }, [token, process.env.MODE || 'light']);
     await page.reload();
     await page.waitForTimeout(1200);
+    // Announcements open full screen until read: read them, as a person would, so the screens behind are measured.
+    for (let i = 0; i < 10; i += 1) {
+      const read = page.locator('.announce-actions .button-primary');
+      if (!(await read.count())) break;
+      await read.first().click();
+      await page.waitForTimeout(500);
+    }
     for (const route of pages) {
       if (ONLY && !ONLY.includes(route)) continue;
       const errors = []; const failed = [];
@@ -91,9 +102,10 @@ for (const [who, token, pages] of [['owner', tokens.owner, OWNER_PAGES], ['emplo
         ...(phone && m.tinyCount ? [`${m.tinyCount} texts under 12px: ${m.tiny.join(', ')}`] : []),
         ...(m.empty ? ['screen is empty'] : []),
       ];
-      if (problems.length) {
-        failures += 1;
-        await page.screenshot({ path: path.join(OUT, 'shots', `${who}_${route.replace(/\//g, '_')}_${width}.png`), fullPage: true });
+      if (problems.length) failures += 1;
+      // SHOTS=all keeps a picture of every screen (to compare two builds); otherwise only of the failures.
+      if (problems.length || process.env.SHOTS === 'all') {
+        await page.screenshot({ path: path.join(OUT, 'shots', `${who}_${route.replace(/\//g, '_')}_${width}.png`), fullPage: true, animations: 'disabled', caret: 'hide' });
       }
       results.push({ who, route, width, problems });
       console.log(`${problems.length ? 'FAIL' : 'ok  '} ${who.padEnd(8)} ${route.padEnd(28)} ${String(width).padStart(4)}${problems.length ? `  ${problems.join(' | ')}` : ''}`);

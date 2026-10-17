@@ -18,6 +18,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.1',
+    date: '2026-10-17',
+    title: 'الوضع الداكن أوضح، وتنظيف التنسيق وأدوات التطوير',
+    titleEn: 'Clearer dark mode, a cleaner stylesheet and development tools',
+    items: [
+      { kind: 'fix', ar: 'في الوضع الداكن صارت ألوان الحالات مقروءة: رسائل «حُفظ» والأخطاء، التنبيهات، وشارات «بانتظار الاعتماد» و«اطلعت»، بدل نص داكن على خلفية داكنة أو شارات فاتحة لامعة', en: 'In dark mode status colours are now readable: saved and error messages, warnings, and badges such as awaiting approval and seen, instead of dark text on dark backgrounds or glaring light badges' },
+      { kind: 'improve', ar: 'ملف التنسيق أخف: حُذفت قواعد الواجهة القديمة التي لم تعد تُستعمل، وتحققنا بمقارنة صور كل الشاشات قبل وبعد أن الشكل لم يتغير', en: 'A lighter stylesheet: rules left from the old layout were removed, and screenshots of every screen before and after confirm nothing else changed' },
+      { kind: 'security', ar: 'ترقية أدوات التطوير والاختبار ومكتبة المعرّفات لسد ثغرات معروفة فيها', en: 'Development, test tools and the ID library upgraded to close known flaws' },
+    ],
+  },
+  {
     version: '2.0.1',
     date: '2026-10-17',
     title: 'تصحيح أحجام نصوص صغيرة، وفحص آلي لكل شاشة قبل كل نشر',

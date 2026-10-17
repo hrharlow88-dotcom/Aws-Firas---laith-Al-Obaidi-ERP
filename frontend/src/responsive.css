@@ -279,9 +279,8 @@ td, th { overflow-wrap: anywhere; }
 .feedback-kind { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px 3px 8px; border-radius: 999px; font-size: 13px; font-weight: 700; }
 .feedback-kind-bug { background: var(--red-wash); color: var(--red); }
 .feedback-kind-idea { background: var(--brass-wash); color: var(--teal-dark); }
-.feedback-kind-question { background: #ebf1f8; color: #2f5b8a; }
+.feedback-kind-question { background: var(--info-wash); color: var(--info-ink); }
 html[data-mode="dark"] .feedback-kind-idea { color: var(--brand); }
-html[data-mode="dark"] .feedback-kind-question { background: #1c2a3a; color: #9cc0e6; }
 .feedback-who { margin: 0; font-size: 14px; font-weight: 700; }
 .feedback-who .muted { font-weight: 400; }
 .feedback-message { margin: 0; font-size: 15px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
