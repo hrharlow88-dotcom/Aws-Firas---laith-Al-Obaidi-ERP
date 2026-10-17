@@ -6,8 +6,15 @@
 # For a server reached only inside the company network, put its IP or a local
 # name in ERP_DOMAIN and replace this block's first line with  http://{$ERP_DOMAIN}
 {$ERP_DOMAIN} {
-	encode gzip
+	encode zstd gzip
 	reverse_proxy web:80
+}
+
+# Earlier addresses of the system (bookmarks, installed apps, old links) forward
+# to the main domain. 308 keeps the method, so integrations posting to an old
+# address keep working. Set ERP_OLD_DOMAINS in .env, e.g. srv123.hstgr.cloud
+{$ERP_OLD_DOMAINS} {
+	redir https://{$ERP_DOMAIN}{uri} 308
 }
 
 # Fingerprint devices (ZKTeco ADMS) usually cannot do HTTPS. They get a

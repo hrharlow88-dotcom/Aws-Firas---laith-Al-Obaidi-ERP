@@ -34,6 +34,7 @@ export const RELEASES: Release[] = [
       { kind: 'new', ar: 'ترتيب التطبيقات، وتحديد التطبيقات الظاهرة لكل مستخدم (يُطبق على الخادم)', en: 'App ordering and per-user app access, enforced on the server' },
       { kind: 'improve', ar: 'الدعوة: تختار واتساب أو رسالة أو بريد، وترى النص وتعدّله قبل الإرسال، وفيه رابط الدخول', en: 'Invitations: choose WhatsApp, SMS or e-mail, read and edit the text first; it carries the sign-in link' },
       { kind: 'improve', ar: 'إشعارات وموافقات على البريد الشخصي برسائل عربية وإنكليزية', en: 'Notifications and approvals by personal e-mail, in Arabic and English' },
+      { kind: 'improve', ar: 'النظام على دومينه الخاص erp.g-n-group.com مباشرة بدل عرضه داخل صفحة GitHub، فتعمل التنزيلات والإشعارات والتثبيت على الموبايل', en: 'The system runs directly on its own domain erp.g-n-group.com instead of inside a GitHub page, so downloads, notifications and mobile install work' },
       { kind: 'new', ar: 'رقم النسخة وسجل «ما الجديد» داخل النظام', en: 'Version number and a What\'s new log inside the system' },
     ],
   },

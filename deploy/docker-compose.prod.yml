@@ -72,6 +72,8 @@ services:
     restart: unless-stopped
     environment:
       ERP_DOMAIN: ${ERP_DOMAIN:?Set ERP_DOMAIN in .env}
+      # Old addresses that forward to ERP_DOMAIN (comma separated); the default is a harmless placeholder.
+      ERP_OLD_DOMAINS: ${ERP_OLD_DOMAINS:-http://old-address.invalid}
       ACME_EMAIL: ${ACME_EMAIL:-}
     ports:
       - "80:80"
