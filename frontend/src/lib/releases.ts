@@ -18,6 +18,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '2.0.1',
+    date: '2026-10-17',
+    title: 'تصحيح أحجام نصوص صغيرة، وفحص آلي لكل شاشة قبل كل نشر',
+    titleEn: 'Small text sizes fixed, and every screen checked before each release',
+    items: [
+      { kind: 'fix', ar: 'تاريخ الإعلان في لوحة الإعلانات والملاحظات الصغيرة في الإعدادات صارت بحجم 12px على التلفون مثل باقي النصوص', en: 'The date on notice-board cards and small notes in settings are now 12px on phones, like all other text' },
+      { kind: 'improve', ar: 'قبل كل نشر: اختبار آلي يمر بدورة موظف كاملة من الشاغر إلى القسيمة والقيد في SAP، وفحص يفتح كل شاشة على التلفون والحاسبة', en: 'Before every release: an automated test that walks one employee from vacancy to payslip and SAP journal, and a check that opens every screen on phone and computer' },
+    ],
+  },
+  {
     version: '2.0',
     date: '2026-10-17',
     title: 'النظام تطبيق على التلفون: إشعارات، شريط سفلي، تثبيت على الشاشة، وملاحظات المستخدمين',

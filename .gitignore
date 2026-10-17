@@ -26,3 +26,9 @@ yarn-error.log*
 /deploy/companies/*.env
 /deploy/companies/*.caddy
 /backend/.tok.cjs
+
+# Screen check (e2e/): its packages and the files each run writes.
+/e2e/node_modules/
+/e2e/results/
+/e2e/tokens.json
+/e2e/*.log

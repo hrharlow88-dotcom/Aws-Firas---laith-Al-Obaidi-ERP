@@ -1,0 +1,13 @@
+{
+  "name": "laith-erp-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Every screen of the ERP in a real browser, on a fresh copy filled with made-up data.",
+  "scripts": {
+    "screens": "node screens.mjs",
+    "local": "sh run-local.sh"
+  },
+  "dependencies": {
+    "playwright-core": "1.56.0"
+  }
+}

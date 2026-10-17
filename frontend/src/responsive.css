@@ -298,4 +298,4 @@ html[data-mode="dark"] .feedback-kind-question { background: #1c2a3a; color: #9c
 }
 
 /* Small notes inside 13px rows stay at the 12px floor. */
-.settings-check small { font-size: 12px; }
+.settings-check small, .notice-card header small { font-size: 12px; }
